@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Compliance — BOSS System{% endblock %}
+{% block page_title %}Compliance Center{% endblock %}
+{% block page_sub %}Regulatory monitoring & tracking{% endblock %}
+
+{% block extra_css %}
+.risk-bar { height:6px; border-radius:3px; background:var(--border); overflow:hidden; margin-top:4px; }
+.risk-fill { height:100%; border-radius:3px; transition:width 0.5s ease; }
+.compliance-stat {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px 20px;
+}
+.comp-stat-val { font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri; font-size:26px; font-weight:800; }
+.comp-record {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:14px 16px;
+  margin-bottom:8px; transition:border-color 0.15s;
+}
+.comp-record:hover { border-color:var(--border2); }
+{% endblock %}
+
+{% block content %}
+<!-- Stats Row -->
+<div class="grid grid-4 mb-6">
+  <div class="compliance-stat">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);font-weight:600;">Overall Score</div>
+    <div class="comp-stat-val" style="color:{% if score >= 70 %}#34d399{% elif score >= 40 %}#fbbf24{% else %}#f87171{% endif %};">{{ score }}%</div>
+    <div class="risk-bar mt-2">
+      <div class="risk-fill" style="width:{{ score }}%;background:{% if score >= 70 %}var(--green){% elif score >= 40 %}var(--yellow){% else %}var(--red){% endif %};"></div>
+    </div>
+  </div>
+  <div class="compliance-stat">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);font-weight:600;">Total Items</div>
+    <div class="comp-stat-val" style="color:#60a5fa">{{ total }}</div>
+    <div class="text-xs text-muted mt-1">Compliance records</div>
+  </div>
+  <div class="compliance-stat">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);font-weight:600;">Compliant</div>
+    <div class="comp-stat-val" style="color:#34d399">{{ compliant }}</div>
+    <div class="text-xs text-muted mt-1">Meeting requirements</div>
+  </div>
+  <div class="compliance-stat">
+    <div style="font-size:12px;text-transform:uppercase;letter-spacing:0.06em;color:var(--text3);font-weight:600;">Critical Risks</div>
+    <div class="comp-stat-val" style="color:#f87171">{{ by_risk.critical }}</div>
+    <div class="text-xs text-muted mt-1">Require immediate action</div>
+  </div>
+</div>
+
+<!-- Risk Breakdown -->
+<div class="card mb-6">
+  <div class="card-title"><i class="fa-solid fa-chart-bar" style="color:var(--accent)"></i> Risk Distribution</div>
+  <div class="grid grid-4" style="gap:12px;">
+    {% for level, color in [('critical','#f87171'),('high','#fbbf24'),('medium','#60a5fa'),('low','#34d399')] %}
+    <div style="background:rgba(0,0,0,0.2);border-radius:var(--radius-sm);padding:14px;text-align:center;">
+      <div style="font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri;font-size:24px;font-weight:800;color:{{ color }};">{{ by_risk[level] }}</div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text3);margin-top:4px;">{{ level }}</div>
+      <div class="risk-bar">
+        <div class="risk-fill" style="width:{% if total > 0 %}{{ (by_risk[level]/total*100)|round }}{% else %}0{% endif %}%;background:{{ color }};"></div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Records -->
+<div class="card">
+  <div class="card-title flex justify-between">
+    <span><i class="fa-solid fa-list-check" style="color:var(--accent)"></i> Compliance Records</span>
+    <span class="text-sm text-muted">{{ records|length }} records</span>
+  </div>
+
+  {% if records %}
+    {% for record, doc_title in records %}
+    <div class="comp-record" id="rec-{{ record.id }}">
+      <div class="flex items-center gap-2 mb-2" style="flex-wrap:wrap;">
+        <span class="badge badge-
+          {% if record.risk_level == 'critical' %}red
+          {% elif record.risk_level == 'high' %}yellow
+          {% elif record.risk_level == 'medium' %}blue
+          {% else %}green{% endif %}">
+          <i class="fa-solid fa-circle" style="font-size:7px"></i> {{ record.risk_level.title() }}
+        </span>
+        <span class="badge badge-purple">{{ record.regulation_type }}</span>
+        <span class="badge badge-gray">{{ doc_title[:40] }}{% if doc_title|length > 40 %}...{% endif %}</span>
+        <span class="badge badge-
+          {% if record.status == 'compliant' %}green
+          {% elif record.status == 'non_compliant' %}red
+          {% elif record.status == 'pending' %}yellow
+          {% else %}gray{% endif %}" style="margin-left:auto;">
+          {{ record.status.replace('_',' ').title() }}
+        </span>
+      </div>
+      <div style="font-size:13.5px;color:var(--text2);line-height:1.6;margin-bottom:8px;">{{ record.requirement }}</div>
+      {% if record.notes %}
+      <div class="text-xs text-muted" style="font-style:italic;">📝 {{ record.notes }}</div>
+      {% endif %}
+      {% if user.role in ('super_admin', 'admin', 'manager') %}
+      <div class="flex gap-2 mt-3">
+        <button class="btn btn-success btn-xs" onclick="updateCompliance({{ record.id }}, 'compliant')"><i class="fa-solid fa-check"></i> Mark Compliant</button>
+        <button class="btn btn-danger btn-xs" onclick="updateCompliance({{ record.id }}, 'non_compliant')"><i class="fa-solid fa-times"></i> Non-Compliant</button>
+        <button class="btn btn-ghost btn-xs" onclick="updateCompliance({{ record.id }}, 'pending')"><i class="fa-solid fa-clock"></i> Pending</button>
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  {% else %}
+  <div style="text-align:center;padding:40px 20px;color:var(--text3);">
+    <i class="fa-solid fa-shield-halved" style="font-size:40px;opacity:0.2;display:block;margin-bottom:12px;"></i>
+    No compliance records yet. Upload documents to auto-extract compliance requirements.
+    <br><a href="/documents/new" class="btn btn-primary" style="margin-top:16px;display:inline-flex;">Upload Document</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function updateCompliance(id, status) {
+  const fd = new FormData();
+  fd.append('status', status);
+  const resp = await fetch(`/compliance/${id}/update`, { method:'POST', body:fd });
+  if (resp.ok) {
+    toast(`Status updated to ${status.replace('_',' ')}`, 'success');
+    setTimeout(() => location.reload(), 600);
+  }
+}
+</script>
+{% endblock %}

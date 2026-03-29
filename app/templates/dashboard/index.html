@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — BOSS System{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_sub %}Welcome back, {{ user.full_name }}{% endblock %}
+
+{% block extra_css %}
+.stat-card { position:relative; overflow:hidden; }
+.stat-card .glow {
+  position:absolute; width:80px; height:80px; border-radius:50%;
+  filter:blur(30px); opacity:0.15; top:-20px; right:-20px;
+}
+.compliance-ring { position:relative; display:inline-flex; align-items:center; justify-content:center; }
+.compliance-ring svg { transform:rotate(-90deg); }
+.ring-value {
+  position:absolute; font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri;
+  font-weight:800; font-size:22px; color:var(--text);
+}
+.ring-label { font-size:10px; color:var(--text3); text-align:center; margin-top:4px; }
+.activity-item {
+  display:flex; align-items:flex-start; gap:12px;
+  padding:10px 0; border-bottom:1px solid rgba(31,45,66,0.5);
+}
+.activity-item:last-child { border-bottom:none; }
+.activity-dot {
+  width:8px; height:8px; border-radius:50%;
+  margin-top:5px; flex-shrink:0;
+}
+.activity-text { font-size:13px; color:var(--text2); line-height:1.5; }
+.activity-time { font-size:11px; color:var(--text3); margin-top:2px; }
+.doc-item {
+  display:flex; align-items:center; gap:12px;
+  padding:10px 0; border-bottom:1px solid rgba(31,45,66,0.5);
+}
+.doc-item:last-child { border-bottom:none; }
+.doc-icon {
+  width:36px; height:36px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:14px; flex-shrink:0;
+}
+{% endblock %}
+
+{% block content %}
+<!-- Stat Cards -->
+<div class="grid grid-4 mb-6">
+  <div class="stat-card">
+    <div class="glow" style="background:#3b82f6"></div>
+    <div class="stat-icon" style="color:#3b82f6"><i class="fa-solid fa-file-lines"></i></div>
+    <div class="stat-label">Documents</div>
+    <div class="stat-value" style="color:#60a5fa">{{ stats.documents }}</div>
+    <div class="text-xs text-muted mt-1">Total uploaded</div>
+  </div>
+  <div class="stat-card">
+    <div class="glow" style="background:#8b5cf6"></div>
+    <div class="stat-icon" style="color:#8b5cf6"><i class="fa-solid fa-users"></i></div>
+    <div class="stat-label">Users</div>
+    <div class="stat-value" style="color:#a78bfa">{{ stats.users }}</div>
+    <div class="text-xs text-muted mt-1">Registered staff</div>
+  </div>
+  <div class="stat-card">
+    <div class="glow" style="background:#10b981"></div>
+    <div class="stat-icon" style="color:#10b981"><i class="fa-solid fa-circle-dot"></i></div>
+    <div class="stat-label">Active Now</div>
+    <div class="stat-value" style="color:#34d399">{{ stats.active_users }}</div>
+    <div class="text-xs text-muted mt-1">Online users</div>
+  </div>
+  <div class="stat-card">
+    <div class="glow" style="background:#f59e0b"></div>
+    <div class="stat-icon" style="color:#f59e0b"><i class="fa-solid fa-clock"></i></div>
+    <div class="stat-label">Pending</div>
+    <div class="stat-value" style="color:#fbbf24">{{ stats.pending_approvals }}</div>
+    <div class="text-xs text-muted mt-1">Awaiting approval</div>
+  </div>
+</div>
+
+<div class="grid" style="grid-template-columns:1fr 1fr 320px;gap:16px;margin-bottom:16px;">
+
+  <!-- Recent Activity -->
+  <div class="card" style="grid-column:1/3;">
+    <div class="card-title"><i class="fa-solid fa-list-check" style="color:var(--accent)"></i> Recent Activity</div>
+    {% if recent_logs %}
+      {% for log, uname in recent_logs %}
+      <div class="activity-item">
+        <div class="activity-dot" style="background:
+          {% if 'login' in log.action %}#10b981
+          {% elif 'create' in log.action %}#3b82f6
+          {% elif 'approve' in log.action %}#8b5cf6
+          {% else %}#64748b{% endif %}">
+        </div>
+        <div>
+          <div class="activity-text">
+            <strong style="color:var(--text)">{{ uname }}</strong>
+            {{ log.action.replace('_', ' ') }}
+            {% if log.resource_type %}<span class="text-muted"> · {{ log.resource_type }}</span>{% endif %}
+          </div>
+          <div class="activity-time">
+            {{ log.created_at.strftime('%b %d, %Y at %H:%M') if log.created_at else '' }}
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-muted text-sm" style="padding:20px 0;text-align:center;">
+        <i class="fa-solid fa-ghost" style="font-size:24px;margin-bottom:8px;display:block;opacity:0.3"></i>
+        No activity yet
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Compliance Score -->
+  <div class="card" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+    <div class="card-title" style="text-align:center;width:100%;justify-content:center;">
+      <i class="fa-solid fa-shield-halved" style="color:var(--green)"></i> Compliance Score
+    </div>
+    {% set score = stats.compliance_score %}
+    {% set color = '#10b981' if score >= 70 else ('#f59e0b' if score >= 40 else '#ef4444') %}
+    {% set r = 56 %}
+    {% set circ = 2 * 3.14159 * r %}
+    {% set dash = (score / 100) * circ %}
+    <div class="compliance-ring">
+      <svg width="140" height="140" viewBox="0 0 140 140">
+        <circle cx="70" cy="70" r="{{ r }}" fill="none" stroke="var(--border)" stroke-width="10"/>
+        <circle cx="70" cy="70" r="{{ r }}" fill="none" stroke="{{ color }}"
+          stroke-width="10"
+          stroke-dasharray="{{ dash | round(1) }} {{ circ | round(1) }}"
+          stroke-linecap="round"/>
+      </svg>
+      <div class="ring-value" style="color:{{ color }}">{{ score }}%</div>
+    </div>
+    <div class="ring-label">Overall Compliance</div>
+    <div class="flex gap-2 mt-2" style="flex-wrap:wrap;justify-content:center;">
+      <span class="badge badge-green"><i class="fa-solid fa-circle" style="font-size:6px"></i> Compliant</span>
+      <span class="badge badge-yellow"><i class="fa-solid fa-circle" style="font-size:6px"></i> Pending</span>
+      <span class="badge badge-red"><i class="fa-solid fa-circle" style="font-size:6px"></i> Non-Compliant</span>
+    </div>
+    <a href="/compliance" class="btn btn-ghost btn-sm mt-2">View Details</a>
+  </div>
+</div>
+
+<div class="grid grid-2" style="gap:16px;">
+  <!-- Recent Documents -->
+  <div class="card">
+    <div class="card-title flex justify-between" style="margin-bottom:14px;">
+      <span><i class="fa-solid fa-file-lines" style="color:var(--accent)"></i> Recent Documents</span>
+      <a href="/documents" class="btn btn-ghost btn-xs">View All</a>
+    </div>
+    {% if recent_docs %}
+      {% for doc in recent_docs %}
+      <div class="doc-item">
+        <div class="doc-icon" style="background:
+          {% if doc.file_type == 'pdf' %}rgba(239,68,68,0.1)
+          {% elif doc.file_type == 'docx' %}rgba(59,130,246,0.1)
+          {% elif doc.file_type == 'csv' %}rgba(16,185,129,0.1)
+          {% else %}rgba(100,116,139,0.1){% endif %}">
+          <i class="fa-solid fa-file-{% if doc.file_type == 'pdf' %}pdf{% elif doc.file_type == 'csv' %}csv{% else %}word{% endif %}"
+            style="color:{% if doc.file_type == 'pdf' %}#f87171{% elif doc.file_type == 'csv' %}#34d399{% else %}#60a5fa{% endif %}"></i>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ doc.title }}</div>
+          <div class="flex gap-2 mt-1">
+            <span class="text-xs text-muted">{{ doc.department or '—' }}</span>
+            <span class="badge badge-{% if doc.status.value == 'approved' %}green{% elif doc.status.value == 'pending' %}yellow{% else %}gray{% endif %} text-xs">
+              {{ doc.status.value }}
+            </span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div class="text-muted text-sm" style="padding:20px 0;text-align:center;opacity:0.5">No documents yet</div>
+    {% endif %}
+  </div>
+
+  <!-- Quick Actions -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-bolt" style="color:var(--yellow)"></i> Quick Actions</div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <a href="/documents/new" class="btn btn-primary" style="justify-content:flex-start;gap:12px;padding:12px 16px;">
+        <i class="fa-solid fa-file-circle-plus fa-fw"></i>
+        <div>
+          <div>Upload Document</div>
+          <div style="font-size:11px;opacity:0.7;font-weight:400">Add to knowledge base</div>
+        </div>
+      </a>
+      <a href="/ask-boss" class="btn" style="background:rgba(139,92,246,0.15);color:#a78bfa;border:1px solid rgba(139,92,246,0.2);justify-content:flex-start;gap:12px;padding:12px 16px;">
+        <i class="fa-solid fa-robot fa-fw"></i>
+        <div>
+          <div>Ask BOSS AI</div>
+          <div style="font-size:11px;opacity:0.7;font-weight:400">Chat with your knowledge base</div>
+        </div>
+      </a>
+      <a href="/messages" class="btn" style="background:rgba(16,185,129,0.1);color:#34d399;border:1px solid rgba(16,185,129,0.2);justify-content:flex-start;gap:12px;padding:12px 16px;">
+        <i class="fa-solid fa-comments fa-fw"></i>
+        <div>
+          <div>Team Messages</div>
+          <div style="font-size:11px;opacity:0.7;font-weight:400">Internal communication</div>
+        </div>
+      </a>
+      {% if user.role in ('super_admin', 'admin') %}
+      <a href="/users" class="btn btn-ghost" style="justify-content:flex-start;gap:12px;padding:12px 16px;">
+        <i class="fa-solid fa-user-plus fa-fw"></i>
+        <div>
+          <div>Manage Users</div>
+          <div style="font-size:11px;opacity:0.7;font-weight:400">Add or edit team members</div>
+        </div>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

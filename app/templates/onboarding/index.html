@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+{% block title %}Onboarding — BOSS System{% endblock %}
+{% block page_title %}Onboarding{% endblock %}
+{% block page_sub %}Employee setup & progress tracking{% endblock %}
+
+{% block extra_css %}
+.step-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px 20px;
+  display:flex; align-items:flex-start; gap:14px;
+  transition:border-color 0.15s;
+}
+.step-card:hover { border-color:var(--border2); }
+.step-card.completed { border-color:rgba(16,185,129,0.3); background:rgba(16,185,129,0.03); }
+.step-num {
+  width:36px; height:36px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:800; font-size:14px;
+  flex-shrink:0;
+}
+.progress-track {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px 20px; margin-bottom:10px;
+}
+.progress-bar-wrap { background:var(--border); border-radius:10px; height:6px; margin-top:6px; }
+.progress-bar-fill { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--accent),var(--green)); transition:width 0.5s ease; }
+{% endblock %}
+
+{% block content %}
+<div style="display:grid;grid-template-columns:{% if new_employees %}1fr 340px{% else %}1fr{% endif %};gap:20px;align-items:start;">
+
+  <!-- Steps list -->
+  <div>
+    <div class="flex justify-between items-center mb-6">
+      <div>
+        {% set my_done = my_progress.values()|selectattr('__eq__', 'equalto', True)|list|length %}
+        {% set total_steps = steps|length %}
+        <div style="font-size:13px;color:var(--text3);">Your Progress: <strong style="color:var(--text)">{{ my_done }}/{{ total_steps }}</strong> steps</div>
+        <div class="progress-bar-wrap" style="width:200px;margin-top:6px;">
+          <div class="progress-bar-fill" style="width:{% if total_steps %}{{ (my_done/total_steps*100)|round }}{% else %}0{% endif %}%"></div>
+        </div>
+      </div>
+      {% if user.role in ('super_admin', 'admin') %}
+      <button class="btn btn-primary" onclick="openModal('addStepModal')">
+        <i class="fa-solid fa-plus"></i> Add Step
+      </button>
+      {% endif %}
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      {% for step in steps %}
+      {% set is_done = my_progress.get(step.id, False) %}
+      <div class="step-card {% if is_done %}completed{% endif %}" id="step-{{ step.id }}">
+        <div class="step-num" style="background:{% if is_done %}rgba(16,185,129,0.15);color:#34d399{% else %}rgba(59,130,246,0.12);color:#60a5fa{% endif %}">
+          {% if is_done %}<i class="fa-solid fa-check" style="font-size:13px;"></i>{% else %}{{ step.step_order or loop.index }}{% endif %}
+        </div>
+        <div style="flex:1">
+          <div class="flex items-center gap-2 mb-1">
+            <div style="font-weight:600;font-size:14px;">{{ step.title }}</div>
+            {% if step.is_required %}
+            <span class="badge badge-red" style="font-size:10px;">Required</span>
+            {% else %}
+            <span class="badge badge-gray" style="font-size:10px;">Optional</span>
+            {% endif %}
+            {% if is_done %}
+            <span class="badge badge-green" style="font-size:10px;margin-left:auto;"><i class="fa-solid fa-check"></i> Done</span>
+            {% endif %}
+          </div>
+          {% if step.description %}
+          <div class="text-sm" style="color:var(--text2);line-height:1.6;">{{ step.description }}</div>
+          {% endif %}
+          {% if not is_done %}
+          <button class="btn btn-success btn-sm mt-2" onclick="completeStep({{ step.id }}, this)">
+            <i class="fa-solid fa-check"></i> Mark Complete
+          </button>
+          {% endif %}
+        </div>
+      </div>
+      {% else %}
+      <div class="card" style="text-align:center;padding:50px 20px;">
+        <i class="fa-solid fa-rocket" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px;"></i>
+        <div style="color:var(--text3);font-size:14px;">No onboarding steps configured yet.</div>
+        {% if user.role in ('super_admin', 'admin') %}
+        <button class="btn btn-primary" style="margin-top:16px;" onclick="openModal('addStepModal')">
+          <i class="fa-solid fa-plus"></i> Create First Step
+        </button>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- New employees progress (admin view) -->
+  {% if new_employees %}
+  <div>
+    <div class="card-title mb-4"><i class="fa-solid fa-users" style="color:var(--accent)"></i> New Employee Progress</div>
+    {% for item in new_employees %}
+    <div class="progress-track">
+      <div class="flex items-center gap-10 mb-2">
+        <div class="avatar" style="background:{{ item.user.avatar_color }};width:30px;height:30px;font-size:11px;">
+          {{ item.user.full_name[:2].upper() }}
+        </div>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:600;">{{ item.user.full_name }}</div>
+          <div class="text-xs text-muted">{{ item.user.department }}</div>
+        </div>
+        <div class="text-xs text-muted">{{ item.completed }}/{{ item.total }}</div>
+      </div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" style="width:{{ item.pct }}%;"></div>
+      </div>
+      <div class="text-xs text-muted mt-1 text-right">{{ item.pct }}% complete</div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Add Step Modal -->
+{% if user.role in ('super_admin', 'admin') %}
+<div class="modal-overlay" id="addStepModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-rocket" style="color:var(--accent)"></i> Add Onboarding Step</span>
+      <span class="modal-close" onclick="closeModal('addStepModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Step Title *</label>
+      <input type="text" id="s-title" class="form-control" placeholder="e.g. Complete company policy review" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea id="s-desc" class="form-control" rows="3" placeholder="Instructions for this step..." style="padding-left:12px"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Order</label>
+        <input type="number" id="s-order" class="form-control" value="{{ steps|length + 1 }}" min="1" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Required?</label>
+        <select id="s-req" class="form-control" style="padding-left:12px">
+          <option value="1">Yes — Required</option>
+          <option value="0">No — Optional</option>
+        </select>
+      </div>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('addStepModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addStep()"><i class="fa-solid fa-plus"></i> Add Step</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function completeStep(stepId, btn) {
+  btn.disabled = true;
+  const resp = await fetch(`/onboarding/step/${stepId}/complete`, { method:'POST' });
+  const data = await resp.json();
+  if (resp.ok) {
+    const card = document.getElementById(`step-${stepId}`);
+    card.classList.add('completed');
+    btn.remove();
+    toast('Step completed!', 'success');
+    if (data.onboarding_complete) {
+      toast('🎉 Onboarding complete! Welcome to the team!', 'success');
+    }
+  }
+}
+
+async function addStep() {
+  const fd = new FormData();
+  fd.append('title', document.getElementById('s-title').value);
+  fd.append('description', document.getElementById('s-desc').value);
+  fd.append('step_order', document.getElementById('s-order').value);
+  fd.append('is_required', document.getElementById('s-req').value === '1');
+
+  const resp = await fetch('/onboarding/step/create', { method:'POST', body:fd });
+  if (resp.ok) {
+    toast('Step created!', 'success');
+    closeModal('addStepModal');
+    setTimeout(() => location.reload(), 600);
+  }
+}
+</script>
+{% endblock %}

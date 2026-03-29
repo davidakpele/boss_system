@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}Risk Management — BOSS System{% endblock %}
+{% block page_title %}Risk Management{% endblock %}
+{% block page_sub %}Identify, assess, and mitigate business risks{% endblock %}
+
+{% block extra_css %}
+.risk-matrix-cell {
+  width:60px; height:60px; border-radius:8px;
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; color:#fff; cursor:pointer;
+}
+.risk-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px 20px;
+  transition:border-color 0.15s;
+}
+.risk-card:hover { border-color:var(--border2); }
+.risk-score-badge {
+  width:44px; height:44px; border-radius:10px;
+  display:flex; align-items:center; justify-content:center;
+  font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:800; font-size:16px;
+  flex-shrink:0;
+}
+.impact-row { display:flex; gap:6px; align-items:center; margin-top:4px; }
+.impact-dot { width:8px; height:8px; border-radius:50%; }
+{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div class="flex gap-2" style="flex-wrap:wrap;">
+    <span class="badge badge-red"><i class="fa-solid fa-circle" style="font-size:7px"></i> {{ risks|selectattr('risk_score','ge',15)|list|length }} Critical (≥15)</span>
+    <span class="badge badge-yellow"><i class="fa-solid fa-circle" style="font-size:7px"></i> {{ risks|selectattr('risk_score','ge',8)|selectattr('risk_score','lt',15)|list|length }} High (8–14)</span>
+    <span class="badge badge-blue"><i class="fa-solid fa-circle" style="font-size:7px"></i> {{ risks|selectattr('risk_score','lt',8)|list|length }} Medium/Low (&lt;8)</span>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('addRiskModal')">
+    <i class="fa-solid fa-plus"></i> Add Risk
+  </button>
+</div>
+
+<!-- Risk Cards -->
+<div style="display:flex;flex-direction:column;gap:10px;">
+  {% for risk in risks %}
+  {% set score = risk.risk_score %}
+  {% if score >= 15 %}
+    {% set risk_color = '#f87171' %}{% set risk_bg = 'rgba(239,68,68,0.12)' %}{% set risk_label = 'Critical' %}
+  {% elif score >= 8 %}
+    {% set risk_color = '#fbbf24' %}{% set risk_bg = 'rgba(245,158,11,0.12)' %}{% set risk_label = 'High' %}
+  {% elif score >= 4 %}
+    {% set risk_color = '#60a5fa' %}{% set risk_bg = 'rgba(59,130,246,0.12)' %}{% set risk_label = 'Medium' %}
+  {% else %}
+    {% set risk_color = '#34d399' %}{% set risk_bg = 'rgba(16,185,129,0.12)' %}{% set risk_label = 'Low' %}
+  {% endif %}
+  <div class="risk-card">
+    <div class="flex items-center gap-3">
+      <div class="risk-score-badge" style="background:{{ risk_bg }};color:{{ risk_color }};">
+        {{ score|int }}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="flex items-center gap-2 mb-1" style="flex-wrap:wrap;">
+          <div style="font-weight:600;font-size:14px;">{{ risk.title }}</div>
+          <span class="badge" style="background:{{ risk_bg }};color:{{ risk_color }};">{{ risk_label }}</span>
+          <span class="badge badge-gray">{{ risk.category }}</span>
+          <span class="badge badge-
+            {% if risk.status == 'open' %}red
+            {% elif risk.status == 'mitigated' %}green
+            {% else %}gray{% endif %}">
+            {{ risk.status.title() }}
+          </span>
+        </div>
+        {% if risk.description %}
+        <div class="text-sm text-muted">{{ risk.description[:150] }}{% if risk.description|length > 150 %}...{% endif %}</div>
+        {% endif %}
+        <div class="impact-row mt-2">
+          <span class="text-xs text-muted">Likelihood:</span>
+          {% for i in range(5) %}
+          <div class="impact-dot" style="background:{% if i < risk.likelihood %}{{ risk_color }}{% else %}var(--border){% endif %}"></div>
+          {% endfor %}
+          <span class="text-xs text-muted" style="margin-left:8px;">Impact:</span>
+          {% for i in range(5) %}
+          <div class="impact-dot" style="background:{% if i < risk.impact %}{{ risk_color }}{% else %}var(--border){% endif %}"></div>
+          {% endfor %}
+          <span class="font-mono text-xs text-muted" style="margin-left:8px;">{{ risk.likelihood }}×{{ risk.impact }}={{ score|int }}</span>
+        </div>
+        {% if risk.mitigation_plan %}
+        <div class="text-xs" style="margin-top:8px;padding:6px 10px;background:rgba(0,0,0,0.2);border-radius:6px;border-left:3px solid {{ risk_color }};color:var(--text2);">
+          <i class="fa-solid fa-shield-halved" style="color:{{ risk_color }};margin-right:4px;"></i>
+          <strong>Mitigation:</strong> {{ risk.mitigation_plan[:200] }}{% if risk.mitigation_plan|length > 200 %}...{% endif %}
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:60px 20px;">
+    <i class="fa-solid fa-triangle-exclamation" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px;"></i>
+    <div style="color:var(--text3);font-size:14px;">No risks identified yet.</div>
+    <button class="btn btn-primary" style="margin-top:16px;" onclick="openModal('addRiskModal')">
+      <i class="fa-solid fa-plus"></i> Add First Risk
+    </button>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Add Risk Modal -->
+<div class="modal-overlay" id="addRiskModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--yellow)"></i> Add Risk Item</span>
+      <span class="modal-close" onclick="closeModal('addRiskModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Risk Title *</label>
+      <input type="text" id="r-title" class="form-control" placeholder="e.g. Data breach from unsecured endpoints" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea id="r-desc" class="form-control" rows="2" placeholder="Describe the risk..." style="padding-left:12px"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Category</label>
+        <select id="r-cat" class="form-control" style="padding-left:12px">
+          <option>Operational</option><option>Financial</option><option>Legal</option>
+          <option>Technology</option><option>HR</option><option>Strategic</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Likelihood (1-5)</label>
+        <input type="number" id="r-like" class="form-control" min="1" max="5" value="3" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Impact (1-5)</label>
+        <input type="number" id="r-impact" class="form-control" min="1" max="5" value="3" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Mitigation Plan</label>
+      <textarea id="r-mit" class="form-control" rows="2" placeholder="How will this risk be mitigated?" style="padding-left:12px"></textarea>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('addRiskModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addRisk()"><i class="fa-solid fa-plus"></i> Add Risk</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function addRisk() {
+  const fd = new FormData();
+  fd.append('title', document.getElementById('r-title').value);
+  fd.append('description', document.getElementById('r-desc').value);
+  fd.append('category', document.getElementById('r-cat').value);
+  fd.append('likelihood', document.getElementById('r-like').value);
+  fd.append('impact', document.getElementById('r-impact').value);
+  fd.append('mitigation_plan', document.getElementById('r-mit').value);
+
+  const resp = await fetch('/risk-management/create', { method:'POST', body:fd });
+  if (resp.ok) {
+    toast('Risk added!', 'success');
+    closeModal('addRiskModal');
+    setTimeout(() => location.reload(), 600);
+  } else {
+    toast('Error adding risk', 'error');
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Settings — BOSS System{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_sub %}Profile & system preferences{% endblock %}
+
+{% block content %}
+<div style="max-width:680px;display:flex;flex-direction:column;gap:16px;">
+
+  <!-- Profile -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-user-circle" style="color:var(--accent)"></i> Profile</div>
+    <div class="flex items-center gap-16 mb-6">
+      <div class="avatar lg" style="background:{{ user.avatar_color }};width:64px;height:64px;font-size:22px;border-radius:16px;">
+        {{ user.full_name[:2].upper() }}
+      </div>
+      <div>
+        <div style="font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri;font-size:18px;font-weight:700;">{{ user.full_name }}</div>
+        <div style="color:var(--text3);font-size:13px;">{{ user.email }}</div>
+        <span class="badge badge-blue mt-1">{{ user.role.value.replace('_',' ').title() }}</span>
+      </div>
+    </div>
+    <form onsubmit="updateProfile(event)">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <input type="text" id="p-name" class="form-control" value="{{ user.full_name }}" style="padding-left:12px"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Department</label>
+          <select id="p-dept" class="form-control" style="padding-left:12px">
+            {% for dept in ['HR','Sales','Technology','Finance','Operations','Legal','Marketing','Management','General'] %}
+            <option {% if user.department == dept %}selected{% endif %}>{{ dept }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="fa-solid fa-floppy-disk"></i> Save Profile</button>
+    </form>
+  </div>
+
+  <!-- Change Password -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-lock" style="color:var(--yellow)"></i> Security</div>
+    <form onsubmit="changePassword(event)">
+      <div class="form-group">
+        <label class="form-label">Current Password</label>
+        <input type="password" id="pw-cur" class="form-control" placeholder="••••••••" style="padding-left:12px"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" id="pw-new" class="form-control" placeholder="••••••••" style="padding-left:12px"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm New</label>
+          <input type="password" id="pw-conf" class="form-control" placeholder="••••••••" style="padding-left:12px"/>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="fa-solid fa-key"></i> Update Password</button>
+    </form>
+  </div>
+
+  <!-- System Info -->
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-circle-info" style="color:var(--text3)"></i> System Information</div>
+    <table class="table">
+      <tbody>
+        <tr><td style="color:var(--text3);width:180px;">System</td><td><strong>BOSS — Business Operating System</strong></td></tr>
+        <tr><td style="color:var(--text3);">Version</td><td><span class="font-mono">v1.0.0</span></td></tr>
+        <tr><td style="color:var(--text3);">AI Engine</td><td><span class="font-mono">codellama:7b-instruct-q4_K_M</span></td></tr>
+        <tr><td style="color:var(--text3);">Backend</td><td><span class="font-mono">Python · FastAPI · MySQL</span></td></tr>
+        <tr><td style="color:var(--text3);">Developed by</td><td>MindSync AI Consults</td></tr>
+        <tr><td style="color:var(--text3);">Your Role</td><td><span class="badge badge-blue">{{ user.role.value.replace('_',' ').title() }}</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function updateProfile(e) {
+  e.preventDefault();
+  const fd = new FormData();
+  fd.append('full_name', document.getElementById('p-name').value);
+  fd.append('department', document.getElementById('p-dept').value);
+  const resp = await fetch('/settings/profile', { method:'POST', body:fd });
+  if (resp.ok) toast('Profile updated!', 'success');
+  else toast('Error updating profile', 'error');
+}
+
+async function changePassword(e) {
+  e.preventDefault();
+  const newpw = document.getElementById('pw-new').value;
+  const conf = document.getElementById('pw-conf').value;
+  if (newpw !== conf) { toast('Passwords do not match', 'error'); return; }
+  const fd = new FormData();
+  fd.append('current_password', document.getElementById('pw-cur').value);
+  fd.append('new_password', newpw);
+  const resp = await fetch('/settings/password', { method:'POST', body:fd });
+  const data = await resp.json();
+  if (resp.ok) { toast('Password updated!', 'success'); document.getElementById('pw-cur').value=''; document.getElementById('pw-new').value=''; document.getElementById('pw-conf').value=''; }
+  else toast(data.error || 'Error', 'error');
+}
+</script>
+{% endblock %}

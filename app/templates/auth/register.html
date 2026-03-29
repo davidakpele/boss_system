@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Register — BOSS System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
+  <style>
+    :root{--bg:#080c14;--bg2:#0d1422;--surface:#131d2e;--border:#1f2d42;--accent:#3b82f6;--accent-glow:rgba(59,130,246,0.18);--purple:#8b5cf6;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--red:#ef4444;}
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
+    .bg-mesh{position:fixed;inset:0;background:radial-gradient(ellipse 60% 50% at 20% 40%,rgba(59,130,246,0.08) 0%,transparent 70%),radial-gradient(ellipse 50% 60% at 80% 60%,rgba(139,92,246,0.06) 0%,transparent 70%);pointer-events:none;}
+    .bg-grid{position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:50px 50px;opacity:0.3;pointer-events:none;}
+    .auth-container{width:100%;max-width:460px;position:relative;z-index:10;}
+    .auth-logo{text-align:center;margin-bottom:28px;}
+    .logo-mark{width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri;font-weight:800;font-size:18px;color:#fff;margin-bottom:12px;box-shadow:0 8px 32px rgba(59,130,246,0.3);}
+    .auth-title{font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri;font-weight:800;font-size:24px;}
+    .auth-sub{font-size:13px;color:var(--text3);margin-top:4px;}
+    .auth-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px;}
+    .form-group{margin-bottom:16px;}
+    .form-label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;}
+    .input-wrap{position:relative;}
+    .input-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none;}
+    .form-control{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:10px 12px 10px 36px;color:var(--text);font-size:13.5px;font-family:'DM Sans',sans-serif;transition:border-color 0.15s,box-shadow 0.15s;outline:none;}
+    .form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
+    .form-control::placeholder{color:var(--text3);}
+    select.form-control{padding-left:36px;}
+    select.form-control option{background:var(--bg2);}
+    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+    .btn-submit{width:100%;padding:11px;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;font-size:14px;font-weight:700;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
+    .btn-submit:hover{opacity:0.9;}
+    .error-msg{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+    .auth-footer{text-align:center;margin-top:20px;font-size:12.5px;color:var(--text3);}
+    .auth-footer a{color:#60a5fa;text-decoration:none;}
+    .auth-footer a:hover{text-decoration:underline;}
+    .powered-by{text-align:center;margin-top:24px;font-size:11px;color:var(--text3);opacity:0.6;}
+    .powered-by span{color:#60a5fa;}
+  </style>
+</head>
+<body>
+  <div class="bg-mesh"></div>
+  <div class="bg-grid"></div>
+  <div class="auth-container">
+    <div class="auth-logo">
+      <div class="logo-mark">BOS</div>
+      <div class="auth-title">Create Account</div>
+      <div class="auth-sub">Join your organization's BOSS System</div>
+    </div>
+    <div class="auth-card">
+      {% if error %}
+      <div class="error-msg"><i class="fa-solid fa-circle-exclamation"></i> {{ error }}</div>
+      {% endif %}
+      <form method="POST" action="/auth/register">
+        <div class="form-group">
+          <label class="form-label">Full Name</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-user input-icon"></i>
+            <input type="text" name="full_name" class="form-control" placeholder="John Doe" required/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Email Address</label>
+          <div class="input-wrap">
+            <i class="fa-solid fa-envelope input-icon"></i>
+            <input type="email" name="email" class="form-control" placeholder="you@company.com" required/>
+          </div>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <div class="input-wrap">
+              <i class="fa-solid fa-building input-icon"></i>
+              <select name="department" class="form-control" required>
+                <option value="">Select...</option>
+                <option>HR</option><option>Sales</option><option>Technology</option>
+                <option>Finance</option><option>Operations</option><option>Legal</option>
+                <option>Marketing</option><option>Management</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <div class="input-wrap">
+              <i class="fa-solid fa-lock input-icon"></i>
+              <input type="password" name="password" class="form-control" placeholder="••••••••" required minlength="6"/>
+            </div>
+          </div>
+        </div>
+        <button type="submit" class="btn-submit">
+          <i class="fa-solid fa-user-plus"></i> Create Account
+        </button>
+      </form>
+    </div>
+    <div class="auth-footer">Already have an account? <a href="/auth/login">Sign in</a></div>
+    <div class="powered-by">Powered by <span>MindSync AI Consults</span></div>
+  </div>
+</body>
+</html>

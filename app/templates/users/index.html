@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Users — BOSS System{% endblock %}
+{% block page_title %}Users{% endblock %}
+{% block page_sub %}Team member management{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div>
+    <span class="badge badge-blue"><i class="fa-solid fa-users"></i> {{ users|length }} Total</span>
+    <span class="badge badge-green ml-2"><i class="fa-solid fa-circle" style="font-size:7px"></i> {{ users|selectattr('is_online')|list|length }} Online</span>
+  </div>
+  {% if user.role in ('super_admin', 'admin') %}
+  <button class="btn btn-primary" onclick="openModal('addUserModal')">
+    <i class="fa-solid fa-user-plus"></i> Add User
+  </button>
+  {% endif %}
+</div>
+
+<div class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Member</th>
+        <th>Department</th>
+        <th>Role</th>
+        <th>Status</th>
+        <th>Onboarding</th>
+        <th>Joined</th>
+        {% if user.role in ('super_admin', 'admin') %}<th>Actions</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td>
+          <div class="flex items-center gap-10">
+            <div class="avatar" style="background:{{ u.avatar_color }};position:relative;">
+              {{ u.full_name[:2].upper() }}
+              {% if u.is_online %}
+              <div style="position:absolute;bottom:0;right:0;width:9px;height:9px;background:var(--green);border-radius:50%;border:2px solid var(--surface);box-shadow:0 0 4px var(--green)"></div>
+              {% endif %}
+            </div>
+            <div>
+              <div style="font-weight:600;font-size:13.5px;">{{ u.full_name }}</div>
+              <div class="text-xs text-muted">{{ u.email }}</div>
+            </div>
+          </div>
+        </td>
+        <td><span class="badge badge-gray">{{ u.department or '—' }}</span></td>
+        <td>
+          <span class="badge badge-
+            {% if u.role.value == 'super_admin' %}red
+            {% elif u.role.value == 'admin' %}purple
+            {% elif u.role.value == 'manager' %}blue
+            {% elif u.role.value == 'staff' %}green
+            {% else %}gray{% endif %}">
+            {{ u.role.value.replace('_', ' ').title() }}
+          </span>
+        </td>
+        <td>
+          {% if u.is_active %}
+          <span class="badge badge-green"><i class="fa-solid fa-circle" style="font-size:7px"></i> Active</span>
+          {% else %}
+          <span class="badge badge-red"><i class="fa-solid fa-circle" style="font-size:7px"></i> Inactive</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if u.onboarding_complete %}
+          <span class="badge badge-green"><i class="fa-solid fa-check"></i> Complete</span>
+          {% elif u.role.value == 'new_employee' %}
+          <span class="badge badge-yellow"><i class="fa-solid fa-clock"></i> In Progress</span>
+          {% else %}
+          <span class="badge badge-gray">N/A</span>
+          {% endif %}
+        </td>
+        <td class="text-xs text-muted">{{ u.created_at.strftime('%b %d, %Y') if u.created_at else '—' }}</td>
+        {% if user.role in ('super_admin', 'admin') and u.id != user.id %}
+        <td>
+          <button class="btn btn-ghost btn-xs" onclick="toggleUser({{ u.id }}, this)">
+            {% if u.is_active %}
+            <i class="fa-solid fa-ban"></i> Deactivate
+            {% else %}
+            <i class="fa-solid fa-check"></i> Activate
+            {% endif %}
+          </button>
+        </td>
+        {% elif u.id == user.id %}
+        <td><span class="text-xs text-muted">You</span></td>
+        {% elif user.role in ('super_admin', 'admin') %}
+        <td>—</td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Add User Modal -->
+{% if user.role in ('super_admin', 'admin') %}
+<div class="modal-overlay" id="addUserModal">
+  <div class="modal">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-user-plus" style="color:var(--accent)"></i> Add New User</span>
+      <span class="modal-close" onclick="closeModal('addUserModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Full Name</label>
+      <input type="text" id="nu-name" class="form-control" placeholder="Jane Smith" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Email</label>
+      <input type="email" id="nu-email" class="form-control" placeholder="jane@company.com" style="padding-left:12px"/>
+    </div>
+    <div class="grid-2" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Department</label>
+        <select id="nu-dept" class="form-control" style="padding-left:12px">
+          <option value="HR">HR</option>
+          <option value="Sales">Sales</option>
+          <option value="Technology">Technology</option>
+          <option value="Finance">Finance</option>
+          <option value="Operations">Operations</option>
+          <option value="Legal">Legal</option>
+          <option value="Management">Management</option>
+          <option value="General">General</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Role</label>
+        <select id="nu-role" class="form-control" style="padding-left:12px">
+          {% for role in roles %}
+          <option value="{{ role }}" {% if role == 'staff' %}selected{% endif %}>{{ role.replace('_',' ').title() }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Temporary Password</label>
+      <input type="password" id="nu-pass" class="form-control" placeholder="Min 6 characters" style="padding-left:12px"/>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('addUserModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addUser()"><i class="fa-solid fa-user-plus"></i> Create User</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function addUser() {
+  const fd = new FormData();
+  fd.append('full_name', document.getElementById('nu-name').value);
+  fd.append('email', document.getElementById('nu-email').value);
+  fd.append('department', document.getElementById('nu-dept').value);
+  fd.append('role', document.getElementById('nu-role').value);
+  fd.append('password', document.getElementById('nu-pass').value);
+
+  const resp = await fetch('/users/create', { method:'POST', body:fd });
+  const data = await resp.json();
+  if (resp.ok) {
+    toast('User created successfully!', 'success');
+    closeModal('addUserModal');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    toast(data.error || 'Error creating user', 'error');
+  }
+}
+
+async function toggleUser(userId, btn) {
+  const resp = await fetch(`/users/${userId}/toggle`, { method:'POST' });
+  if (resp.ok) {
+    toast('User status updated', 'success');
+    setTimeout(() => location.reload(), 600);
+  }
+}
+</script>
+{% endblock %}

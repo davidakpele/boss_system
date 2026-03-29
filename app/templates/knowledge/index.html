@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Knowledge Base — BOSS System{% endblock %}
+{% block page_title %}Knowledge Base{% endblock %}
+{% block page_sub %}AI-extracted company intelligence{% endblock %}
+
+{% block extra_css %}
+.kb-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:16px 18px;
+  transition:border-color 0.15s;
+}
+.kb-card:hover { border-color:var(--border2); }
+.kb-source-badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 9px; border-radius:20px; font-size:11px; font-weight:600;
+}
+.source-doc { background:rgba(59,130,246,0.1); color:#60a5fa; }
+.source-msg { background:rgba(16,185,129,0.1); color:#34d399; }
+.source-manual { background:rgba(139,92,246,0.1); color:#a78bfa; }
+.kb-content {
+  font-size:13.5px; line-height:1.7; color:var(--text2);
+  margin:10px 0; display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden;
+}
+.kb-summary {
+  font-size:12px; color:var(--text3); font-style:italic;
+  padding:8px 12px; background:rgba(0,0,0,0.2); border-radius:6px;
+  border-left:3px solid var(--accent);
+}
+.search-bar {
+  display:flex; gap:10px; align-items:center;
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:8px 14px;
+  transition:border-color 0.15s;
+}
+.search-bar:focus-within { border-color:var(--accent); }
+.search-bar input { flex:1; background:none; border:none; outline:none; color:var(--text); font-size:14px; }
+.search-bar input::placeholder { color:var(--text3); }
+.kb-grid { display:flex; flex-direction:column; gap:12px; }
+.stats-mini {
+  display:flex; gap:16px; flex-wrap:wrap;
+}
+.stats-mini-item {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius-sm); padding:12px 18px;
+  text-align:center; flex:1; min-width:100px;
+}
+.stats-mini-val { font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
+                 Roboto, Oxygen, Ubuntu, Cantarell,
+                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:700; font-size:20px; }
+.stats-mini-label { font-size:11px; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; }
+{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-mini mb-6">
+  <div class="stats-mini-item">
+    <div class="stats-mini-val" style="color:#60a5fa">{{ chunks|length }}</div>
+    <div class="stats-mini-label">Knowledge Chunks</div>
+  </div>
+  <div class="stats-mini-item">
+    <div class="stats-mini-val" style="color:#34d399">{{ chunks|selectattr('source_type','eq','document')|list|length }}</div>
+    <div class="stats-mini-label">From Documents</div>
+  </div>
+  <div class="stats-mini-item">
+    <div class="stats-mini-val" style="color:#a78bfa">{{ chunks|selectattr('source_type','eq','message')|list|length }}</div>
+    <div class="stats-mini-label">From Messages</div>
+  </div>
+  <div class="stats-mini-item">
+    <div class="stats-mini-val" style="color:#fbbf24">{{ departments|length }}</div>
+    <div class="stats-mini-label">Departments</div>
+  </div>
+</div>
+
+<!-- Search & Filters -->
+<form method="GET" action="/knowledge-base">
+  <div class="flex gap-3 mb-6" style="flex-wrap:wrap;">
+    <div class="search-bar" style="flex:1;min-width:200px;">
+      <i class="fa-solid fa-magnifying-glass" style="color:var(--text3)"></i>
+      <input type="text" name="search" value="{{ filters.search or '' }}" placeholder="Search knowledge base..."/>
+    </div>
+    <select name="department" class="form-control" style="width:auto;padding-left:12px;" onchange="this.form.submit()">
+      <option value="">All Departments</option>
+      {% for dept in departments %}
+      <option value="{{ dept }}" {% if filters.department == dept %}selected{% endif %}>{{ dept }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-search"></i> Search</button>
+    {% if filters.search or filters.department %}
+    <a href="/knowledge-base" class="btn btn-ghost"><i class="fa-solid fa-times"></i> Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Knowledge chunks -->
+<div class="kb-grid">
+  {% for chunk in chunks %}
+  <div class="kb-card">
+    <div class="flex items-center gap-2 mb-2" style="flex-wrap:wrap;">
+      <span class="kb-source-badge source-{{ chunk.source_type }}">
+        <i class="fa-solid fa-{% if chunk.source_type == 'document' %}file-lines{% elif chunk.source_type == 'message' %}comments{% else %}pencil{% endif %}"></i>
+        {{ chunk.source_type.title() }}
+      </span>
+      {% if chunk.department %}
+      <span class="badge badge-blue">{{ chunk.department }}</span>
+      {% endif %}
+      <span class="text-xs text-muted" style="margin-left:auto;">
+        {{ chunk.created_at.strftime('%b %d, %Y') if chunk.created_at else '' }}
+      </span>
+    </div>
+    <div class="kb-content">{{ chunk.content }}</div>
+    {% if chunk.summary %}
+    <div class="kb-summary">
+      <i class="fa-solid fa-robot" style="font-size:10px;margin-right:4px;color:var(--accent)"></i>
+      <strong style="color:var(--text2)">AI Summary:</strong> {{ chunk.summary }}
+    </div>
+    {% endif %}
+  </div>
+  {% else %}
+  <div class="card" style="text-align:center;padding:60px 20px;">
+    <i class="fa-solid fa-brain" style="font-size:48px;opacity:0.15;display:block;margin-bottom:16px;"></i>
+    <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Knowledge Base is Empty</div>
+    <div style="color:var(--text3);font-size:13px;max-width:400px;margin:0 auto;">
+      Upload documents or start conversations in Messages. The AI will automatically extract and store key knowledge.
+    </div>
+    <div class="flex gap-3 justify-between" style="margin-top:20px;justify-content:center;">
+      <a href="/documents/new" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload Document</a>
+      <a href="/messages" class="btn btn-ghost"><i class="fa-solid fa-comments"></i> Go to Messages</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
