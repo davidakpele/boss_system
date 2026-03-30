@@ -1,14 +1,21 @@
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, Form
+# src/app/routers/messages.py
+import os
+import uuid
+import logging
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+
 from app.database import get_db, AsyncSessionLocal
 from app.models import Channel, ChannelMember, Message, User, KnowledgeChunk
 from app.auth import require_user
 from app.services.websocket_manager import manager
 from app.services.ai_service import ai_service
-import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +24,24 @@ templates = Jinja2Templates(directory="app/templates")
 
 DEPARTMENTS = ["HR", "Sales", "Technology", "Finance", "Operations", "Legal", "Marketing", "Management", "General"]
 
+# Max file size: 20 MB
+MAX_FILE_SIZE = 20 * 1024 * 1024
+
+ALLOWED_EXTENSIONS = {
+    # Images
+    "png", "jpg", "jpeg", "gif", "webp",
+    # Documents
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv",
+    # Code
+    "py", "js", "ts", "html", "json", "md",
+    # Archives
+    "zip", "rar", "7z",
+    # Audio / Video
+    "mp3", "wav", "mp4", "mov", "avi",
+}
+
+
+# ── PAGES ──────────────────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
 async def messages_page(
@@ -24,7 +49,6 @@ async def messages_page(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    # Channels user belongs to
     channels_q = await db.execute(
         select(Channel)
         .join(ChannelMember, and_(
@@ -36,12 +60,10 @@ async def messages_page(
     )
     channels = channels_q.scalars().all()
 
-    # All users except self
     all_users = (await db.execute(
         select(User).where(User.id != current_user.id).order_by(User.full_name)
     )).scalars().all()
 
-    # All department channels
     all_channels = (await db.execute(
         select(Channel).where(Channel.channel_type == "department").order_by(Channel.name)
     )).scalars().all()
@@ -63,6 +85,8 @@ async def messages_page(
     )
 
 
+# ── HISTORY ────────────────────────────────────────────────────────────────────
+
 @router.get("/channel/{channel_id}/history")
 async def get_channel_history(
     channel_id: int,
@@ -79,14 +103,7 @@ async def get_channel_history(
     result = await db.execute(stmt)
     messages = []
     for msg, name, color in result.all():
-        messages.append({
-            "id": msg.id,
-            "content": msg.content,
-            "sender_id": msg.sender_id,
-            "sender_name": name,
-            "avatar_color": color,
-            "created_at": msg.created_at.isoformat() if msg.created_at else "",
-        })
+        messages.append(_serialize_message(msg, name, color))
     return JSONResponse(messages)
 
 
@@ -96,7 +113,6 @@ async def init_dm(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    """Get or create a DM channel, return channel_id + message history."""
     channel = await _get_or_create_dm(db, current_user.id, other_user_id)
 
     stmt = (
@@ -109,16 +125,33 @@ async def init_dm(
     result = await db.execute(stmt)
     messages = []
     for msg, name, color in result.all():
-        messages.append({
-            "id": msg.id,
-            "content": msg.content,
-            "sender_id": msg.sender_id,
-            "sender_name": name,
-            "avatar_color": color,
-            "created_at": msg.created_at.isoformat() if msg.created_at else "",
-        })
+        messages.append(_serialize_message(msg, name, color))
+
     return JSONResponse({"channel_id": channel.id, "messages": messages})
 
+
+def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dict:
+    """Convert a Message ORM object to a JSON-safe dict."""
+    return {
+        "id": msg.id,
+        "content": msg.content or "",
+        "sender_id": msg.sender_id,
+        "sender_name": sender_name,
+        "avatar_color": avatar_color,
+        "created_at": msg.created_at.isoformat() if msg.created_at else "",
+        "is_deleted": bool(msg.is_deleted),
+        # Reply fields
+        "reply_to_id": msg.reply_to_id,
+        "reply_to_sender": msg.reply_to_sender,
+        "reply_to_content": msg.reply_to_content,
+        # File fields
+        "file_url": msg.file_url,
+        "file_name": msg.file_name,
+        "file_size": msg.file_size,
+    }
+
+
+# ── DM HELPER ──────────────────────────────────────────────────────────────────
 
 async def _get_or_create_dm(db: AsyncSession, user_a: int, user_b: int) -> Channel:
     dm_name = f"dm_{min(user_a, user_b)}_{max(user_a, user_b)}"
@@ -142,6 +175,8 @@ async def _get_or_create_dm(db: AsyncSession, user_a: int, user_b: int) -> Chann
     return channel
 
 
+# ── CHANNEL MANAGEMENT ─────────────────────────────────────────────────────────
+
 @router.post("/channel/create")
 async def create_channel(
     name: str = Form(...),
@@ -162,10 +197,8 @@ async def create_channel(
     db.add(channel)
     await db.flush()
 
-    # Add creator
     db.add(ChannelMember(channel_id=channel.id, user_id=current_user.id))
 
-    # Auto-add users in selected departments
     if dept_list:
         dept_users = (await db.execute(
             select(User).where(User.department.in_(dept_list), User.id != current_user.id)
@@ -217,7 +250,6 @@ async def update_channel(
     channel.description = description
     channel.department = ",".join(dept_list)
 
-    # Remove all members except creator, re-add based on new depts
     await db.execute(
         ChannelMember.__table__.delete().where(
             and_(ChannelMember.channel_id == channel_id,
@@ -235,7 +267,114 @@ async def update_channel(
     return JSONResponse({"status": "updated"})
 
 
-# ── WEBSOCKET — handles both DM and Channel ──
+# ── FILE UPLOAD ────────────────────────────────────────────────────────────────
+
+@router.post("/upload")
+async def upload_file(
+    channel_id: int = Form(...),
+    file: UploadFile = File(...),
+    reply_to_id: int | None = Form(None),
+    reply_to_sender: str | None = Form(None),
+    reply_to_content: str | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    # Validate extension
+    ext = Path(file.filename or "").suffix.lstrip(".").lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        return JSONResponse({"error": f"File type '.{ext}' not allowed"}, status_code=400)
+
+    # Read & size-check
+    data = await file.read()
+    if len(data) > MAX_FILE_SIZE:
+        return JSONResponse({"error": "File too large (max 20 MB)"}, status_code=400)
+
+    # Save to disk
+    upload_subdir = os.path.join(settings.UPLOAD_DIR, "messages")
+    os.makedirs(upload_subdir, exist_ok=True)
+
+    safe_stem = Path(file.filename or "file").stem[:40]
+    unique_name = f"{uuid.uuid4().hex}_{safe_stem}.{ext}"
+    dest = os.path.join(upload_subdir, unique_name)
+
+    with open(dest, "wb") as f:
+        f.write(data)
+
+    file_url = f"/static/uploads/messages/{unique_name}"
+
+    # Persist message
+    async with AsyncSessionLocal() as sess:
+        msg = Message(
+            channel_id=channel_id,
+            sender_id=current_user.id,
+            content="",
+            message_type="file",
+            file_url=file_url,
+            file_name=file.filename,
+            file_size=len(data),
+            reply_to_id=reply_to_id,
+            reply_to_sender=reply_to_sender,
+            reply_to_content=reply_to_content,
+        )
+        sess.add(msg)
+        await sess.commit()
+        await sess.refresh(msg)
+
+        payload = {
+            "type": "message",
+            "id": msg.id,
+            "content": "",
+            "sender_id": current_user.id,
+            "sender_name": current_user.full_name,
+            "avatar_color": current_user.avatar_color,
+            "created_at": msg.created_at.isoformat() if msg.created_at else "",
+            "file_url": file_url,
+            "file_name": file.filename,
+            "file_size": len(data),
+            "reply_to_id": reply_to_id,
+            "reply_to_sender": reply_to_sender,
+            "reply_to_content": reply_to_content,
+            "is_deleted": False,
+        }
+        await manager.broadcast_to_channel(channel_id, payload)
+
+    return JSONResponse({"status": "ok", "file_url": file_url})
+
+
+# ── DELETE MESSAGE ─────────────────────────────────────────────────────────────
+
+@router.post("/{message_id}/delete")
+async def delete_message(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    msg = (await db.execute(
+        select(Message).where(Message.id == message_id)
+    )).scalar_one_or_none()
+
+    if not msg:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    is_admin = current_user.role in ("super_admin", "admin")
+    if msg.sender_id != current_user.id and not is_admin:
+        return JSONResponse({"error": "Not authorized"}, status_code=403)
+
+    msg.is_deleted = True
+    msg.content = ""          # clear content for privacy
+    await db.commit()
+
+    # Broadcast deletion to channel
+    await manager.broadcast_to_channel(msg.channel_id, {
+        "type": "message_deleted",
+        "message_id": message_id,
+    })
+
+    return JSONResponse({"status": "deleted"})
+
+
+# ── WEBSOCKET ──────────────────────────────────────────────────────────────────
+
 @router.websocket("/ws/{channel_id}")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -245,7 +384,6 @@ async def websocket_endpoint(
     from jose import jwt, JWTError
     from app.config import settings as cfg
 
-    # Authenticate
     user = None
     try:
         if token:
@@ -264,7 +402,6 @@ async def websocket_endpoint(
 
     await manager.connect_to_channel(websocket, channel_id, user.id, user.full_name)
 
-    # Notify others
     await manager.broadcast_to_channel(channel_id, {
         "type": "user_joined",
         "user_id": user.id,
@@ -287,6 +424,9 @@ async def websocket_endpoint(
                         sender_id=user.id,
                         content=content,
                         message_type="text",
+                        reply_to_id=data.get("reply_to_id"),
+                        reply_to_sender=data.get("reply_to_sender"),
+                        reply_to_content=data.get("reply_to_content"),
                     )
                     sess.add(msg)
                     await sess.commit()
@@ -300,11 +440,17 @@ async def websocket_endpoint(
                         "sender_name": user.full_name,
                         "avatar_color": user.avatar_color,
                         "created_at": msg.created_at.isoformat() if msg.created_at else "",
+                        "is_deleted": False,
+                        "reply_to_id": msg.reply_to_id,
+                        "reply_to_sender": msg.reply_to_sender,
+                        "reply_to_content": msg.reply_to_content,
+                        "file_url": None,
+                        "file_name": None,
+                        "file_size": None,
                     }
-                    # Broadcast to ALL in channel (including sender for confirmation)
                     await manager.broadcast_to_channel(channel_id, payload_out)
 
-                # Background AI extraction (non-blocking)
+                # Background AI extraction
                 try:
                     async with AsyncSessionLocal() as ai_sess:
                         knowledge = await ai_service.extract_knowledge_from_message(content, ai_sess)
@@ -325,6 +471,15 @@ async def websocket_endpoint(
                     "user_id": user.id,
                     "user_name": user.full_name,
                 }, exclude_user=user.id)
+
+            elif msg_type == "delete":
+                # Secondary broadcast for other clients
+                message_id = data.get("message_id")
+                if message_id:
+                    await manager.broadcast_to_channel(channel_id, {
+                        "type": "message_deleted",
+                        "message_id": message_id,
+                    }, exclude_user=user.id)
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})

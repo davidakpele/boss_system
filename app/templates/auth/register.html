@@ -1,102 +1,346 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
   <title>Register — BOSS System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
   <style>
-    :root{--bg:#080c14;--bg2:#0d1422;--surface:#131d2e;--border:#1f2d42;--accent:#3b82f6;--accent-glow:rgba(59,130,246,0.18);--purple:#8b5cf6;--text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;--red:#ef4444;}
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-    body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;}
-    .bg-mesh{position:fixed;inset:0;background:radial-gradient(ellipse 60% 50% at 20% 40%,rgba(59,130,246,0.08) 0%,transparent 70%),radial-gradient(ellipse 50% 60% at 80% 60%,rgba(139,92,246,0.06) 0%,transparent 70%);pointer-events:none;}
-    .bg-grid{position:fixed;inset:0;background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px);background-size:50px 50px;opacity:0.3;pointer-events:none;}
-    .auth-container{width:100%;max-width:460px;position:relative;z-index:10;}
-    .auth-logo{text-align:center;margin-bottom:28px;}
-    .logo-mark{width:52px;height:52px;background:linear-gradient(135deg,var(--accent),var(--purple));border-radius:14px;display:inline-flex;align-items:center;justify-content:center;font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue', sans-seri;font-weight:800;font-size:18px;color:#fff;margin-bottom:12px;box-shadow:0 8px 32px rgba(59,130,246,0.3);}
-    .auth-title{font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue', sans-seri;font-weight:800;font-size:24px;}
-    .auth-sub{font-size:13px;color:var(--text3);margin-top:4px;}
-    .auth-card{background:var(--bg2);border:1px solid var(--border);border-radius:16px;padding:32px;}
-    .form-group{margin-bottom:16px;}
-    .form-label{display:block;font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:6px;}
-    .input-wrap{position:relative;}
-    .input-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px;pointer-events:none;}
-    .form-control{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:10px 12px 10px 36px;color:var(--text);font-size:13.5px;font-family:'DM Sans',sans-serif;transition:border-color 0.15s,box-shadow 0.15s;outline:none;}
-    .form-control:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow);}
-    .form-control::placeholder{color:var(--text3);}
-    select.form-control{padding-left:36px;}
-    select.form-control option{background:var(--bg2);}
-    .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-    .btn-submit{width:100%;padding:11px;background:linear-gradient(135deg,var(--accent),#2563eb);color:#fff;font-size:14px;font-weight:700;border:none;border-radius:10px;cursor:pointer;font-family:'DM Sans',sans-serif;transition:opacity 0.15s;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:6px;}
-    .btn-submit:hover{opacity:0.9;}
-    .error-msg{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);color:#f87171;border-radius:10px;padding:10px 14px;font-size:13px;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
-    .auth-footer{text-align:center;margin-top:20px;font-size:12.5px;color:var(--text3);}
-    .auth-footer a{color:#60a5fa;text-decoration:none;}
-    .auth-footer a:hover{text-decoration:underline;}
-    .powered-by{text-align:center;margin-top:24px;font-size:11px;color:var(--text3);opacity:0.6;}
-    .powered-by span{color:#60a5fa;}
+    :root {
+      --bg:#080c14; --bg2:#0d1422; --surface:#131d2e; --border:#1f2d42;
+      --accent:#3b82f6; --accent2:#60a5fa; --accent-glow:rgba(59,130,246,0.18);
+      --purple:#8b5cf6; --text:#e2e8f0; --text2:#94a3b8; --text3:#64748b;
+      --red:#ef4444;
+      --card-radius: 16px;
+      --input-radius: 10px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { -webkit-text-size-adjust: 100%; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow-x: hidden;
+      padding: 16px;
+    }
+
+    /* ── Background ── */
+    .bg-mesh {
+      position: fixed; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 70% 60% at 15% 35%, rgba(59,130,246,0.10) 0%, transparent 70%),
+        radial-gradient(ellipse 60% 70% at 85% 65%, rgba(139,92,246,0.07) 0%, transparent 70%);
+    }
+    .bg-grid {
+      position: fixed; inset: 0; pointer-events: none;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 50px 50px;
+      opacity: 0.25;
+    }
+
+    /* ── Container ── */
+    .auth-container {
+      width: 100%;
+      max-width: 460px;
+      position: relative;
+      z-index: 10;
+      animation: fadeUp 0.45s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(18px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── Logo / header ── */
+    .auth-logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-mark {
+      width: 52px; height: 52px;
+      background: linear-gradient(135deg, var(--accent), var(--purple));
+      border-radius: 14px;
+      display: inline-flex;
+      align-items: center; justify-content: center;
+      font-family: 'Syne', sans-serif;
+      font-weight: 800; font-size: 17px;
+      color: #fff;
+      margin-bottom: 12px;
+      box-shadow: 0 8px 32px rgba(59,130,246,0.30), 0 0 0 1px rgba(59,130,246,0.15);
+      letter-spacing: 0.04em;
+    }
+
+    .auth-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: clamp(20px, 5vw, 24px);
+    }
+
+    .auth-sub {
+      font-size: clamp(12px, 3vw, 13px);
+      color: var(--text3);
+      margin-top: 4px;
+    }
+
+    /* ── Card ── */
+    .auth-card {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: var(--card-radius);
+      padding: clamp(18px, 5vw, 32px);
+    }
+
+    /* ── Error ── */
+    .error-msg {
+      background: rgba(239,68,68,0.10);
+      border: 1px solid rgba(239,68,68,0.25);
+      color: #f87171;
+      border-radius: var(--input-radius);
+      padding: 10px 14px;
+      font-size: 13px;
+      margin-bottom: 16px;
+      display: flex; align-items: flex-start; gap: 8px;
+      line-height: 1.4;
+    }
+    .error-msg i { margin-top: 2px; flex-shrink: 0; }
+
+    /* ── Form ── */
+    .form-group { margin-bottom: 15px; }
+
+    .form-label {
+      display: block;
+      font-size: 11px; font-weight: 600;
+      color: var(--text2);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 6px;
+    }
+
+    .input-wrap { position: relative; }
+
+    .input-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text3); font-size: 13px; pointer-events: none;
+      transition: color 0.15s;
+    }
+
+    .form-control {
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: var(--input-radius);
+      padding: 11px 12px 11px 38px;
+      color: var(--text);
+      font-size: 14px;
+      font-family: 'DM Sans', sans-serif;
+      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+      outline: none;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+
+    /* Prevent iOS auto-zoom (font-size must be ≥ 16px on mobile) */
+    @media (max-width: 480px) {
+      .form-control { font-size: 16px; padding: 12px 12px 12px 38px; }
+    }
+
+    .form-control:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+      background: rgba(255,255,255,0.06);
+    }
+
+    .input-wrap:focus-within .input-icon { color: var(--accent2); }
+
+    .form-control::placeholder { color: var(--text3); }
+
+    /* Select */
+    select.form-control {
+      cursor: pointer;
+      /* Custom arrow */
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%2364748b' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      padding-right: 32px;
+    }
+    select.form-control option { background: var(--bg2); color: var(--text); }
+
+    /* ── 2-col grid — stacks on small screens ── */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    @media (max-width: 400px) {
+      .grid-2 {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+    }
+
+    /* ── Submit ── */
+    .btn-submit {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, var(--accent), #2563eb);
+      color: #fff;
+      font-size: 14px; font-weight: 700;
+      border: none; border-radius: var(--input-radius);
+      cursor: pointer;
+      font-family: 'DM Sans', sans-serif;
+      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      margin-top: 6px;
+      letter-spacing: 0.03em;
+      box-shadow: 0 4px 16px rgba(59,130,246,0.30);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    .btn-submit:hover { opacity: 0.90; box-shadow: 0 6px 20px rgba(59,130,246,0.40); }
+    .btn-submit:active { transform: scale(0.98); opacity: 0.85; }
+
+    /* ── Footer ── */
+    .auth-footer {
+      text-align: center;
+      margin-top: 18px;
+      font-size: 13px;
+      color: var(--text3);
+    }
+    .auth-footer a {
+      color: var(--accent2); text-decoration: none; font-weight: 500;
+    }
+    .auth-footer a:hover { text-decoration: underline; }
+
+    .powered-by {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 11px;
+      color: var(--text3);
+      opacity: 0.55;
+    }
+    .powered-by span { color: var(--accent2); opacity: 1; }
+
+    /* ── Very small phones ── */
+    @media (max-width: 360px) {
+      body { padding: 10px; }
+      .auth-logo { margin-bottom: 16px; }
+      .logo-mark { width: 44px; height: 44px; font-size: 15px; }
+      .auth-card { padding: 16px; }
+      .form-group { margin-bottom: 12px; }
+    }
+
+    /* ── Landscape phones ── */
+    @media (max-height: 600px) and (orientation: landscape) {
+      body { align-items: flex-start; padding: 10px 16px; }
+      .auth-logo { margin-bottom: 14px; }
+      .logo-mark { width: 42px; height: 42px; font-size: 14px; margin-bottom: 8px; }
+      .auth-title { font-size: 19px; }
+      .auth-sub { display: none; }
+      .auth-card { padding: 18px 22px; }
+      .form-group { margin-bottom: 10px; }
+      .powered-by { margin-top: 14px; }
+    }
+
+    /* ── Tablets ── */
+    @media (min-width: 640px) {
+      .auth-container { max-width: 480px; }
+      .auth-logo { margin-bottom: 28px; }
+    }
   </style>
 </head>
 <body>
   <div class="bg-mesh"></div>
   <div class="bg-grid"></div>
+
   <div class="auth-container">
     <div class="auth-logo">
       <div class="logo-mark">BOS</div>
       <div class="auth-title">Create Account</div>
       <div class="auth-sub">Join your organization's BOSS System</div>
     </div>
+
     <div class="auth-card">
       {% if error %}
-      <div class="error-msg"><i class="fa-solid fa-circle-exclamation"></i> {{ error }}</div>
+      <div class="error-msg">
+        <i class="fa-solid fa-circle-exclamation"></i>
+        <span>{{ error }}</span>
+      </div>
       {% endif %}
-      <form method="POST" action="/auth/register">
+
+      <form method="POST" action="/auth/register" autocomplete="on">
         <div class="form-group">
-          <label class="form-label">Full Name</label>
+          <label class="form-label" for="full_name">Full Name</label>
           <div class="input-wrap">
+            <input type="text" id="full_name" name="full_name" class="form-control"
+              placeholder="John Doe" required autocomplete="name"/>
             <i class="fa-solid fa-user input-icon"></i>
-            <input type="text" name="full_name" class="form-control" placeholder="John Doe" required/>
           </div>
         </div>
+
         <div class="form-group">
-          <label class="form-label">Email Address</label>
+          <label class="form-label" for="email">Email Address</label>
           <div class="input-wrap">
+            <input type="email" id="email" name="email" class="form-control"
+              placeholder="you@company.com" required autocomplete="email"/>
             <i class="fa-solid fa-envelope input-icon"></i>
-            <input type="email" name="email" class="form-control" placeholder="you@company.com" required/>
           </div>
         </div>
+
+        <!-- Department + Password side by side on wider screens, stacked on mobile -->
         <div class="grid-2">
           <div class="form-group">
-            <label class="form-label">Department</label>
+            <label class="form-label" for="department">Department</label>
             <div class="input-wrap">
-              <i class="fa-solid fa-building input-icon"></i>
-              <select name="department" class="form-control" required>
+              <select id="department" name="department" class="form-control" required>
                 <option value="">Select...</option>
-                <option>HR</option><option>Sales</option><option>Technology</option>
-                <option>Finance</option><option>Operations</option><option>Legal</option>
-                <option>Marketing</option><option>Management</option>
+                <option>HR</option>
+                <option>Sales</option>
+                <option>Technology</option>
+                <option>Finance</option>
+                <option>Operations</option>
+                <option>Legal</option>
+                <option>Marketing</option>
+                <option>Management</option>
               </select>
+              <i class="fa-solid fa-building input-icon"></i>
             </div>
           </div>
+
           <div class="form-group">
-            <label class="form-label">Password</label>
+            <label class="form-label" for="password">Password</label>
             <div class="input-wrap">
+              <input type="password" id="password" name="password" class="form-control"
+                placeholder="••••••••" required minlength="6" autocomplete="new-password"/>
               <i class="fa-solid fa-lock input-icon"></i>
-              <input type="password" name="password" class="form-control" placeholder="••••••••" required minlength="6"/>
             </div>
           </div>
         </div>
+
         <button type="submit" class="btn-submit">
           <i class="fa-solid fa-user-plus"></i> Create Account
         </button>
       </form>
     </div>
-    <div class="auth-footer">Already have an account? <a href="/auth/login">Sign in</a></div>
+
+    <div class="auth-footer">
+      Already have an account? <a href="/auth/login">Sign in</a>
+    </div>
     <div class="powered-by">Powered by <span>MindSync AI Consults</span></div>
   </div>
 </body>

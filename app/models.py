@@ -81,17 +81,34 @@ class Message(Base):
     id = Column(Integer, primary_key=True, index=True)
     channel_id = Column(Integer, ForeignKey("channels.id"))
     sender_id = Column(Integer, ForeignKey("users.id"))
-    content = Column(Text, nullable=False)
-    message_type = Column(String(50), default="text")
-    file_url = Column(String(500))
-    reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    content = Column(Text, nullable=True)           # nullable=True so deleted messages can be cleared
+    message_type = Column(String(50), default="text")  # "text" | "file"
+
+    # ── Soft delete ───────────────────────────────────────────────────────────
+    is_deleted = Column(Boolean, default=False, nullable=False)
+
+    # ── File attachment ───────────────────────────────────────────────────────
+    file_url = Column(String(512))                  # public URL served by /static
+    file_name = Column(String(255))                 # original filename shown in UI
+    file_size = Column(Integer)                     # bytes
+
+    # ── Reply threading ───────────────────────────────────────────────────────
+    # We store a denormalised snapshot of the parent message so the quote
+    # remains readable even if the parent is later deleted.
+    reply_to_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
+    reply_to_sender = Column(String(255), nullable=True)   # snapshot of sender name
+    reply_to_content = Column(Text, nullable=True)         # snapshot of content / "[file]"
+
+    # ── Legacy / AI fields (kept from original model) ─────────────────────────
     is_ai_extracted = Column(Boolean, default=False)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
     edited_at = Column(DateTime(timezone=True), nullable=True)
 
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # ── Relationships ─────────────────────────────────────────────────────────
     channel = relationship("Channel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
-    reply_to = relationship("Message", remote_side="Message.id")
+    reply_to = relationship("Message", remote_side="Message.id", foreign_keys=[reply_to_id])
 
 
 class Document(Base):
