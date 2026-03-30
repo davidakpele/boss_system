@@ -12,6 +12,8 @@ import os
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+templates = Jinja2Templates(directory="app/templates")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -32,10 +34,8 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# Static files
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# Include routers
 app.include_router(auth.router)
 app.include_router(dashboard.router)
 app.include_router(messages.router)
@@ -44,26 +44,25 @@ app.include_router(documents.router)
 app.include_router(admin.router)
 
 
-@app.exception_handler(307)
-async def redirect_handler(request: Request, exc):
-    return RedirectResponse(url="/auth/login")
-
-
 @app.exception_handler(403)
 async def forbidden_handler(request: Request, exc):
-    templates = Jinja2Templates(directory="app/templates")
     return templates.TemplateResponse(
-        "errors/403.html",
-        {"request": request},
+        request=request,
+        name="errors/403.html",
+        context={},
         status_code=403,
     )
 
 
 @app.exception_handler(404)
 async def not_found_handler(request: Request, exc):
-    templates = Jinja2Templates(directory="app/templates")
+    # Silently ignore browser auto-requests
+    path = request.url.path
+    if path in ("/favicon.ico",) or path.startswith("/.well-known"):
+        return HTMLResponse("", status_code=204)
     return templates.TemplateResponse(
-        "errors/404.html",
-        {"request": request},
+        request=request,
+        name="errors/404.html",
+        context={},
         status_code=404,
     )

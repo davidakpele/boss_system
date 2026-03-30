@@ -11,8 +11,6 @@
   margin: -24px;
   overflow: hidden;
 }
-
-/* ── LEFT PANEL ── */
 .left-panel {
   background: var(--bg2);
   border-right: 1px solid var(--border);
@@ -26,7 +24,6 @@
   flex-shrink: 0;
 }
 .left-panel-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
-
 .msg-search { padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .search-wrap { position: relative; }
 .search-wrap i { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:var(--text3); font-size:12px; }
@@ -37,7 +34,6 @@
 }
 .msg-search input:focus { border-color: var(--accent); }
 .msg-search input::placeholder { color: var(--text3); }
-
 .tab-bar { display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .tab-btn {
   flex: 1; padding: 10px; font-size: 12px; font-weight: 600;
@@ -47,9 +43,7 @@
 }
 .tab-btn.active { color: var(--accent2); border-bottom-color: var(--accent); }
 .tab-btn:hover { color: var(--text2); }
-
 .conv-list { flex: 1; overflow-y: auto; padding: 6px; }
-
 .conv-item {
   display: flex; align-items: center; gap: 10px;
   padding: 9px 10px; border-radius: 10px; cursor: pointer;
@@ -58,7 +52,6 @@
 .conv-item:hover { background: var(--surface); }
 .conv-item.active { background: var(--accent-glow); border: 1px solid rgba(59,130,246,0.2); }
 .conv-item.active .conv-name { color: var(--accent2); }
-
 .conv-avatar {
   width: 40px; height: 40px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -85,10 +78,7 @@
   padding: 1px 7px; border-radius: 10px; font-size: 10px; font-weight: 600;
   background: rgba(59,130,246,0.1); color: #60a5fa; border: 1px solid rgba(59,130,246,0.2);
 }
-
-/* ── CHAT AREA ── */
 .chat-area { display: flex; flex-direction: column; background: var(--bg); overflow: hidden; }
-
 .chat-header {
   padding: 0 20px; height: 60px;
   border-bottom: 1px solid var(--border);
@@ -101,16 +91,13 @@
   font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0;
 }
 .hdr-av.ch-av { border-radius: 10px; background: rgba(59,130,246,0.12); color: var(--accent2); }
-
 .online-status { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text3); margin-top: 2px; }
 .dot-on { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 5px var(--green); flex-shrink: 0; }
 .dot-off { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); flex-shrink: 0; }
-
 .messages-list {
   flex: 1; overflow-y: auto; padding: 20px 24px;
   display: flex; flex-direction: column; gap: 2px;
 }
-
 .msg-group { margin-bottom: 6px; }
 .msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 1px; }
 .msg-row.mine { flex-direction: row-reverse; }
@@ -121,7 +108,7 @@
 }
 .spacer-av { width: 30px; flex-shrink: 0; }
 .msg-bubble {
-  max-width: 60%; padding: 9px 14px; border-radius: 16px;
+  max-width: 100%; padding: 9px 14px; border-radius: 16px;
   font-size: 13.5px; line-height: 1.55; word-break: break-word;
 }
 .msg-bubble.other {
@@ -134,8 +121,6 @@
 }
 .msg-sender { font-size: 11px; font-weight: 600; color: var(--text3); margin-bottom: 3px; margin-left: 4px; }
 .msg-time { font-size: 10px; color: var(--text3); margin: 2px 6px 0; }
-
-/* Input */
 .chat-input-wrap {
   padding: 14px 20px; border-top: 1px solid var(--border);
   background: var(--bg2); flex-shrink: 0;
@@ -162,8 +147,6 @@
   font-size: 14px; transition: opacity 0.15s; flex-shrink: 0;
 }
 .send-btn:hover { opacity: 0.85; }
-
-/* Empty + typing */
 .empty-chat {
   flex: 1; display: flex; flex-direction: column;
   align-items: center; justify-content: center;
@@ -182,8 +165,6 @@
 .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
 .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
 @keyframes tdot { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-5px)} }
-
-/* Dept checkbox */
 .dept-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .dept-check {
   display: flex; align-items: center; gap: 6px;
@@ -193,8 +174,6 @@
 }
 .dept-check input { display: none; }
 .dept-check.selected { border-color: var(--accent); background: var(--accent-glow); color: var(--accent2); }
-
-/* WS status */
 .ws-status {
   font-size: 10px; padding: 2px 8px; border-radius: 10px;
   margin-left: auto; display: flex; align-items: center; gap: 4px;
@@ -206,7 +185,6 @@
 
 {% block content %}
 <div class="messages-layout">
-
   <!-- LEFT PANEL -->
   <div class="left-panel">
     <div class="left-panel-header">
@@ -215,14 +193,12 @@
         <i class="fa-solid fa-plus"></i>
       </button>
     </div>
-
     <div class="msg-search">
       <div class="search-wrap">
         <i class="fa-solid fa-magnifying-glass"></i>
         <input type="text" id="convSearch" placeholder="Search people or channels..." oninput="filterConvs(this.value)"/>
       </div>
     </div>
-
     <div class="tab-bar">
       <div class="tab-btn active" id="tabDM" onclick="switchTab('dm')">
         <i class="fa-solid fa-user fa-fw"></i> Direct
@@ -305,15 +281,11 @@
 
   <!-- CHAT AREA -->
   <div class="chat-area">
-
-    <!-- Empty state -->
     <div class="empty-chat" id="emptyState">
       <i class="fa-solid fa-comments"></i>
       <div style="font-size:16px;font-weight:600;">Select a conversation</div>
-      <div style="font-size:13px;max-width:280px;">Click on a person to send a direct message, or join a channel</div>
+      <div style="font-size:13px;max-width:280px;">Click on a person to message them directly, or join a channel</div>
     </div>
-
-    <!-- Chat header (hidden until conv selected) -->
     <div class="chat-header" id="chatHeader" style="display:none;">
       <div class="hdr-av" id="hdrAv"></div>
       <div>
@@ -329,21 +301,15 @@
         </div>
       </div>
     </div>
-
-    <!-- Messages -->
     <div class="messages-list" id="messagesList" style="display:none;"></div>
-
-    <!-- Typing -->
     <div class="typing-bar" id="typingBar"></div>
-
-    <!-- Input (hidden until conv selected) -->
     <div class="chat-input-wrap" id="chatInputWrap" style="display:none;">
       <div class="input-row">
         <textarea class="msg-input" id="msgInput" rows="1"
           placeholder="Type a message..."
           onkeydown="handleKey(event)"
           oninput="autoResize(this); sendTyping()"></textarea>
-        <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        <button class="send-btn" onclick="sendMessage()">
           <i class="fa-solid fa-paper-plane"></i>
         </button>
       </div>
@@ -368,7 +334,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Departments</label>
-      <p style="font-size:11px;color:var(--text3);margin-bottom:8px;">All users in selected departments are auto-added to this channel</p>
+      <p style="font-size:11px;color:var(--text3);margin-bottom:8px;">All users in selected departments are auto-added</p>
       <div class="dept-grid" id="nc-depts">
         {% for dept in departments %}
         <label class="dept-check" onclick="toggleDept(this)">
@@ -421,26 +387,44 @@
 
 {% block extra_js %}
 <script>
-// ── CONSTANTS ──
 const ME = {
   id: {{ user.id }},
   name: "{{ user.full_name }}",
   color: "{{ user.avatar_color }}",
   role: "{{ user.role.value }}"
 };
-// Extract JWT token from cookie
-const TOKEN = (document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith('access_token=')) || '').replace('access_token=', '');
+
+// ── TOKEN: fetched from server (httpOnly cookie not readable by JS) ──
+let WS_TOKEN = null;
+
+async function loadToken() {
+  try {
+    const resp = await fetch('/auth/ws-token');
+    if (!resp.ok) {
+      console.error('Could not get WS token — not authenticated');
+      return;
+    }
+    const data = await resp.json();
+    WS_TOKEN = data.token;
+    console.log('WS token loaded:', WS_TOKEN ? 'OK' : 'MISSING');
+  } catch(e) {
+    console.error('Token fetch error:', e);
+  }
+}
 
 // ── STATE ──
 let ws = null;
 let wsReconnectTimer = null;
 let currentChannelId = null;
-let currentChatType = null;   // 'dm' | 'channel'
-let currentChatMeta = {};     // {id, name, dept, created_by}
+let currentChatType = null;
+let currentChatMeta = {};
 let lastSenderId = null;
 let typingTimer = null;
 let typingUsers = {};
 let lastTypingSent = 0;
+
+// Load token immediately when page loads
+loadToken();
 
 // ── TAB SWITCHING ──
 function switchTab(tab) {
@@ -450,7 +434,6 @@ function switchTab(tab) {
   document.getElementById('channelsPanel').style.display = tab === 'channels' ? 'block' : 'none';
 }
 
-// ── SEARCH ──
 function filterConvs(q) {
   q = q.toLowerCase();
   document.querySelectorAll('.conv-item').forEach(el => {
@@ -460,11 +443,9 @@ function filterConvs(q) {
 
 // ── OPEN DM ──
 async function openDM(userId, name, color, isOnline) {
-  // Mark active
   setActive(`dm-item-${userId}`);
   currentChatType = 'dm';
 
-  // Update header immediately
   const initials = getInitials(name);
   document.getElementById('hdrAv').className = 'hdr-av';
   document.getElementById('hdrAv').style.background = color;
@@ -480,23 +461,18 @@ async function openDM(userId, name, color, isOnline) {
   clearMessages();
   setWsStatus('connecting');
 
-  // Fetch/create DM channel + history
   try {
     const resp = await fetch(`/messages/dm/${userId}/init`);
-    if (!resp.ok) throw new Error('Failed to init DM');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
     currentChannelId = data.channel_id;
     currentChatMeta = { id: data.channel_id, name };
-
-    // Render history
     data.messages.forEach(m => appendMessage(m, false));
     scrollBottom();
-
-    // Connect WebSocket
     connectWS(data.channel_id);
   } catch(e) {
     console.error('DM init error:', e);
-    toast('Could not open conversation', 'error');
+    toast('Could not open conversation: ' + e.message, 'error');
     setWsStatus('disconnected');
   }
 }
@@ -508,7 +484,6 @@ async function openChannel(channelId, name, dept, createdBy) {
   currentChannelId = channelId;
   currentChatMeta = { id: channelId, name, dept, created_by: createdBy };
 
-  // Header
   document.getElementById('hdrAv').className = 'hdr-av ch-av';
   document.getElementById('hdrAv').style.background = '';
   document.getElementById('hdrAv').style.borderRadius = '10px';
@@ -526,7 +501,6 @@ async function openChannel(channelId, name, dept, createdBy) {
   clearMessages();
   setWsStatus('connecting');
 
-  // Load history
   try {
     const resp = await fetch(`/messages/channel/${channelId}/history`);
     const msgs = await resp.json();
@@ -541,30 +515,29 @@ async function openChannel(channelId, name, dept, createdBy) {
 
 // ── WEBSOCKET ──
 function connectWS(channelId) {
-  // Close existing
   if (ws) {
-    ws.onclose = null; // prevent reconnect logic
+    ws.onclose = null;
     ws.close();
     ws = null;
   }
   clearTimeout(wsReconnectTimer);
 
-  if (!TOKEN) {
-    toast('Not authenticated — please refresh', 'error');
-    setWsStatus('disconnected');
+  if (!WS_TOKEN) {
+    // Token not loaded yet — wait and retry once
+    console.warn('Token not ready, retrying in 500ms...');
+    wsReconnectTimer = setTimeout(() => connectWS(channelId), 500);
     return;
   }
 
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  const url = `${proto}://${location.host}/messages/ws/${channelId}?token=${encodeURIComponent(TOKEN)}`;
+  const url = `${proto}://${location.host}/messages/ws/${channelId}?token=${encodeURIComponent(WS_TOKEN)}`;
 
-  console.log('WS connecting to channel', channelId);
+  console.log('WS connecting → channel', channelId, 'token length:', WS_TOKEN.length);
   ws = new WebSocket(url);
 
   ws.onopen = () => {
-    console.log('WS connected');
+    console.log('WS open ✓');
     setWsStatus('connected');
-    // Keep alive ping every 25s
     ws._pingInterval = setInterval(() => {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'ping' }));
@@ -573,12 +546,8 @@ function connectWS(channelId) {
   };
 
   ws.onmessage = (e) => {
-    try {
-      const data = JSON.parse(e.data);
-      handleWsMessage(data);
-    } catch(err) {
-      console.error('WS parse error', err);
-    }
+    try { handleWsMessage(JSON.parse(e.data)); }
+    catch(err) { console.error('WS parse error', err); }
   };
 
   ws.onerror = (e) => {
@@ -590,11 +559,9 @@ function connectWS(channelId) {
     console.log('WS closed', e.code, e.reason);
     clearInterval(ws?._pingInterval);
     setWsStatus('disconnected');
-    // Auto-reconnect after 3s if same channel still open
     if (currentChannelId === channelId) {
       wsReconnectTimer = setTimeout(() => {
         if (currentChannelId === channelId) {
-          console.log('WS reconnecting...');
           setWsStatus('connecting');
           connectWS(channelId);
         }
@@ -604,13 +571,8 @@ function connectWS(channelId) {
 }
 
 function handleWsMessage(data) {
-  if (data.type === 'message') {
-    appendMessage(data, true);
-  } else if (data.type === 'typing') {
-    showTyping(data.user_id, data.user_name);
-  } else if (data.type === 'pong') {
-    // keep-alive OK
-  }
+  if (data.type === 'message') appendMessage(data, true);
+  else if (data.type === 'typing') showTyping(data.user_id, data.user_name);
 }
 
 function setWsStatus(state) {
@@ -621,28 +583,22 @@ function setWsStatus(state) {
   el.innerHTML = `<i class="fa-solid fa-circle" style="font-size:7px;"></i> ${labels[state]}`;
 }
 
-// ── SEND MESSAGE ──
+// ── SEND ──
 function sendMessage() {
   const input = document.getElementById('msgInput');
   const content = input.value.trim();
-
   if (!content) return;
-
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    toast('Not connected — please wait', 'error');
+    toast('Still connecting — please wait a moment', 'error');
     return;
   }
-
   ws.send(JSON.stringify({ type: 'message', content }));
   input.value = '';
   input.style.height = 'auto';
 }
 
 function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 }
 
 function autoResize(el) {
@@ -738,7 +694,6 @@ function getInitials(name) {
   return (name || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 }
 
-// ── UI HELPERS ──
 function showChatUI() {
   document.getElementById('emptyState').style.display = 'none';
   document.getElementById('chatHeader').style.display = 'flex';
@@ -762,29 +717,17 @@ async function createChannel() {
   if (!name) { toast('Channel name is required', 'error'); return; }
   const depts = [...document.querySelectorAll('#nc-depts .selected')].map(l => l.querySelector('input').value);
   const desc = document.getElementById('nc-desc').value;
-
   const fd = new FormData();
-  fd.append('name', name);
-  fd.append('description', desc);
-  fd.append('departments', depts.join(','));
-
-  const resp = await fetch('/messages/channel/create', { method: 'POST', body: fd });
-  if (resp.ok) {
-    toast('Channel created!', 'success');
-    closeModal('newChannelModal');
-    setTimeout(() => location.reload(), 600);
-  } else {
-    toast('Error creating channel', 'error');
-  }
+  fd.append('name', name); fd.append('description', desc); fd.append('departments', depts.join(','));
+  const resp = await fetch('/messages/channel/create', { method:'POST', body:fd });
+  if (resp.ok) { toast('Channel created!', 'success'); closeModal('newChannelModal'); setTimeout(() => location.reload(), 600); }
+  else toast('Error creating channel', 'error');
 }
 
 async function joinChannel(channelId, e) {
   e.stopPropagation();
-  const resp = await fetch(`/messages/channel/${channelId}/join`, { method: 'POST' });
-  if (resp.ok) {
-    toast('Joined!', 'success');
-    setTimeout(() => location.reload(), 500);
-  }
+  const resp = await fetch(`/messages/channel/${channelId}/join`, { method:'POST' });
+  if (resp.ok) { toast('Joined!', 'success'); setTimeout(() => location.reload(), 500); }
 }
 
 function openEditChannel() {
@@ -808,20 +751,11 @@ async function saveChannel() {
   if (!name) { toast('Channel name required', 'error'); return; }
   const depts = [...document.querySelectorAll('#ec-depts .selected')].map(l => l.querySelector('input').value);
   const desc = document.getElementById('ec-desc').value;
-
   const fd = new FormData();
-  fd.append('name', name);
-  fd.append('description', desc);
-  fd.append('departments', depts.join(','));
-
-  const resp = await fetch(`/messages/channel/${id}/update`, { method: 'POST', body: fd });
-  if (resp.ok) {
-    toast('Channel updated!', 'success');
-    closeModal('editChannelModal');
-    setTimeout(() => location.reload(), 600);
-  } else {
-    toast('Error updating channel', 'error');
-  }
+  fd.append('name', name); fd.append('description', desc); fd.append('departments', depts.join(','));
+  const resp = await fetch(`/messages/channel/${id}/update`, { method:'POST', body:fd });
+  if (resp.ok) { toast('Channel updated!', 'success'); closeModal('editChannelModal'); setTimeout(() => location.reload(), 600); }
+  else toast('Error updating channel', 'error');
 }
 </script>
 {% endblock %}
