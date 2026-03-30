@@ -1,178 +1,234 @@
+{# src/templates/dashboard/index.html #}
 {% extends "base.html" %}
 {% block title %}Dashboard — BOSS System{% endblock %}
 {% block page_title %}Dashboard{% endblock %}
-{% block page_sub %}Welcome back, {{ user.full_name }}{% endblock %}
+{% block page_sub %}Overview{% endblock %}
 
 {% block extra_css %}
+
+/* ── Page header ── */
+.page-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.page-header-title {
+  font-size: 18px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.4px;
+}
+.page-header-sub {
+  font-size: 12.5px; color: var(--text3); margin-top: 2px;
+}
+.page-header-actions { display: flex; gap: 8px; align-items: center; }
+
+/* ── Stats grid ── */
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 16px; margin-bottom: 20px;
+  gap: 12px;
+  margin-bottom: 16px;
 }
 
-.stat-glow {
-  position: absolute; width: 110px; height: 110px;
-  border-radius: 50%; filter: blur(40px); opacity: 0.1;
-  top: -30px; right: -20px; pointer-events: none;
-}
+.stat-divider { height: 1px; background: var(--border); margin: 8px 0 6px; }
 
-.stat-top {
+.stat-card-inner { display: flex; flex-direction: column; }
+.stat-card-row {
   display: flex; align-items: center;
-  justify-content: space-between; margin-bottom: 12px;
+  justify-content: space-between;
+  margin-bottom: 8px;
 }
-
-.stat-icon-box {
-  width: 38px; height: 38px; border-radius: 10px;
+.stat-icon-mark {
+  width: 28px; height: 28px;
+  border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
-  font-size: 15px; flex-shrink: 0;
+  font-size: 12px;
 }
 
-.stat-trend { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 20px; }
-.stat-trend.up   { background: rgba(16,185,129,0.12); color: #34d399; }
-.stat-trend.down { background: rgba(239,68,68,0.12);  color: #f87171; }
-
-.stat-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 30px; line-height: 1; margin-bottom: 4px; }
-.stat-lbl { font-size: 12px; color: var(--text2); }
-
+/* ── Dash grid ── */
 .dash-main-grid {
   display: grid;
-  grid-template-columns: 1fr 290px;
-  gap: 16px; margin-bottom: 20px;
+  grid-template-columns: 1fr 260px;
+  gap: 14px;
+  margin-bottom: 14px;
 }
-
 .dash-bottom-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px;
+  gap: 14px;
 }
 
+/* ── Activity list ── */
 .activity-item {
-  display: flex; align-items: flex-start; gap: 12px;
-  padding: 11px 0;
-  border-bottom: 1px solid rgba(31,45,66,0.6);
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
 }
-.activity-item:last-child { border-bottom: none; }
-.activity-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; box-shadow: 0 0 5px currentColor; }
-.activity-text { font-size: 13px; color: var(--text2); line-height: 1.5; }
-.activity-time { font-size: 11px; color: var(--text3); margin-top: 2px; }
+.activity-item:last-child { border-bottom: none; padding-bottom: 0; }
+.activity-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  margin-top: 6px; flex-shrink: 0;
+}
+.activity-text { font-size: 12.5px; color: var(--text2); line-height: 1.5; }
+.activity-time { font-size: 11px; color: var(--text3); margin-top: 2px; font-family: var(--font-mono); }
 
-.compliance-inner {
+/* ── Compliance ring ── */
+.compliance-wrap {
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  text-align: center; gap: 6px;
+  text-align: center; gap: 8px; padding: 8px 0;
 }
 .compliance-ring { position: relative; display: inline-flex; align-items: center; justify-content: center; }
 .compliance-ring svg { transform: rotate(-90deg); }
-.ring-value { position: absolute; font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue'; font-weight: 800; font-size: 22px; }
-.ring-label { font-size: 12px; color: var(--text2); }
+.ring-value {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-weight: 700; font-size: 20px;
+  color: var(--text);
+}
+.ring-label { font-size: 11.5px; color: var(--text2); }
 .compliance-badges { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; margin-top: 4px; }
-.cbadge { font-size: 10px; font-weight: 600; padding: 3px 9px; border-radius: 20px; display: flex; align-items: center; gap: 4px; }
-.cbadge-green  { background: rgba(16,185,129,0.12); color: #34d399; }
-.cbadge-yellow { background: rgba(245,158,11,0.12); color: #fbbf24; }
-.cbadge-red    { background: rgba(239,68,68,0.12);  color: #f87171; }
+.cbadge {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 3px;
+  font-family: var(--font-mono);
+}
+.cbadge-green  { background: var(--green-bg);  color: var(--green); }
+.cbadge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+.cbadge-red    { background: var(--red-bg);    color: var(--red); }
 
-.doc-item { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(31,45,66,0.6); }
+/* ── Document list ── */
+.doc-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 0; border-bottom: 1px solid var(--border);
+}
 .doc-item:last-child { border-bottom: none; }
-.doc-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
-.doc-name { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.doc-meta { display: flex; gap: 8px; align-items: center; margin-top: 3px; }
-.doc-dept { font-size: 11px; color: var(--text3); }
+.doc-icon {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0;
+  background: var(--bg2);
+  color: var(--text3);
+}
+.doc-name {
+  font-size: 13px; font-weight: 500; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.doc-meta { display: flex; gap: 8px; align-items: center; margin-top: 2px; }
+.doc-dept { font-size: 11px; color: var(--text3); font-family: var(--font-mono); }
 
-.status-badge { font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 20px; text-transform: capitalize; }
-.status-approved { background: rgba(16,185,129,0.12); color: #34d399; }
-.status-pending  { background: rgba(245,158,11,0.12);  color: #fbbf24; }
-.status-rejected { background: rgba(239,68,68,0.12);   color: #f87171; }
-.status-gray     { background: rgba(100,116,139,0.12); color: #94a3b8; }
+/* ── Quick actions ── */
+.quick-btn {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 14px; border-radius: var(--radius-sm);
+  text-decoration: none; cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  transition: border-color 0.12s, background 0.12s;
+}
+.quick-btn:hover { border-color: var(--border2); background: var(--bg2); }
+.quick-btn:active { background: var(--bg3); }
+.qbtn-icon {
+  width: 32px; height: 32px; border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; flex-shrink: 0;
+  background: var(--bg2); color: var(--text2);
+}
+.qbtn-label { font-size: 13px; font-weight: 600; color: var(--text); }
+.qbtn-sub   { font-size: 11px; color: var(--text3); margin-top: 1px; }
 
-.quick-btn { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 11px; text-decoration: none; border: 1px solid transparent; transition: transform 0.15s, opacity 0.15s; cursor: pointer; }
-.quick-btn:hover  { transform: translateY(-1px); }
-.quick-btn:active { transform: scale(0.98); opacity: 0.85; }
-.qbtn-icon { width: 36px; height: 36px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: 14px; flex-shrink: 0; }
-.qbtn-label { font-size: 13px; font-weight: 600; }
-.qbtn-sub   { font-size: 11px; font-weight: 400; margin-top: 1px; opacity: 0.65; }
-.qbtn-blue   { background: linear-gradient(135deg,rgba(59,130,246,0.12),rgba(139,92,246,0.08)); border-color: rgba(59,130,246,0.2);   color: #93c5fd; }
-.qbtn-blue   .qbtn-icon { background: rgba(59,130,246,0.12);  color: var(--accent); }
-.qbtn-purple { background: rgba(139,92,246,0.08);  border-color: rgba(139,92,246,0.18); color: #c4b5fd; }
-.qbtn-purple .qbtn-icon { background: rgba(139,92,246,0.12);  color: #a78bfa; }
-.qbtn-green  { background: rgba(16,185,129,0.07);  border-color: rgba(16,185,129,0.18); color: #6ee7b7; }
-.qbtn-green  .qbtn-icon { background: rgba(16,185,129,0.12);  color: #34d399; }
-.qbtn-ghost  { background: var(--surface2); border-color: var(--border); color: var(--text2); }
-.qbtn-ghost  .qbtn-icon { background: var(--bg3); color: var(--text3); }
+/* ── Inline link ── */
+.btn-link {
+  font-size: 11.5px; color: var(--text3);
+  text-decoration: none; font-weight: 500;
+  padding: 3px 6px; border-radius: var(--radius-sm);
+  transition: color 0.1s, background 0.1s;
+}
+.btn-link:hover { color: var(--text); background: var(--bg3); }
 
-.btn-link { font-size: 12px; color: var(--accent2); text-decoration: none; font-weight: 500; padding: 4px 8px; border-radius: 7px; transition: background 0.15s; }
-.btn-link:hover { background: var(--accent-glow); }
-
+/* ── Empty state ── */
 .empty-state { text-align: center; padding: 28px 0; color: var(--text3); }
-.empty-state i { font-size: 26px; margin-bottom: 8px; display: block; opacity: 0.2; }
-.empty-state span { font-size: 13px; }
+.empty-state i { font-size: 22px; margin-bottom: 8px; display: block; opacity: 0.25; }
+.empty-state span { font-size: 12.5px; }
+
+/* ── Section heading inside card ── */
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 14px;
+}
+.section-head-title {
+  font-size: 12.5px; font-weight: 600; color: var(--text); letter-spacing: -0.1px;
+}
 
 @media (max-width: 1100px) {
   .stats-grid     { grid-template-columns: repeat(2, 1fr); }
   .dash-main-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 768px) {
-  .stats-grid       { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .stats-grid       { grid-template-columns: repeat(2, 1fr); }
   .dash-bottom-grid { grid-template-columns: 1fr; }
-  .dash-main-grid   { grid-template-columns: 1fr; }
 }
 @media (max-width: 420px) {
-  .stats-grid { gap: 10px; }
-  .stat-val   { font-size: 24px; }
+  .stats-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
 }
 {% endblock %}
 
 {% block content %}
 
-<div style="margin-bottom:22px;">
-  <h1 style="font-weight:800;font-size:22px;letter-spacing:-0.4px;">Dashboard</h1>
-  <p style="font-size:13px;color:var(--text2);margin-top:3px;">
-    Welcome back, <strong style="color:var(--text)">{{ user.full_name }}</strong> — here's what's happening today.
-  </p>
+<!-- Page header -->
+<div class="page-header">
+  <div>
+    <div class="page-header-title">Dashboard</div>
+    <div class="page-header-sub">Welcome back, {{ user.full_name }} &mdash; {{ 'today' }}</div>
+  </div>
+  <div class="page-header-actions">
+    <a href="/documents/new" class="btn btn-ghost btn-sm">
+      <i class="fa-regular fa-plus"></i> New Document
+    </a>
+    <a href="/ask-boss" class="btn btn-primary btn-sm">
+      <i class="fa-solid fa-microchip"></i> Ask BOSS
+    </a>
+  </div>
 </div>
 
 <!-- STAT CARDS -->
 <div class="stats-grid">
 
   <div class="stat-card">
-    <div class="stat-glow" style="background:#3b82f6"></div>
-    <div class="stat-top">
-      <div class="stat-icon-box" style="background:rgba(59,130,246,0.12);color:#60a5fa;"><i class="fa-solid fa-file-lines"></i></div>
-      <span class="stat-trend up"><i class="fa-solid fa-arrow-trend-up" style="font-size:9px"></i> 12%</span>
+    <div class="stat-card-row">
+      <div class="stat-label">Documents</div>
+      <span class="stat-trend up">+12%</span>
     </div>
-    <div class="stat-val" style="color:#60a5fa">{{ stats.documents }}</div>
-    <div class="stat-lbl">Total Documents</div>
+    <div class="stat-val">{{ stats.documents }}</div>
+    <div class="stat-lbl" style="color:var(--text3);font-size:11px;">Total uploaded</div>
   </div>
 
   <div class="stat-card">
-    <div class="stat-glow" style="background:#8b5cf6"></div>
-    <div class="stat-top">
-      <div class="stat-icon-box" style="background:rgba(139,92,246,0.12);color:#a78bfa;"><i class="fa-solid fa-users"></i></div>
-      <span class="stat-trend up"><i class="fa-solid fa-arrow-trend-up" style="font-size:9px"></i> 4%</span>
+    <div class="stat-card-row">
+      <div class="stat-label">Staff</div>
+      <span class="stat-trend up">+4%</span>
     </div>
-    <div class="stat-val" style="color:#a78bfa">{{ stats.users }}</div>
-    <div class="stat-lbl">Registered Staff</div>
+    <div class="stat-val">{{ stats.users }}</div>
+    <div class="stat-lbl" style="color:var(--text3);font-size:11px;">Registered users</div>
   </div>
 
   <div class="stat-card">
-    <div class="stat-glow" style="background:#10b981"></div>
-    <div class="stat-top">
-      <div class="stat-icon-box" style="background:rgba(16,185,129,0.12);color:#34d399;"><i class="fa-solid fa-circle-dot"></i></div>
-      <span class="stat-trend up" style="background:rgba(16,185,129,0.12);color:#34d399;"><i class="fa-solid fa-circle" style="font-size:6px"></i> Live</span>
+    <div class="stat-card-row">
+      <div class="stat-label">Online Now</div>
+      <span class="stat-trend up" style="background:var(--green-bg);color:var(--green);">Live</span>
     </div>
-    <div class="stat-val" style="color:#34d399">{{ stats.active_users }}</div>
-    <div class="stat-lbl">Online Now</div>
+    <div class="stat-val">{{ stats.active_users }}</div>
+    <div class="stat-lbl" style="color:var(--text3);font-size:11px;">Active sessions</div>
   </div>
 
   <div class="stat-card">
-    <div class="stat-glow" style="background:#f59e0b"></div>
-    <div class="stat-top">
-      <div class="stat-icon-box" style="background:rgba(245,158,11,0.12);color:#fbbf24;"><i class="fa-solid fa-clock"></i></div>
-      <span class="stat-trend down"><i class="fa-solid fa-clock" style="font-size:9px"></i> Review</span>
+    <div class="stat-card-row">
+      <div class="stat-label">Pending</div>
+      <span class="stat-trend down">Review</span>
     </div>
-    <div class="stat-val" style="color:#fbbf24">{{ stats.pending_approvals }}</div>
-    <div class="stat-lbl">Pending Approvals</div>
+    <div class="stat-val">{{ stats.pending_approvals }}</div>
+    <div class="stat-lbl" style="color:var(--text3);font-size:11px;">Awaiting approval</div>
   </div>
 
 </div>
@@ -181,51 +237,52 @@
 <div class="dash-main-grid">
 
   <div class="card">
-    <div class="card-title">
-      <i class="fa-solid fa-list-check" style="color:var(--accent)"></i> Recent Activity
+    <div class="section-head">
+      <div class="section-head-title">Recent Activity</div>
+      <a href="/audit-logs" class="btn-link">View all &rarr;</a>
     </div>
     {% if recent_logs %}
       {% for log, uname in recent_logs %}
       <div class="activity-item">
-        <div class="activity-dot" style="background:{% if 'login' in log.action %}#10b981{% elif 'create' in log.action %}#3b82f6{% elif 'approve' in log.action %}#8b5cf6{% else %}#64748b{% endif %};color:{% if 'login' in log.action %}#10b981{% elif 'create' in log.action %}#3b82f6{% elif 'approve' in log.action %}#8b5cf6{% else %}#64748b{% endif %};"></div>
+        <div class="activity-dot" style="background:{% if 'login' in log.action %}var(--green){% elif 'create' in log.action %}var(--blue){% elif 'approve' in log.action %}var(--purple){% else %}var(--border2){% endif %};"></div>
         <div style="flex:1">
           <div class="activity-text">
-            <strong style="color:var(--text)">{{ uname }}</strong> {{ log.action.replace('_', ' ') }}
-            {% if log.resource_type %}<span style="color:var(--text3)"> · {{ log.resource_type }}</span>{% endif %}
+            <strong style="color:var(--text);font-weight:600;">{{ uname }}</strong>
+            {{ log.action.replace('_', ' ') }}
+            {% if log.resource_type %}<span style="color:var(--text3)"> &middot; {{ log.resource_type }}</span>{% endif %}
           </div>
-          <div class="activity-time">{{ log.created_at.strftime('%b %d, %Y at %H:%M') if log.created_at else '' }}</div>
+          <div class="activity-time">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '' }}</div>
         </div>
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty-state"><i class="fa-solid fa-ghost"></i><span>No activity recorded yet</span></div>
+      <div class="empty-state"><i class="fa-regular fa-clock"></i><span>No activity recorded yet</span></div>
     {% endif %}
   </div>
 
   <div class="card">
-    <div class="compliance-inner">
-      <div class="card-title" style="justify-content:center;margin-bottom:6px;">
-        <i class="fa-solid fa-shield-halved" style="color:var(--green)"></i> Compliance Score
-      </div>
+    <div class="section-head" style="justify-content:center;">
+      <div class="section-head-title">Compliance Score</div>
+    </div>
+    <div class="compliance-wrap">
       {% set score = stats.compliance_score %}
-      {% set color = '#10b981' if score >= 70 else ('#f59e0b' if score >= 40 else '#ef4444') %}
-      {% set r = 56 %}{% set circ = 2 * 3.14159 * r %}{% set dash = (score / 100) * circ %}
+      {% set color = 'var(--green)' if score >= 70 else ('var(--yellow)' if score >= 40 else 'var(--red)') %}
+      {% set r = 52 %}{% set circ = 2 * 3.14159 * r %}{% set dash = (score / 100) * circ %}
       <div class="compliance-ring">
-        <svg width="145" height="145" viewBox="0 0 140 140">
-          <circle cx="70" cy="70" r="{{ r }}" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="10"/>
-          <circle cx="70" cy="70" r="{{ r }}" fill="none" stroke="{{ color }}" stroke-width="10"
-            stroke-dasharray="{{ dash | round(1) }} {{ circ | round(1) }}" stroke-linecap="round"
-            style="filter:drop-shadow(0 0 8px {{ color }}60)"/>
+        <svg width="130" height="130" viewBox="0 0 130 130">
+          <circle cx="65" cy="65" r="{{ r }}" fill="none" stroke="var(--bg3)" stroke-width="8"/>
+          <circle cx="65" cy="65" r="{{ r }}" fill="none" stroke="{{ color }}" stroke-width="8"
+            stroke-dasharray="{{ dash | round(1) }} {{ circ | round(1) }}" stroke-linecap="round"/>
         </svg>
-        <div class="ring-value" style="color:{{ color }}">{{ score }}%</div>
+        <div class="ring-value">{{ score }}%</div>
       </div>
       <div class="ring-label">Overall Compliance</div>
       <div class="compliance-badges">
-        <span class="cbadge cbadge-green"><i class="fa-solid fa-circle" style="font-size:5px"></i> Compliant</span>
-        <span class="cbadge cbadge-yellow"><i class="fa-solid fa-circle" style="font-size:5px"></i> Pending</span>
-        <span class="cbadge cbadge-red"><i class="fa-solid fa-circle" style="font-size:5px"></i> Non-Compliant</span>
+        <span class="cbadge cbadge-green">Compliant</span>
+        <span class="cbadge cbadge-yellow">Pending</span>
+        <span class="cbadge cbadge-red">Non-Compliant</span>
       </div>
-      <a href="/compliance" class="btn-link" style="margin-top:8px;">View Full Report →</a>
+      <a href="/compliance" class="btn-link" style="margin-top:6px;">Full Report &rarr;</a>
     </div>
   </div>
 
@@ -235,15 +292,15 @@
 <div class="dash-bottom-grid">
 
   <div class="card">
-    <div class="card-title" style="justify-content:space-between;">
-      <span><i class="fa-solid fa-file-lines" style="color:var(--accent)"></i> Recent Documents</span>
-      <a href="/documents" class="btn-link" style="margin:0;">View All</a>
+    <div class="section-head">
+      <div class="section-head-title">Recent Documents</div>
+      <a href="/documents" class="btn-link">View all &rarr;</a>
     </div>
     {% if recent_docs %}
       {% for doc in recent_docs %}
       <div class="doc-item">
-        <div class="doc-icon" style="background:{% if doc.file_type == 'pdf' %}rgba(239,68,68,0.1){% elif doc.file_type == 'docx' %}rgba(59,130,246,0.1){% elif doc.file_type == 'csv' %}rgba(16,185,129,0.1){% else %}rgba(100,116,139,0.1){% endif %}">
-          <i class="fa-solid fa-file-{% if doc.file_type == 'pdf' %}pdf{% elif doc.file_type == 'csv' %}csv{% else %}word{% endif %}" style="color:{% if doc.file_type == 'pdf' %}#f87171{% elif doc.file_type == 'csv' %}#34d399{% else %}#60a5fa{% endif %}"></i>
+        <div class="doc-icon">
+          <i class="fa-regular fa-file-{% if doc.file_type == 'pdf' %}pdf{% elif doc.file_type == 'csv' %}csv{% else %}lines{% endif %}"></i>
         </div>
         <div style="flex:1;min-width:0;">
           <div class="doc-name">{{ doc.title }}</div>
@@ -255,31 +312,43 @@
       </div>
       {% endfor %}
     {% else %}
-      <div class="empty-state"><i class="fa-solid fa-folder-open"></i><span>No documents uploaded yet</span></div>
+      <div class="empty-state"><i class="fa-regular fa-folder-open"></i><span>No documents uploaded yet</span></div>
     {% endif %}
   </div>
 
   <div class="card">
-    <div class="card-title">
-      <i class="fa-solid fa-bolt" style="color:var(--yellow)"></i> Quick Actions
+    <div class="section-head">
+      <div class="section-head-title">Quick Actions</div>
     </div>
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <a href="/documents/new" class="quick-btn qbtn-blue">
-        <div class="qbtn-icon"><i class="fa-solid fa-file-circle-plus"></i></div>
-        <div><div class="qbtn-label">Upload Document</div><div class="qbtn-sub">Add to knowledge base</div></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <a href="/documents/new" class="quick-btn">
+        <div class="qbtn-icon"><i class="fa-regular fa-file-plus"></i></div>
+        <div>
+          <div class="qbtn-label">Upload Document</div>
+          <div class="qbtn-sub">Add to knowledge base</div>
+        </div>
       </a>
-      <a href="/ask-boss" class="quick-btn qbtn-purple">
-        <div class="qbtn-icon"><i class="fa-solid fa-robot"></i></div>
-        <div><div class="qbtn-label">Ask BOSS AI</div><div class="qbtn-sub">Chat with your knowledge base</div></div>
+      <a href="/ask-boss" class="quick-btn">
+        <div class="qbtn-icon"><i class="fa-solid fa-microchip"></i></div>
+        <div>
+          <div class="qbtn-label">Ask BOSS AI</div>
+          <div class="qbtn-sub">Chat with your data</div>
+        </div>
       </a>
-      <a href="/messages" class="quick-btn qbtn-green">
-        <div class="qbtn-icon"><i class="fa-solid fa-comments"></i></div>
-        <div><div class="qbtn-label">Team Messages</div><div class="qbtn-sub">Internal communication</div></div>
+      <a href="/messages" class="quick-btn">
+        <div class="qbtn-icon"><i class="fa-regular fa-comment-dots"></i></div>
+        <div>
+          <div class="qbtn-label">Team Messages</div>
+          <div class="qbtn-sub">Internal communication</div>
+        </div>
       </a>
       {% if user.role.value in ('super_admin', 'admin') %}
-      <a href="/users" class="quick-btn qbtn-ghost">
-        <div class="qbtn-icon"><i class="fa-solid fa-user-plus"></i></div>
-        <div><div class="qbtn-label">Manage Users</div><div class="qbtn-sub">Add or edit team members</div></div>
+      <a href="/users" class="quick-btn">
+        <div class="qbtn-icon"><i class="fa-regular fa-user-plus"></i></div>
+        <div>
+          <div class="qbtn-label">Manage Users</div>
+          <div class="qbtn-sub">Add or edit team members</div>
+        </div>
       </a>
       {% endif %}
     </div>
