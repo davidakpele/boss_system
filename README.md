@@ -417,7 +417,7 @@ cp .env.example .env
 
 Edit `.env`:
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:your_password@localhost:5432/boss_system
+DATABASE_URL=
 SECRET_KEY=your-minimum-32-character-secret-key-here
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=1440

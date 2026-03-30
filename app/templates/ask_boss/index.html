@@ -69,7 +69,7 @@
 }
 .boss-logo-big {
   width:72px; height:72px;
-  background:linear-gradient(135deg,var(--accent),var(--purple));
+  background: #3f3f46;
   border-radius:20px;
   display:flex; align-items:center; justify-content:center;
   font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
@@ -101,7 +101,7 @@
 .msg-wrapper.user { align-self:flex-end; flex-direction:row-reverse; }
 .ai-avatar {
   width:36px; height:36px; border-radius:10px;
-  background:linear-gradient(135deg,var(--accent),var(--purple));
+  background: #3f3f46;
   display:flex; align-items:center; justify-content:center;
   font-size:14px; color:#fff; flex-shrink:0; font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
                  Roboto, Oxygen, Ubuntu, Cantarell,
@@ -165,7 +165,7 @@
 .boss-textarea::placeholder { color:var(--text3); }
 .boss-send {
   width:38px; height:38px;
-  background:linear-gradient(135deg,var(--accent),#2563eb);
+  background: #3f3f46;
   border:none; border-radius:10px;
   color:#fff; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
@@ -218,7 +218,7 @@
       <div class="ai-avatar" style="width:36px;height:36px;border-radius:10px;font-size:14px;">AI</div>
       <div>
         <div style="font-weight:600;font-size:14px;">BOSS AI Assistant</div>
-        <div style="font-size:11px;color:var(--text3);">codellama:7b-instruct-q4_K_M</div>
+        
       </div>
       <div class="ai-status {% if ai_online %}online{% else %}offline{% endif %}">
         <div class="status-dot"></div>
