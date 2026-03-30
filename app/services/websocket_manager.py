@@ -8,9 +8,7 @@ logger = logging.getLogger(__name__)
 
 class ConnectionManager:
     def __init__(self):
-        # channel_id -> list of (websocket, user_id, user_name)
         self.channel_connections: Dict[int, List[dict]] = {}
-        # user_id -> websocket (for direct messages / notifications)
         self.user_connections: Dict[int, WebSocket] = {}
 
     async def connect_to_channel(self, websocket: WebSocket, channel_id: int, user_id: int, user_name: str):

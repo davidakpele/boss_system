@@ -23,9 +23,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(f"{settings.UPLOAD_DIR}/documents", exist_ok=True)
+    os.makedirs("app/static/uploads/messages", exist_ok=True) 
     logger.info("Database initialized.")
     yield
-    logger.info("Shutting down BOSS System.")
 
 
 app = FastAPI(

@@ -1,3 +1,4 @@
+# Configuration settings for the BOSS System application. src/config.py
 from pydantic_settings import BaseSettings
 from typing import Optional
 

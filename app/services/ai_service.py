@@ -138,10 +138,10 @@ class AIService:
                             except json.JSONDecodeError:
                                 continue
         except httpx.ConnectError:
-            yield "\n\n⚠️ AI service is not available. Please ensure Ollama is running with the model loaded."
+            yield "\n\nAI service is not available. Please ensure Ollama is running with the model loaded."
         except Exception as e:
             logger.error(f"Ollama error: {e}")
-            yield f"\n\n⚠️ Error connecting to AI service: {str(e)}"
+            yield f"\n\nError connecting to AI service: {str(e)}"
 
     async def chat_complete(self, messages: List[dict]) -> str:
         """Non-streaming chat completion."""

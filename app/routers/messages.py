@@ -1,4 +1,9 @@
 # src/app/routers/messages.py
+#
+# KEY FIX: Files are now saved into app/static/uploads/messages/
+# so they are served correctly at /static/uploads/messages/<filename>
+# for ALL users, not just the sender.
+#
 import os
 import uuid
 import logging
@@ -24,21 +29,20 @@ templates = Jinja2Templates(directory="app/templates")
 
 DEPARTMENTS = ["HR", "Sales", "Technology", "Finance", "Operations", "Legal", "Marketing", "Management", "General"]
 
-# Max file size: 20 MB
-MAX_FILE_SIZE = 20 * 1024 * 1024
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
 
 ALLOWED_EXTENSIONS = {
-    # Images
     "png", "jpg", "jpeg", "gif", "webp",
-    # Documents
     "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv",
-    # Code
     "py", "js", "ts", "html", "json", "md",
-    # Archives
     "zip", "rar", "7z",
-    # Audio / Video
     "mp3", "wav", "mp4", "mov", "avi",
 }
+
+# ── THE FIX: Save files inside app/static so FastAPI can serve them ──
+# main.py mounts:  app.mount("/static", StaticFiles(directory="app/static"))
+# So anything in app/static/uploads/messages/ is reachable at /static/uploads/messages/
+STATIC_UPLOAD_DIR = os.path.join("app", "static", "uploads", "messages")
 
 
 # ── PAGES ──────────────────────────────────────────────────────────────────────
@@ -131,7 +135,6 @@ async def init_dm(
 
 
 def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dict:
-    """Convert a Message ORM object to a JSON-safe dict."""
     return {
         "id": msg.id,
         "content": msg.content or "",
@@ -140,11 +143,9 @@ def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dic
         "avatar_color": avatar_color,
         "created_at": msg.created_at.isoformat() if msg.created_at else "",
         "is_deleted": bool(msg.is_deleted),
-        # Reply fields
         "reply_to_id": msg.reply_to_id,
         "reply_to_sender": msg.reply_to_sender,
         "reply_to_content": msg.reply_to_content,
-        # File fields
         "file_url": msg.file_url,
         "file_name": msg.file_name,
         "file_size": msg.file_size,
@@ -186,7 +187,6 @@ async def create_channel(
     current_user: User = Depends(require_user),
 ):
     dept_list = [d.strip() for d in departments.split(",") if d.strip()]
-
     channel = Channel(
         name=name,
         description=description,
@@ -196,16 +196,13 @@ async def create_channel(
     )
     db.add(channel)
     await db.flush()
-
     db.add(ChannelMember(channel_id=channel.id, user_id=current_user.id))
-
     if dept_list:
         dept_users = (await db.execute(
             select(User).where(User.department.in_(dept_list), User.id != current_user.id)
         )).scalars().all()
         for u in dept_users:
             db.add(ChannelMember(channel_id=channel.id, user_id=u.id))
-
     await db.commit()
     return JSONResponse({"id": channel.id, "name": channel.name})
 
@@ -262,7 +259,6 @@ async def update_channel(
         )).scalars().all()
         for u in dept_users:
             db.add(ChannelMember(channel_id=channel_id, user_id=u.id))
-
     await db.commit()
     return JSONResponse({"status": "updated"})
 
@@ -289,17 +285,19 @@ async def upload_file(
     if len(data) > MAX_FILE_SIZE:
         return JSONResponse({"error": "File too large (max 20 MB)"}, status_code=400)
 
-    # Save to disk
-    upload_subdir = os.path.join(settings.UPLOAD_DIR, "messages")
-    os.makedirs(upload_subdir, exist_ok=True)
+    # ── FIXED: Save directly into app/static/uploads/messages/ ──
+    # This ensures FastAPI's StaticFiles middleware can serve the file at
+    # /static/uploads/messages/<filename> for every user on the network.
+    os.makedirs(STATIC_UPLOAD_DIR, exist_ok=True)
 
     safe_stem = Path(file.filename or "file").stem[:40]
     unique_name = f"{uuid.uuid4().hex}_{safe_stem}.{ext}"
-    dest = os.path.join(upload_subdir, unique_name)
+    dest = os.path.join(STATIC_UPLOAD_DIR, unique_name)
 
     with open(dest, "wb") as f:
         f.write(data)
 
+    # URL is now genuinely reachable by all clients
     file_url = f"/static/uploads/messages/{unique_name}"
 
     # Persist message
@@ -361,10 +359,9 @@ async def delete_message(
         return JSONResponse({"error": "Not authorized"}, status_code=403)
 
     msg.is_deleted = True
-    msg.content = ""          # clear content for privacy
+    msg.content = ""
     await db.commit()
 
-    # Broadcast deletion to channel
     await manager.broadcast_to_channel(msg.channel_id, {
         "type": "message_deleted",
         "message_id": message_id,
@@ -401,7 +398,6 @@ async def websocket_endpoint(
         return
 
     await manager.connect_to_channel(websocket, channel_id, user.id, user.full_name)
-
     await manager.broadcast_to_channel(channel_id, {
         "type": "user_joined",
         "user_id": user.id,
@@ -450,7 +446,6 @@ async def websocket_endpoint(
                     }
                     await manager.broadcast_to_channel(channel_id, payload_out)
 
-                # Background AI extraction
                 try:
                     async with AsyncSessionLocal() as ai_sess:
                         knowledge = await ai_service.extract_knowledge_from_message(content, ai_sess)
@@ -473,7 +468,6 @@ async def websocket_endpoint(
                 }, exclude_user=user.id)
 
             elif msg_type == "delete":
-                # Secondary broadcast for other clients
                 message_id = data.get("message_id")
                 if message_id:
                     await manager.broadcast_to_channel(channel_id, {
