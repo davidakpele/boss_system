@@ -50,7 +50,7 @@
   <!-- Chat panel -->
   <div class="ob-chat">
     <div class="ob-header">
-      <div class="ob-avatar">🤖</div>
+      <div class="ob-avatar"><i class="fas fa-robot" style="color:white"></i></div>
       <div style="flex:1">
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">BOSS Onboarding Assistant</div>
         <div class="status-line">
@@ -64,7 +64,7 @@
     <div class="ob-messages" id="obMessages">
       <!-- Greeting bubble -->
       <div class="ob-msg">
-        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0"><i class="fas fa-robot" style="color:white"></i></div>
         <div>
           <div class="ob-bubble ai">
             👋 Hi <strong>{{ user.full_name }}</strong>! I'm your personal onboarding assistant.<br><br>
@@ -84,7 +84,7 @@
       {% for msg in history %}
       <div class="ob-msg {% if msg.role == 'user' %}user{% endif %}">
         {% if msg.role == 'assistant' %}
-        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0"><i class="fas fa-robot" style="color:white"></i></div>
         {% endif %}
         <div>
           <div class="ob-bubble {% if msg.role == 'user' %}user{% else %}ai{% endif %}">{{ msg.content }}</div>
@@ -113,20 +113,20 @@
   <div class="ob-sidebar">
     <div class="ob-info-card">
       <div class="ob-info-title"><i class="fa-solid fa-wifi" style="color:var(--accent)"></i> Live Status</div>
-      <div class="tip-item"><span class="tip-icon">🤖</span><span>AI: <span id="sideAi">Checking…</span></span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-robot" style="color:white"></i></span><span>AI: <span id="sideAi">Checking…</span></span></div>
       <div class="tip-item"><span class="tip-icon">👤</span><span>You: <span style="color:#22c55e">● Online</span></span></div>
       <div class="tip-item"><span class="tip-icon">🔗</span><span>Socket: <span id="sideWs">Connecting…</span></span></div>
     </div>
 
     <div class="ob-info-card">
       <div class="ob-info-title"><i class="fa-solid fa-lightbulb" style="color:var(--yellow)"></i> Quick Questions</div>
-      <div class="ob-chip" onclick="ask('What are the company values and culture?')">🏢 Company values & culture</div>
-      <div class="ob-chip" onclick="ask('What is the leave policy?')">📅 Leave & time off policy</div>
-      <div class="ob-chip" onclick="ask('How does the performance review process work?')">⭐ Performance reviews</div>
-      <div class="ob-chip" onclick="ask('What tools and software does the company use?')">🛠️ Tools & software</div>
-      <div class="ob-chip" onclick="ask('Who should I contact for IT support?')">💻 IT support</div>
-      <div class="ob-chip" onclick="ask('What are the working hours and remote work policy?')">⏰ Working hours</div>
-      <div class="ob-chip" onclick="ask('Tell me about the {{ user.department or 'General' }} department')">👥 My department</div>
+      <div class="ob-chip" onclick="ask('What are the company values and culture?')"><i class="fas fa-building" style="color:#52525b"></i> Company values & culture</div>
+      <div class="ob-chip" onclick="ask('What is the leave policy?')"><i class="fas fa-calendar-alt" style="color:#52525b"></i> Leave & time off policy</div>
+      <div class="ob-chip" onclick="ask('How does the performance review process work?')"><i class="fas fa-star" style="color:#52525b"></i> Performance reviews</div>
+      <div class="ob-chip" onclick="ask('What tools and software does the company use?')"><i class="fas fa-tools" style="color:#52525b"></i> Tools & software</div>
+      <div class="ob-chip" onclick="ask('Who should I contact for IT support?')"><i class="fas fa-laptop-code" style="color:#52525b"></i> IT support</div>
+      <div class="ob-chip" onclick="ask('What are the working hours and remote work policy?')"><i class="fas fa-clock" style="color:#52525b"></i> Working hours</div>
+      <div class="ob-chip" onclick="ask('Tell me about the {{ user.department or 'General' }} department')"><i class="fas fa-users" style="color:#52525b"></i> My department</div>
     </div>
 
     <div class="ob-info-card">
@@ -138,16 +138,16 @@
           <div style="font-size:11px;color:var(--text3)">{{ user.department or 'No department' }}</div>
         </div>
       </div>
-      <div class="tip-item"><span class="tip-icon">📧</span><span>{{ user.email }}</span></div>
-      <div class="tip-item"><span class="tip-icon">🏷️</span><span>{{ user.role.value.replace('_',' ').title() }}</span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-envelope" style="color:#52525b"></i></span><span>{{ user.email }}</span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-tag" style="color:#52525b"></i></span><span>{{ user.role.value.replace('_',' ').title() }}</span></div>
     </div>
 
     <div class="ob-info-card">
       <div class="ob-info-title"><i class="fa-solid fa-star" style="color:var(--green)"></i> Getting Started Tips</div>
-      <div class="tip-item"><span class="tip-icon">✅</span><span>Complete your onboarding checklist</span></div>
-      <div class="tip-item"><span class="tip-icon">💬</span><span>Join your department channel in Messages</span></div>
-      <div class="tip-item"><span class="tip-icon">📚</span><span>Browse the Knowledge Base for company policies</span></div>
-      <div class="tip-item"><span class="tip-icon">🤖</span><span>Ask BOSS AI any question about operations</span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-check-circle" style="color:var(--green)"></i></span><span>Complete your onboarding checklist</span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-comments" style="color:#52525b"></i></span><span>Join your department channel in Messages</span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-book" style="color:#52525b"></i></span><span>Browse the Knowledge Base for company policies</span></div>
+      <div class="tip-item"><span class="tip-icon"><i class="fas fa-robot" style="color:#52525b"></i></span><span>Ask BOSS AI any question about operations</span></div>
     </div>
   </div>
 </div>
@@ -296,7 +296,7 @@ function appendMsg(role, content) {
   d.innerHTML = isUser
     ? `<div style="width:32px;height:32px;border-radius:50%;background:${OB_AVATAR_CLR};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${OB_USER_INIT}</div>
        <div><div class="ob-bubble user">${esc(content)}</div><div class="ob-time" style="text-align:right">${time}</div></div>`
-    : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
+    : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0"><i class="fas fa-robot" style="color:white"></i></div>
        <div><div class="ob-bubble ai">${fmt(content)}</div><div class="ob-time">${time}</div></div>`;
   c.appendChild(d); scrollBottom();
 }
@@ -305,7 +305,7 @@ function appendThinking() {
   const c = document.getElementById('obMessages');
   const d = document.createElement('div');
   d.className = 'ob-msg'; d.id = 'ob-thinking';
-  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
+  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0"><i class="fas fa-robot" style="color:white"></i></div>
     <div><div class="ob-bubble ai"><div class="ob-thinking"><span></span><span></span><span></span></div></div></div>`;
   c.appendChild(d); scrollBottom();
 }
@@ -318,7 +318,7 @@ function appendStreamBubble(id) {
   const time = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const d = document.createElement('div');
   d.className = 'ob-msg';
-  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
+  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0"><i class="fas fa-robot" style="color:white"></i></div>
     <div><div class="ob-bubble ai" id="${id}"></div><div class="ob-time">${time}</div></div>`;
   c.appendChild(d); scrollBottom();
 }
