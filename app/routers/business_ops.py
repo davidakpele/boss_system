@@ -46,10 +46,14 @@ async def tasks_page(
     depts = (await db.execute(select(User.department).distinct().where(User.department != None))).scalars().all()
 
     return templates.TemplateResponse(request=request, name="business/tasks.html", context={
-        "user": current_user, "board": board, "all_users": all_users,
-        "departments": depts, "current_dept": dept_filter, "page": "tasks",
+        "user": current_user, 
+        "board": board, 
+        "all_users": all_users,
+        "departments": depts, 
+        "current_dept": dept_filter, 
+        "page": "tasks",
+        "now": datetime.now(), 
     })
-
 
 @router.post("/tasks/create")
 async def create_task(
