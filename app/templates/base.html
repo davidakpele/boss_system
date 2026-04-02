@@ -653,7 +653,22 @@
       <a href="/risk-management" class="nav-item {% if page == 'risk_management' %}active{% endif %}">
         <i class="fa-solid fa-circle-exclamation"></i> Risk Management
       </a>
-
+      <div class="nav-section-label mt-4">Operations</div>
+        <a href="/tasks" class="nav-item {% if page == 'tasks' %}active{% endif %}">
+          <i class="fa-solid fa-square-check"></i> Task Board
+        </a>
+        <a href="/meetings" class="nav-item {% if page == 'meetings' %}active{% endif %}">
+          <i class="fa-regular fa-calendar"></i> Meetings
+        </a>
+        <a href="/announcements" class="nav-item {% if page == 'announcements' %}active{% endif %}">
+          <i class="fa-solid fa-bullhorn"></i> Announcements
+        </a>
+        <a href="/directory" class="nav-item {% if page == 'directory' %}active{% endif %}">
+          <i class="fa-solid fa-address-book"></i> Directory
+        </a>
+        <a href="/leave" class="nav-item {% if page == 'leave' %}active{% endif %}">
+          <i class="fa-regular fa-calendar-minus"></i> Leave Tracker
+        </a>
       {% if user.role in ('super_admin', 'admin') %}
       <div class="nav-section-label">System</div>
       <a href="/audit-logs" class="nav-item {% if page == 'audit' %}active{% endif %}">

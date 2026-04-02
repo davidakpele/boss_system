@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}Leave Tracker — BOSS{% endblock %}
+{% block page_title %}Leave & Absence{% endblock %}
+{% block page_sub %}Submit requests, track approvals, view calendar{% endblock %}
+{% block extra_css %}
+.leave-layout { display:grid; grid-template-columns:1fr 320px; gap:20px; align-items:start; }
+.leave-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; margin-bottom:8px; display:flex; align-items:center; gap:12px; }
+.status-pill { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:600; }
+.s-pending { background:rgba(245,158,11,0.1); color:#fbbf24; }
+.s-approved { background:rgba(16,185,129,0.1); color:#34d399; }
+.s-rejected { background:rgba(239,68,68,0.1); color:#f87171; }
+.week-calendar { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.cal-header { display:grid; grid-template-columns:repeat(7,1fr); background:var(--bg2); border-bottom:1px solid var(--border); }
+.cal-day-head { padding:8px; text-align:center; font-size:10px; font-weight:600; color:var(--text3); text-transform:uppercase; letter-spacing:0.06em; }
+.cal-day-head.today { color:var(--accent2); }
+.cal-row { display:grid; grid-template-columns:repeat(7,1fr); min-height:60px; border-bottom:1px solid var(--border); }
+.cal-row:last-child { border-bottom:none; }
+.cal-cell { padding:6px; border-right:1px solid var(--border); }
+.cal-cell:last-child { border-right:none; }
+.cal-cell.today { background:var(--accent-glow); }
+.cal-date { font-size:10px; color:var(--text3); font-weight:600; margin-bottom:4px; }
+.cal-absence { background:rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); border-radius:4px; padding:2px 5px; font-size:9px; font-weight:600; color:#f87171; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.leave-type-badge { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; background:rgba(99,102,241,0.1); color:#818cf8; }
+@media(max-width:900px){ .leave-layout{ grid-template-columns:1fr; } }
+{% endblock %}
+{% block content %}
+<div class="leave-layout">
+  <div>
+    <!-- My Requests -->
+    <div class="flex justify-between items-center mb-4">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">My Leave Requests</div>
+      <button class="btn btn-primary btn-sm" onclick="openModal('newLeaveModal')"><i class="fa-solid fa-plus"></i> Request Leave</button>
+    </div>
+
+    {% if my_requests %}
+      {% for r in my_requests %}
+      <div class="leave-card">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <span class="leave-type-badge">{{ r.leave_type.replace('_',' ').title() }}</span>
+            <span class="status-pill s-{{ r.status }}">{{ r.status.title() }}</span>
+            {% if r.status == 'pending' %}
+            <button class="btn btn-danger btn-xs" onclick="cancelLeave({{ r.id }})"><i class="fa-solid fa-times"></i> Cancel</button>
+            {% endif %}
+          </div>
+          <div style="font-size:13px;color:var(--text2);margin-top:6px;">
+            <i class="fa-regular fa-calendar" style="margin-right:4px;"></i>
+            {{ r.start_date.strftime('%b %d') }} – {{ r.end_date.strftime('%b %d, %Y') }}
+            <span style="margin-left:8px;font-size:11px;color:var(--text3);">{{ r.days_count|int }} day{{ 's' if r.days_count != 1 else '' }}</span>
+          </div>
+          {% if r.reason %}<div style="font-size:12px;color:var(--text3);margin-top:3px;">{{ r.reason }}</div>{% endif %}
+          {% if r.review_note %}<div style="font-size:12px;color:var(--text3);margin-top:3px;font-style:italic;"><i class="fa-solid fa-comment" style="font-size:10px;"></i> {{ r.review_note }}</div>{% endif %}
+        </div>
+        <div style="font-size:11px;color:var(--text3);text-align:right;flex-shrink:0;">{{ r.created_at.strftime('%b %d') if r.created_at else '' }}</div>
+      </div>
+      {% endfor %}
+    {% else %}
+      <div style="text-align:center;padding:40px;color:var(--text3);font-size:13px;">No leave requests yet.</div>
+    {% endif %}
+
+    <!-- Pending approvals (managers/admins) -->
+    {% if pending %}
+    <div style="margin-top:24px;">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;margin-bottom:12px;">
+        Pending Approvals <span class="badge badge-yellow">{{ pending|length }}</span>
+      </div>
+      {% for item in pending %}
+      <div class="leave-card" style="border-left:3px solid var(--yellow);">
+        <div style="width:36px;height:36px;border-radius:50%;background:{{ item.color }};display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;">{{ item.name[:2].upper() }}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;font-size:13px;">{{ item.name }}</div>
+          <div style="font-size:11.5px;color:var(--text3);">{{ item.dept }} · {{ item.req.leave_type.replace('_',' ').title() }}</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:3px;">
+            {{ item.req.start_date.strftime('%b %d') }} – {{ item.req.end_date.strftime('%b %d, %Y') }}
+            ({{ item.req.days_count|int }} days)
+          </div>
+          {% if item.req.reason %}<div style="font-size:11px;color:var(--text3);margin-top:2px;">{{ item.req.reason }}</div>{% endif %}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">
+          <button class="btn btn-success btn-xs" onclick="reviewLeave({{ item.req.id }},'approved')"><i class="fa-solid fa-check"></i> Approve</button>
+          <button class="btn btn-danger btn-xs" onclick="reviewLeave({{ item.req.id }},'rejected')"><i class="fa-solid fa-times"></i> Reject</button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Sidebar: Calendar + stats -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-title"><i class="fa-solid fa-calendar-week" style="color:var(--accent)"></i> This Week's Absences</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:12px;">{{ week_start.strftime('%b %d') }} – {{ week_end.strftime('%b %d, %Y') }}</div>
+      {% if off_this_week %}
+        {% for req, name, color, dept in off_this_week %}
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(31,45,66,0.4);">
+          <div style="width:28px;height:28px;border-radius:50%;background:{{ color }};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;">{{ name[:2].upper() }}</div>
+          <div>
+            <div style="font-size:12.5px;font-weight:600;">{{ name }}</div>
+            <div style="font-size:10.5px;color:var(--text3);">{{ req.start_date.strftime('%b %d') }} – {{ req.end_date.strftime('%b %d') }} · {{ req.leave_type.replace('_',' ').title() }}</div>
+          </div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div style="text-align:center;padding:20px;color:var(--text3);font-size:12.5px;">
+          <i class="fa-solid fa-sun" style="font-size:20px;opacity:0.3;display:block;margin-bottom:6px;"></i>
+          Everyone is in this week!
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title"><i class="fa-solid fa-info-circle" style="color:var(--text3)"></i> Leave Types</div>
+      {% for lt in ['Annual', 'Sick', 'Maternity', 'Paternity', 'Unpaid', 'Other'] %}
+      <div style="display:flex;justify-content:space-between;padding:5px 0;font-size:12.5px;color:var(--text2);border-bottom:1px solid rgba(31,45,66,0.3);">
+        <span>{{ lt }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- New Leave Modal -->
+<div class="modal-overlay" id="newLeaveModal">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-calendar-plus" style="color:var(--accent)"></i> Request Leave</span>
+      <span class="modal-close" onclick="closeModal('newLeaveModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Leave Type *</label>
+      <select id="nl-type" class="form-control" style="padding-left:12px">
+        <option value="annual">Annual Leave</option>
+        <option value="sick">Sick Leave</option>
+        <option value="maternity">Maternity Leave</option>
+        <option value="paternity">Paternity Leave</option>
+        <option value="unpaid">Unpaid Leave</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Start Date *</label>
+        <input type="date" id="nl-start" class="form-control" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">End Date *</label>
+        <input type="date" id="nl-end" class="form-control" style="padding-left:12px" oninput="calcDays()"/>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--accent2);margin-bottom:12px;" id="days-count"></div>
+    <div class="form-group">
+      <label class="form-label">Reason (optional)</label>
+      <textarea id="nl-reason" class="form-control" rows="2" style="padding-left:12px"></textarea>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('newLeaveModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitLeave()"><i class="fa-solid fa-paper-plane"></i> Submit</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function calcDays() {
+  const s = document.getElementById('nl-start').value;
+  const e = document.getElementById('nl-end').value;
+  if (s && e) {
+    const days = Math.max(1, Math.round((new Date(e)-new Date(s))/(1000*60*60*24)) + 1);
+    document.getElementById('days-count').textContent = `${days} day${days!==1?'s':''} requested`;
+  }
+}
+async function submitLeave() {
+  const fd = new FormData();
+  fd.append('leave_type', document.getElementById('nl-type').value);
+  fd.append('start_date', document.getElementById('nl-start').value);
+  fd.append('end_date', document.getElementById('nl-end').value);
+  fd.append('reason', document.getElementById('nl-reason').value);
+  if (!fd.get('start_date') || !fd.get('end_date')) { toast('Dates required', 'error'); return; }
+  const r = await fetch('/leave/submit', {method:'POST', body:fd});
+  if (r.ok) { toast('Request submitted!', 'success'); closeModal('newLeaveModal'); setTimeout(()=>location.reload(),600); }
+  else toast('Error', 'error');
+}
+async function cancelLeave(id) {
+  if (!confirm('Cancel this request?')) return;
+  const r = await fetch(`/leave/${id}`, {method:'DELETE'});
+  if (r.ok) { toast('Cancelled', 'info'); setTimeout(()=>location.reload(),500); }
+}
+async function reviewLeave(id, status) {
+  const note = status === 'rejected' ? (prompt('Reason for rejection (optional):') || '') : '';
+  const fd = new FormData(); fd.append('status', status); fd.append('note', note);
+  const r = await fetch(`/leave/${id}/review`, {method:'POST', body:fd});
+  if (r.ok) { toast(status==='approved'?'Approved!':'Rejected', status==='approved'?'success':'info'); setTimeout(()=>location.reload(),500); }
+}
+</script>
+{% endblock %}

@@ -7,87 +7,91 @@
 .ob-layout { display:grid; grid-template-columns:1fr 320px; gap:20px; height:calc(100vh - 100px); }
 .ob-chat { display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
 .ob-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; background:var(--bg2); flex-shrink:0; }
-.ob-avatar { width:44px; height:44px; border-radius:12px;  background: linear-gradient(135deg, #3f3f46, #52525b); display:flex; align-items:center; justify-content:center; font-size:20px; animation:float 3s ease-in-out infinite; }
+.ob-avatar { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#3f3f46,#52525b); display:flex; align-items:center; justify-content:center; font-size:20px; animation:float 3s ease-in-out infinite; }
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 .ob-messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
 .ob-msg { display:flex; gap:10px; max-width:80%; }
 .ob-msg.user { align-self:flex-end; flex-direction:row-reverse; }
 .ob-bubble { padding:10px 14px; border-radius:14px; font-size:13.5px; line-height:1.6; }
 .ob-bubble.ai { background:var(--bg2); border:1px solid var(--border); color:var(--text); border-top-left-radius:4px; }
-.ob-bubble.user {  background: linear-gradient(135deg, #3f3f46, #52525b); color:#fff; border-top-right-radius:4px; }
+.ob-bubble.user { background:linear-gradient(135deg,#3f3f46,#52525b); color:#fff; border-top-right-radius:4px; }
 .ob-time { font-size:10px; color:var(--text3); margin-top:4px; }
 .ob-thinking { display:flex; gap:5px; padding:4px 0; }
 .ob-thinking span { width:6px; height:6px; background:var(--text3); border-radius:50%; animation:tdot 1.2s infinite; }
-.ob-thinking span:nth-child(2){animation-delay:0.2s} .ob-thinking span:nth-child(3){animation-delay:0.4s}
+.ob-thinking span:nth-child(2){animation-delay:.2s}.ob-thinking span:nth-child(3){animation-delay:.4s}
 @keyframes tdot{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
 .ob-input-area { padding:14px 16px; border-top:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
-.ob-input-row { display:flex; gap:8px; background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:6px 8px 6px 14px; transition:border-color 0.15s; }
+.ob-input-row { display:flex; gap:8px; background:var(--bg3); border:1px solid var(--border); border-radius:12px; padding:6px 8px 6px 14px; transition:border-color .15s; }
 .ob-input-row:focus-within { border-color:var(--accent); }
 .ob-textarea { flex:1; background:none; border:none; outline:none; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif; resize:none; max-height:100px; padding:6px 0; }
 .ob-textarea::placeholder { color:var(--text3); }
-.ob-send { width:36px; height:36px;  background: linear-gradient(135deg, #3f3f46, #52525b); border:none; border-radius:10px; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
-.ob-send:hover { opacity:0.85; }
-.ob-send:disabled { opacity:0.3; cursor:not-allowed; }
-/* Sidebar info */
+.ob-send { width:36px; height:36px; background:linear-gradient(135deg,#3f3f46,#52525b); border:none; border-radius:10px; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.ob-send:hover{opacity:.85}.ob-send:disabled{opacity:.3;cursor:not-allowed}
+.sdot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:3px; vertical-align:middle; }
+.sdot.on  { background:#22c55e; box-shadow:0 0 5px #22c55e; }
+.sdot.off { background:#ef4444; }
+.sdot.chk { background:#f59e0b; animation:blink 1s infinite; }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.status-line { font-size:12px; color:var(--text3); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .ob-sidebar { display:flex; flex-direction:column; gap:14px; overflow-y:auto; }
 .ob-info-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
 .ob-info-title { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
-.ob-chip { padding:6px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:20px; font-size:12px; color:var(--text2); cursor:pointer; transition:all 0.15s; display:block; margin-bottom:6px; }
+.ob-chip { padding:6px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:20px; font-size:12px; color:var(--text2); cursor:pointer; transition:all .15s; display:block; margin-bottom:6px; }
 .ob-chip:hover { border-color:var(--accent); color:var(--accent2); background:var(--accent-glow); }
-.tip-item { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid rgba(31,45,66,0.4); font-size:12.5px; color:var(--text2); }
-.tip-item:last-child { border-bottom:none; }
-.tip-icon { font-size:16px; flex-shrink:0; margin-top:1px; }
-@media(max-width:900px){ .ob-layout{ grid-template-columns:1fr; } .ob-sidebar{display:none;} }
+.tip-item { display:flex; gap:10px; padding:8px 0; border-bottom:1px solid rgba(31,45,66,.4); font-size:12.5px; color:var(--text2); }
+.tip-item:last-child{border-bottom:none}
+.tip-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+@media(max-width:900px){.ob-layout{grid-template-columns:1fr}.ob-sidebar{display:none}}
 {% endblock %}
 
 {% block content %}
 <div class="ob-layout">
 
-  <!-- Chat -->
+  <!-- Chat panel -->
   <div class="ob-chat">
     <div class="ob-header">
       <div class="ob-avatar">🤖</div>
-      <div>
+      <div style="flex:1">
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">BOSS Onboarding Assistant</div>
-        <div style="font-size:12px;color:var(--text3);">
-          {% if ai_online %}<span style="color:var(--green)">● Online</span>{% else %}<span style="color:var(--red)">● Offline</span>{% endif %}
-          — Ask me anything about the company
+        <div class="status-line">
+          <span><span id="aiDot" class="sdot chk"></span><span id="aiTxt">Connecting…</span></span>
+          <span style="color:var(--border)">|</span>
+          <span><span class="sdot on"></span>You are online</span>
         </div>
       </div>
     </div>
 
     <div class="ob-messages" id="obMessages">
-      <!-- Greeting -->
+      <!-- Greeting bubble -->
       <div class="ob-msg">
-        <div style="width:32px;height:32px;border-radius:50%; background: linear-gradient(135deg, #3f3f46, #52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤖</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
         <div>
           <div class="ob-bubble ai">
             👋 Hi <strong>{{ user.full_name }}</strong>! I'm your personal onboarding assistant.<br><br>
             I'm here to help you get settled into <strong>{{ user.department or 'the company' }}</strong>. You can ask me about:
-            <ul style="margin:8px 0 0 16px;line-height:2;">
+            <ul style="margin:8px 0 0 16px;line-height:2">
               <li>Company policies and procedures</li>
               <li>Your role and responsibilities</li>
               <li>How different teams work</li>
               <li>Tools and systems you'll use</li>
               <li>Who to contact for what</li>
-            </ul>
-            <br>What would you like to know? 😊
+            </ul><br>What would you like to know? 😊
           </div>
         </div>
       </div>
 
-      <!-- Load history -->
+      <!-- Chat history from server -->
       {% for msg in history %}
       <div class="ob-msg {% if msg.role == 'user' %}user{% endif %}">
         {% if msg.role == 'assistant' %}
-        <div style="width:32px;height:32px;border-radius:50%; background: linear-gradient(135deg, #3f3f46, #52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤖</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
         {% endif %}
         <div>
           <div class="ob-bubble {% if msg.role == 'user' %}user{% else %}ai{% endif %}">{{ msg.content }}</div>
           <div class="ob-time">{{ msg.created_at.strftime('%H:%M') if msg.created_at else '' }}</div>
         </div>
         {% if msg.role == 'user' %}
-        <div style="width:32px;height:32px;border-radius:50%;background:{{ user.avatar_color }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">{{ user.full_name[:2].upper() }}</div>
+        <div style="width:32px;height:32px;border-radius:50%;background:{{ user.avatar_color }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">{{ user.full_name[:2].upper() }}</div>
         {% endif %}
       </div>
       {% endfor %}
@@ -97,9 +101,8 @@
       <div class="ob-input-row">
         <textarea class="ob-textarea" id="obInput" rows="1"
           placeholder="Ask anything about the company..."
-          onkeydown="handleObKey(event)"
-          oninput="autoResizeOb(this)"></textarea>
-        <button class="ob-send" id="obSendBtn" onclick="sendObMessage()">
+          onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+        <button class="ob-send" id="obSendBtn" onclick="sendMessage()">
           <i class="fa-solid fa-paper-plane"></i>
         </button>
       </div>
@@ -109,23 +112,30 @@
   <!-- Sidebar -->
   <div class="ob-sidebar">
     <div class="ob-info-card">
+      <div class="ob-info-title"><i class="fa-solid fa-wifi" style="color:var(--accent)"></i> Live Status</div>
+      <div class="tip-item"><span class="tip-icon">🤖</span><span>AI: <span id="sideAi">Checking…</span></span></div>
+      <div class="tip-item"><span class="tip-icon">👤</span><span>You: <span style="color:#22c55e">● Online</span></span></div>
+      <div class="tip-item"><span class="tip-icon">🔗</span><span>Socket: <span id="sideWs">Connecting…</span></span></div>
+    </div>
+
+    <div class="ob-info-card">
       <div class="ob-info-title"><i class="fa-solid fa-lightbulb" style="color:var(--yellow)"></i> Quick Questions</div>
-      <div class="ob-chip" onclick="askQuestion('What are the company values and culture?')">🏢 Company values & culture</div>
-      <div class="ob-chip" onclick="askQuestion('What is the leave policy?')">📅 Leave & time off policy</div>
-      <div class="ob-chip" onclick="askQuestion('How does the performance review process work?')">⭐ Performance reviews</div>
-      <div class="ob-chip" onclick="askQuestion('What tools and software does the company use?')">🛠️ Tools & software</div>
-      <div class="ob-chip" onclick="askQuestion('Who should I contact for IT support?')">💻 IT support</div>
-      <div class="ob-chip" onclick="askQuestion('What are the working hours and remote work policy?')">⏰ Working hours</div>
-      <div class="ob-chip" onclick="askQuestion(`Tell me about the ${user_dept} department`)">👥 My department</div>
+      <div class="ob-chip" onclick="ask('What are the company values and culture?')">🏢 Company values & culture</div>
+      <div class="ob-chip" onclick="ask('What is the leave policy?')">📅 Leave & time off policy</div>
+      <div class="ob-chip" onclick="ask('How does the performance review process work?')">⭐ Performance reviews</div>
+      <div class="ob-chip" onclick="ask('What tools and software does the company use?')">🛠️ Tools & software</div>
+      <div class="ob-chip" onclick="ask('Who should I contact for IT support?')">💻 IT support</div>
+      <div class="ob-chip" onclick="ask('What are the working hours and remote work policy?')">⏰ Working hours</div>
+      <div class="ob-chip" onclick="ask('Tell me about the {{ user.department or 'General' }} department')">👥 My department</div>
     </div>
 
     <div class="ob-info-card">
       <div class="ob-info-title"><i class="fa-solid fa-circle-info" style="color:var(--accent)"></i> Your Profile</div>
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-        <div style="width:40px;height:40px;border-radius:50%;background:{{ user.avatar_color }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff;">{{ user.full_name[:2].upper() }}</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+        <div style="width:40px;height:40px;border-radius:50%;background:{{ user.avatar_color }};display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#fff">{{ user.full_name[:2].upper() }}</div>
         <div>
-          <div style="font-weight:600;font-size:13px;">{{ user.full_name }}</div>
-          <div style="font-size:11px;color:var(--text3);">{{ user.department or 'No department' }}</div>
+          <div style="font-weight:600;font-size:13px">{{ user.full_name }}</div>
+          <div style="font-size:11px;color:var(--text3)">{{ user.department or 'No department' }}</div>
         </div>
       </div>
       <div class="tip-item"><span class="tip-icon">📧</span><span>{{ user.email }}</span></div>
@@ -134,10 +144,10 @@
 
     <div class="ob-info-card">
       <div class="ob-info-title"><i class="fa-solid fa-star" style="color:var(--green)"></i> Getting Started Tips</div>
-      <div class="tip-item"><span class="tip-icon">✅</span><span>Complete your onboarding checklist in the Onboarding section</span></div>
+      <div class="tip-item"><span class="tip-icon">✅</span><span>Complete your onboarding checklist</span></div>
       <div class="tip-item"><span class="tip-icon">💬</span><span>Join your department channel in Messages</span></div>
       <div class="tip-item"><span class="tip-icon">📚</span><span>Browse the Knowledge Base for company policies</span></div>
-      <div class="tip-item"><span class="tip-icon">🤖</span><span>Ask BOSS AI any question about company operations</span></div>
+      <div class="tip-item"><span class="tip-icon">🤖</span><span>Ask BOSS AI any question about operations</span></div>
     </div>
   </div>
 </div>
@@ -145,114 +155,189 @@
 
 {% block extra_js %}
 <script>
-const USER_DEPT = "{{ user.department or 'General' }}";
-let obStreaming = false;
+// Server-injected vars
+const OB_USER_ID    = {{ user.id }};
+const OB_USER_INIT  = "{{ user.full_name[:2].upper() }}";
+const OB_AVATAR_CLR = "{{ user.avatar_color }}";
 
-function askQuestion(q) {
-  document.getElementById('obInput').value = q;
-  sendObMessage();
+// State
+let ws          = null;
+let wsReady     = false;
+let busy        = false;        // true while AI is replying
+let pingTimer   = null;
+let reconnTimer = null;
+let activeBubbleId = null;
+
+async function initWebSocket() {
+  try {
+    const r = await fetch('/auth/ws-token');
+    if (r.ok) {
+      const d = await r.json();
+      console.log('Token response:', d);
+      if (d.token) {
+        wsConnect(d.token);
+        return;
+      }
+    }
+    console.error('Failed to get token');
+    setSide('sideWs', 'Auth failed', '#ef4444');
+  } catch (e) {
+    console.error('Token error', e);
+    setSide('sideWs', 'Auth error', '#ef4444');
+  }
 }
 
-async function sendObMessage() {
-  if (obStreaming) return;
+function wsConnect(jwt) {
+  if (ws && ws.readyState < 2) return;
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url = `${proto}://${location.host}/ask-boss/onboarding-assistant/ws/${OB_USER_ID}?token=${encodeURIComponent(jwt)}`;
+
+  setAi(null); setSide('sideWs', 'Connecting…', '#f59e0b');
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    wsReady = true;
+    setSide('sideWs', 'Connected', '#22c55e');
+    clearInterval(pingTimer);
+    pingTimer = setInterval(() => ws.readyState === 1 && ws.send(JSON.stringify({type:'ping'})), 20000);
+  };
+
+  ws.onmessage = (evt) => {
+    let d;
+    try { d = JSON.parse(evt.data); } catch { return; }
+
+    if (d.type === 'status') {
+      setAi(d.ai_online);
+
+    } else if (d.type === 'token') {
+      // Append streaming token to active bubble
+      if (!activeBubbleId) {
+        activeBubbleId = 'ob_' + Date.now();
+        appendStreamBubble(activeBubbleId);
+      }
+      const el = document.getElementById(activeBubbleId);
+      if (el) { el._raw = (el._raw || '') + d.content; el.innerHTML = fmt(el._raw); scrollBottom(); }
+
+    } else if (d.type === 'done') {
+      activeBubbleId = null;
+      busy = false;
+      document.getElementById('obSendBtn').disabled = false;
+
+    } else if (d.type === 'error') {
+      removeThinking();
+      activeBubbleId = null;
+      appendMsg('ai', '⚠️ ' + (d.message || 'AI error. Please try again.'));
+      busy = false;
+      document.getElementById('obSendBtn').disabled = false;
+    }
+    // pong: no action
+  };
+
+  ws.onclose = () => {
+    wsReady = false;
+    clearInterval(pingTimer);
+    setSide('sideWs', 'Disconnected', '#ef4444');
+    setAi(false);
+    clearTimeout(reconnTimer);
+    reconnTimer = setTimeout(() => initWebSocket(), 8000);
+  };
+
+  ws.onerror = () => setSide('sideWs', 'Error', '#ef4444');
+}
+
+// ── Status helpers ────────────────────────────────────────────────
+function setAi(online) {
+  const dot = document.getElementById('aiDot');
+  const txt = document.getElementById('aiTxt');
+  if (online === null) {
+    dot.className = 'sdot chk'; txt.textContent = 'Connecting…';
+    setSide('sideAi', '● Checking…', '#f59e0b');
+  } else if (online) {
+    dot.className = 'sdot on';  txt.textContent = 'AI Online';
+    setSide('sideAi', '● Online', '#22c55e');
+  } else {
+    dot.className = 'sdot off'; txt.textContent = 'AI Offline';
+    setSide('sideAi', '● Offline', '#ef4444');
+  }
+}
+function setSide(id, text, color) {
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = `<span style="color:${color}">${text}</span>`;
+}
+
+// ── Chat ──────────────────────────────────────────────────────────
+function ask(q) { document.getElementById('obInput').value = q; sendMessage(); }
+
+function sendMessage() {
+  if (busy) return;
   const input = document.getElementById('obInput');
   const msg = input.value.trim();
   if (!msg) return;
+  if (!wsReady) { appendMsg('ai', '⚠️ Not connected. Please wait…'); return; }
 
-  input.value = ''; autoResizeOb(input);
-  obStreaming = true;
+  input.value = ''; autoResize(input);
+  busy = true;
   document.getElementById('obSendBtn').disabled = true;
 
-  appendObMsg('user', msg);
+  appendMsg('user', msg);
+  appendThinking();
 
-  // Thinking
-  const thinkId = 'think_' + Date.now();
-  appendObThinking(thinkId);
-
-  try {
-    const resp = await fetch('/ask-boss/onboarding-assistant/chat', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ message: msg }),
-    });
-    document.getElementById(thinkId)?.remove();
-
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let full = '';
-    const bubbleId = 'ob_' + Date.now();
-    appendObStreamBubble(bubbleId);
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      for (const line of decoder.decode(value).split('\n')) {
-        if (line.startsWith('data: ')) {
-          try {
-            const d = JSON.parse(line.slice(6));
-            if (d.content) {
-              full += d.content;
-              const el = document.getElementById(bubbleId);
-              if (el) el.innerHTML = formatObText(full);
-              scrollObBottom();
-            }
-          } catch {}
-        }
-      }
-    }
-  } catch(e) {
-    document.getElementById(thinkId)?.remove();
-    appendObMsg('ai', '⚠️ Could not connect to AI. Please ensure Ollama is running.');
-  }
-
-  obStreaming = false;
-  document.getElementById('obSendBtn').disabled = false;
+  ws.send(JSON.stringify({type: 'chat', message: msg}));
 }
 
-function appendObMsg(role, content) {
+// ── DOM helpers ───────────────────────────────────────────────────
+function appendMsg(role, content) {
+  removeThinking();
   const c = document.getElementById('obMessages');
   const isUser = role === 'user';
-  const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const time = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const d = document.createElement('div');
   d.className = 'ob-msg' + (isUser ? ' user' : '');
   d.innerHTML = isUser
-    ? `<div style="width:32px;height:32px;border-radius:50%;background:{{ user.avatar_color }};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0;">{{ user.full_name[:2].upper() }}</div>
+    ? `<div style="width:32px;height:32px;border-radius:50%;background:${OB_AVATAR_CLR};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff;flex-shrink:0">${OB_USER_INIT}</div>
        <div><div class="ob-bubble user">${esc(content)}</div><div class="ob-time" style="text-align:right">${time}</div></div>`
-    : `<div style="width:32px;height:32px;border-radius:50%; background: linear-gradient(135deg, #3f3f46, #52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤖</div>
-       <div><div class="ob-bubble ai">${formatObText(content)}</div><div class="ob-time">${time}</div></div>`;
-  c.appendChild(d); scrollObBottom();
+    : `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
+       <div><div class="ob-bubble ai">${fmt(content)}</div><div class="ob-time">${time}</div></div>`;
+  c.appendChild(d); scrollBottom();
 }
 
-function appendObThinking(id) {
+function appendThinking() {
   const c = document.getElementById('obMessages');
   const d = document.createElement('div');
-  d.className = 'ob-msg'; d.id = id;
-  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%; background: linear-gradient(135deg, #3f3f46, #52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤖</div>
+  d.className = 'ob-msg'; d.id = 'ob-thinking';
+  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
     <div><div class="ob-bubble ai"><div class="ob-thinking"><span></span><span></span><span></span></div></div></div>`;
-  c.appendChild(d); scrollObBottom();
+  c.appendChild(d); scrollBottom();
 }
 
-function appendObStreamBubble(id) {
+function removeThinking() { document.getElementById('ob-thinking')?.remove(); }
+
+function appendStreamBubble(id) {
+  removeThinking();
   const c = document.getElementById('obMessages');
-  const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const time = new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
   const d = document.createElement('div');
   d.className = 'ob-msg';
-  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%; background: linear-gradient(135deg, #3f3f46, #52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🤖</div>
+  d.innerHTML = `<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#3f3f46,#52525b);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">🤖</div>
     <div><div class="ob-bubble ai" id="${id}"></div><div class="ob-time">${time}</div></div>`;
-  c.appendChild(d); scrollObBottom();
+  c.appendChild(d); scrollBottom();
 }
 
-function formatObText(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+function fmt(t) {
+  return (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/`(.+?)`/g,'<code style="background:rgba(0,0,0,0.2);padding:1px 5px;border-radius:4px;font-size:12px;">$1</code>')
+    .replace(/`(.+?)`/g,'<code style="background:rgba(0,0,0,.2);padding:1px 5px;border-radius:4px;font-size:12px">$1</code>')
     .replace(/\n/g,'<br>');
 }
 function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-function scrollObBottom() { const c=document.getElementById('obMessages'); c.scrollTop=c.scrollHeight; }
-function handleObKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendObMessage();} }
-function autoResizeOb(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
+function scrollBottom() { const c=document.getElementById('obMessages'); c.scrollTop=c.scrollHeight; }
+function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} }
+function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
 
-scrollObBottom();
+// Boot
+scrollBottom();
+initWebSocket();
+
+window.addEventListener('beforeunload', () => { clearInterval(pingTimer); ws && ws.close(); });
 </script>
 {% endblock %}

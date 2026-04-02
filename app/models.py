@@ -269,3 +269,107 @@ class AppSettings(Base):
     value = Column(Text)
     description = Column(Text)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+class Task(Base):
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text)
+    department = Column(String(100))
+    status = Column(String(50), default="todo")  # todo | in_progress | done
+    priority = Column(String(20), default="medium")  # low | medium | high | urgent
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    ai_priority_reason = Column(Text, nullable=True)
+    position = Column(Integer, default=0)  # order within column
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    assignee = relationship("User", foreign_keys=[assigned_to])
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class MeetingRoom(Base):
+    __tablename__ = "meeting_rooms"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text)
+    organizer_id = Column(Integer, ForeignKey("users.id"))
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    location = Column(String(255))
+    agenda = Column(Text)
+    ai_agenda_generated = Column(Boolean, default=False)
+    channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    organizer = relationship("User")
+    attendees = relationship("MeetingAttendee", back_populates="meeting")
+
+
+class MeetingAttendee(Base):
+    __tablename__ = "meeting_attendees"
+    id = Column(Integer, primary_key=True, index=True)
+    meeting_id = Column(Integer, ForeignKey("meeting_rooms.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    status = Column(String(20), default="invited")  # invited | accepted | declined
+
+    meeting = relationship("MeetingRoom", back_populates="attendees")
+    user = relationship("User")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=False)
+    priority = Column(String(20), default="normal")  # normal | important | urgent
+    created_by = Column(Integer, ForeignKey("users.id"))
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    author = relationship("User")
+    reads = relationship("AnnouncementRead", back_populates="announcement")
+
+
+class AnnouncementRead(Base):
+    __tablename__ = "announcement_reads"
+    id = Column(Integer, primary_key=True, index=True)
+    announcement_id = Column(Integer, ForeignKey("announcements.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    read_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    announcement = relationship("Announcement", back_populates="reads")
+    user = relationship("User")
+
+
+class LeaveRequest(Base):
+    __tablename__ = "leave_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    leave_type = Column(String(50))  # annual | sick | maternity | paternity | unpaid | other
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
+    days_count = Column(Float, default=0)
+    reason = Column(Text)
+    status = Column(String(20), default="pending")  # pending | approved | rejected
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_note = Column(Text)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("User", foreign_keys=[user_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class ReportingLine(Base):
+    """Who reports to whom."""
+    __tablename__ = "reporting_lines"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    employee = relationship("User", foreign_keys=[employee_id])
+    manager = relationship("User", foreign_keys=[manager_id])

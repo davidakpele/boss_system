@@ -7,7 +7,7 @@ from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 from app.database import init_db
 from app.config import settings
-from app.routers import auth, dashboard, messages, ask_boss, documents, admin
+from app.routers import auth, business_ops, dashboard, messages, ask_boss, documents, admin
 import logging
 import os
 
@@ -36,7 +36,9 @@ app = FastAPI(
     redoc_url=None,
 )
 
+app = FastAPI(title="BOSS", version=settings.APP_VERSION, lifespan=lifespan, docs_url=None, redoc_url=None)
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 app.include_router(auth.router)
 app.include_router(dashboard.router)
@@ -44,6 +46,7 @@ app.include_router(messages.router)
 app.include_router(ask_boss.router)
 app.include_router(documents.router)
 app.include_router(admin.router)
+app.include_router(business_ops.router)
 
 
 @app.exception_handler(403)
