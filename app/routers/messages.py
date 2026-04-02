@@ -1,9 +1,4 @@
 # src/app/routers/messages.py
-#
-# KEY FIX: Files are now saved into app/static/uploads/messages/
-# so they are served correctly at /static/uploads/messages/<filename>
-# for ALL users, not just the sender.
-#
 import os
 import uuid
 import logging
@@ -39,9 +34,6 @@ ALLOWED_EXTENSIONS = {
     "mp3", "wav", "mp4", "mov", "avi",
 }
 
-# ── THE FIX: Save files inside app/static so FastAPI can serve them ──
-# main.py mounts:  app.mount("/static", StaticFiles(directory="app/static"))
-# So anything in app/static/uploads/messages/ is reachable at /static/uploads/messages/
 STATIC_UPLOAD_DIR = os.path.join("app", "static", "uploads", "messages")
 
 
@@ -135,6 +127,7 @@ async def init_dm(
 
 
 def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dict:
+    """Serialize a Message row to a dict. All fields match models.py Message columns."""
     return {
         "id": msg.id,
         "content": msg.content or "",
@@ -142,10 +135,15 @@ def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dic
         "sender_name": sender_name,
         "avatar_color": avatar_color,
         "created_at": msg.created_at.isoformat() if msg.created_at else "",
+        "edited_at": msg.edited_at.isoformat() if msg.edited_at else None,
+        "message_type": msg.message_type or "text",
         "is_deleted": bool(msg.is_deleted),
+        "is_ai_extracted": bool(msg.is_ai_extracted),
+        # Reply fields
         "reply_to_id": msg.reply_to_id,
         "reply_to_sender": msg.reply_to_sender,
         "reply_to_content": msg.reply_to_content,
+        # File fields
         "file_url": msg.file_url,
         "file_name": msg.file_name,
         "file_size": msg.file_size,
@@ -285,11 +283,7 @@ async def upload_file(
     if len(data) > MAX_FILE_SIZE:
         return JSONResponse({"error": "File too large (max 20 MB)"}, status_code=400)
 
-    # ── FIXED: Save directly into app/static/uploads/messages/ ──
-    # This ensures FastAPI's StaticFiles middleware can serve the file at
-    # /static/uploads/messages/<filename> for every user on the network.
     os.makedirs(STATIC_UPLOAD_DIR, exist_ok=True)
-
     safe_stem = Path(file.filename or "file").stem[:40]
     unique_name = f"{uuid.uuid4().hex}_{safe_stem}.{ext}"
     dest = os.path.join(STATIC_UPLOAD_DIR, unique_name)
@@ -297,22 +291,22 @@ async def upload_file(
     with open(dest, "wb") as f:
         f.write(data)
 
-    # URL is now genuinely reachable by all clients
     file_url = f"/static/uploads/messages/{unique_name}"
 
-    # Persist message
     async with AsyncSessionLocal() as sess:
         msg = Message(
             channel_id=channel_id,
             sender_id=current_user.id,
-            content="",
+            content=None,                       # nullable=True for file messages
             message_type="file",
             file_url=file_url,
-            file_name=file.filename,
-            file_size=len(data),
+            file_name=file.filename,            # models.py: file_name VARCHAR(255)
+            file_size=len(data),                # models.py: file_size INTEGER
             reply_to_id=reply_to_id,
             reply_to_sender=reply_to_sender,
             reply_to_content=reply_to_content,
+            is_deleted=False,
+            is_ai_extracted=False,
         )
         sess.add(msg)
         await sess.commit()
@@ -320,19 +314,7 @@ async def upload_file(
 
         payload = {
             "type": "message",
-            "id": msg.id,
-            "content": "",
-            "sender_id": current_user.id,
-            "sender_name": current_user.full_name,
-            "avatar_color": current_user.avatar_color,
-            "created_at": msg.created_at.isoformat() if msg.created_at else "",
-            "file_url": file_url,
-            "file_name": file.filename,
-            "file_size": len(data),
-            "reply_to_id": reply_to_id,
-            "reply_to_sender": reply_to_sender,
-            "reply_to_content": reply_to_content,
-            "is_deleted": False,
+            **_serialize_message(msg, current_user.full_name, current_user.avatar_color),
         }
         await manager.broadcast_to_channel(channel_id, payload)
 
@@ -359,7 +341,7 @@ async def delete_message(
         return JSONResponse({"error": "Not authorized"}, status_code=403)
 
     msg.is_deleted = True
-    msg.content = ""
+    msg.content = None                          # nullable=True, clear content on delete
     await db.commit()
 
     await manager.broadcast_to_channel(msg.channel_id, {
@@ -423,6 +405,12 @@ async def websocket_endpoint(
                         reply_to_id=data.get("reply_to_id"),
                         reply_to_sender=data.get("reply_to_sender"),
                         reply_to_content=data.get("reply_to_content"),
+                        is_deleted=False,
+                        is_ai_extracted=False,
+                        # file fields are NULL for text messages
+                        file_url=None,
+                        file_name=None,
+                        file_size=None,
                     )
                     sess.add(msg)
                     await sess.commit()
@@ -430,19 +418,7 @@ async def websocket_endpoint(
 
                     payload_out = {
                         "type": "message",
-                        "id": msg.id,
-                        "content": content,
-                        "sender_id": user.id,
-                        "sender_name": user.full_name,
-                        "avatar_color": user.avatar_color,
-                        "created_at": msg.created_at.isoformat() if msg.created_at else "",
-                        "is_deleted": False,
-                        "reply_to_id": msg.reply_to_id,
-                        "reply_to_sender": msg.reply_to_sender,
-                        "reply_to_content": msg.reply_to_content,
-                        "file_url": None,
-                        "file_name": None,
-                        "file_size": None,
+                        **_serialize_message(msg, user.full_name, user.avatar_color),
                     }
                     await manager.broadcast_to_channel(channel_id, payload_out)
 

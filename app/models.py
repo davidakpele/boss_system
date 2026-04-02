@@ -1,3 +1,4 @@
+# app/models.py
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, ForeignKey,
     Float, JSON, Enum as SAEnum
@@ -60,6 +61,7 @@ class Channel(Base):
     department = Column(String(100))
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity_at = Column(DateTime(timezone=True), nullable=True)   # NEW: tracks last message time
 
     messages = relationship("Message", back_populates="channel")
     members = relationship("ChannelMember", back_populates="channel")
@@ -81,35 +83,22 @@ class Message(Base):
     id = Column(Integer, primary_key=True, index=True)
     channel_id = Column(Integer, ForeignKey("channels.id"))
     sender_id = Column(Integer, ForeignKey("users.id"))
-    content = Column(Text, nullable=True)           # nullable=True so deleted messages can be cleared
-    message_type = Column(String(50), default="text")  # "text" | "file"
-
-    # ── Soft delete ───────────────────────────────────────────────────────────
-    is_deleted = Column(Boolean, default=False, nullable=False)
-
-    # ── File attachment ───────────────────────────────────────────────────────
-    file_url = Column(String(512))                  # public URL served by /static
-    file_name = Column(String(255))                 # original filename shown in UI
-    file_size = Column(Integer)                     # bytes
-
-    # ── Reply threading ───────────────────────────────────────────────────────
-    # We store a denormalised snapshot of the parent message so the quote
-    # remains readable even if the parent is later deleted.
-    reply_to_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
-    reply_to_sender = Column(String(255), nullable=True)   # snapshot of sender name
-    reply_to_content = Column(Text, nullable=True)         # snapshot of content / "[file]"
-
-    # ── Legacy / AI fields (kept from original model) ─────────────────────────
+    content = Column(Text, nullable=True)
+    message_type = Column(String(50), default="text")
+    file_url = Column(String(500))
+    file_name = Column(String(255))
+    file_size = Column(Integer)
+    reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    reply_to_sender = Column(String(255), nullable=True)
+    reply_to_content = Column(Text, nullable=True)
     is_ai_extracted = Column(Boolean, default=False)
+    is_deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     edited_at = Column(DateTime(timezone=True), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # ── Relationships ─────────────────────────────────────────────────────────
     channel = relationship("Channel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
-    reply_to = relationship("Message", remote_side="Message.id", foreign_keys=[reply_to_id])
-
+    reply_to = relationship("Message", remote_side="Message.id")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -145,9 +134,35 @@ class KnowledgeChunk(Base):
     summary = Column(Text)
     keywords = Column(JSON, default=list)
     department = Column(String(100))
+    embedding = Column(Text, nullable=True)   # NEW: JSON-encoded float list
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="knowledge_chunks")
+
+
+class MeetingSummary(Base):
+    """NEW: Auto-generated channel conversation summaries."""
+    __tablename__ = "meeting_summaries"
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id"))
+    summary = Column(Text, nullable=False)
+    message_count = Column(Integer, default=0)
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+    generated_for_date = Column(String(20))  # YYYY-MM-DD
+
+    channel = relationship("Channel")
+
+
+class OnboardingConversation(Base):
+    """NEW: Tracks onboarding AI chat sessions per employee."""
+    __tablename__ = "onboarding_conversations"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    role = Column(String(20))   # user | assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")
 
 
 class AIConversation(Base):
@@ -167,7 +182,8 @@ class AIMessage(Base):
     conversation_id = Column(Integer, ForeignKey("ai_conversations.id"))
     role = Column(String(20))
     content = Column(Text, nullable=False)
-    sources = Column(JSON, default=list)
+    sources = Column(JSON, default=list)          # list of chunk_ids used
+    source_chunks = Column(JSON, default=list)    # NEW: full chunk metadata for citations
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship("AIConversation", back_populates="messages")
@@ -199,6 +215,9 @@ class RiskItem(Base):
     status = Column(String(50), default="open")
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     mitigation_plan = Column(Text)
+    auto_detected = Column(Boolean, default=False)   # NEW: flagged if AI-detected
+    source_type = Column(String(50), nullable=True)  # NEW: 'document' | 'message'
+    source_id = Column(Integer, nullable=True)        # NEW: doc/channel id
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User")
