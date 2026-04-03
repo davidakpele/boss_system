@@ -3,6 +3,11 @@ venv/
 env/
 .env
 *.env
+*.env.local
+*.env.example
+*.env.production
+*.env.development
+*.env.test
 
 # Python
 __pycache__/
