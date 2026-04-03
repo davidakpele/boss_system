@@ -11,6 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+GREETING_TRIGGERS = {"hello", "hi", "hey", "thanks", "thank you", "ok", "okay", "sure", "great", "cool", "yes", "no", "alright"}
 
 class AIService:
     def __init__(self):
@@ -306,24 +307,45 @@ class AIService:
         department: str,
         db: AsyncSession,
     ) -> AsyncGenerator[str, None]:
-        """
-        Specialised AI chat for new employees going through onboarding.
-        Retrieves relevant knowledge chunks automatically.
-        """
-        context_chunks = await self.retrieve_context(user_message, db, user_role="staff", max_chunks=4)
+
+        short_or_greeting = (
+            len(user_message.strip()) < 15
+            or user_message.strip().lower().rstrip("!.,") in GREETING_TRIGGERS
+        )
+
+        query = (
+            f"{department} department company values culture policies procedures leave working hours tools"
+            if (short_or_greeting or len(history) == 0)
+            else user_message
+        )
+
+        context_chunks = await self.retrieve_context(query, db, user_role="staff", max_chunks=6)
 
         system_msg = (
-            f"You are the BOSS Onboarding Assistant helping {employee_name} "
-            f"from the {department} department get started at the company. "
-            "You are warm, encouraging, and patient. "
-            "Guide them through company policies, procedures, and culture. "
-            "Answer questions using the company knowledge provided. "
-            "If you don't know something, suggest they ask their manager.\n\n"
+            f"You are the BOSS Onboarding Assistant for {employee_name}, "
+            f"who has already been hired and set up as a {department} department employee. "
+            "Your job is to proactively guide them through the company. "
+            "CRITICAL RULES YOU MUST ALWAYS FOLLOW:\n"
+            "- NEVER ask the employee about themselves, their background, goals, or expectations.\n"
+            "- NEVER say 'Can you tell me about yourself' or anything similar.\n"
+            "- The employee's name, department, and role are already known to you.\n"
+            "- If the employee reminds you that you already know them, apologize briefly and immediately provide company guidance.\n"
+            "- Always respond with company information, policies, culture, tools, or procedures.\n\n"
+            f"Employee: {employee_name} | Department: {department}\n\n"
+            "Provide structured guidance on: company values and culture, policies and procedures, "
+            "how departments work, tools and systems, leave policies, working hours, and contacts.\n\n"
         )
+
         if context_chunks:
             system_msg += "COMPANY KNOWLEDGE:\n"
             for i, c in enumerate(context_chunks, 1):
                 system_msg += f"[{i}] {c['content']}\n\n"
+        else:
+            system_msg += (
+                "NOTE: No company knowledge is currently in the knowledge base. "
+                "Give general best-practice onboarding guidance and remind the employee "
+                "to check with their manager for company-specific details.\n\n"
+            )
 
         messages = [{"role": "system", "content": system_msg}]
         for h in history[-8:]:
@@ -332,7 +354,6 @@ class AIService:
 
         async for chunk in self.chat_stream(messages):
             yield chunk
-
     # ──────────────────────────────────────────────
     #  AI RISK DETECTION
     # ──────────────────────────────────────────────
