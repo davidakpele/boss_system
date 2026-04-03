@@ -4,7 +4,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 from app.database import get_db
 from app.models import (
@@ -200,7 +200,7 @@ async def meetings_page(
     return templates.TemplateResponse(request=request, name="business/meetings.html", context={
         "user": current_user, "meetings": enriched, "all_users": all_users,
         "channels": channels, "page": "meetings",
-        "now": datetime.utcnow(),
+        "now": datetime.now(timezone.utc),
     })
 
 
