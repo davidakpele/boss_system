@@ -694,4 +694,4 @@ server {
 
 ---
 
-*Built with ❤️ by **MindSync AI Consults** · BOSS System v2.0*
+*Built with ❤️ by **David Akpele** · BOSS System v2.0*
