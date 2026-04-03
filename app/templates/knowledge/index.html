@@ -40,6 +40,36 @@
 .stats-mini {
   display:flex; gap:16px; flex-wrap:wrap;
 }
+.activity-document-list {
+  height: 450px;
+  overflow-y: auto;
+  flex: 1;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #888 transparent;
+}
+.activity-document-list::-webkit-scrollbar {
+  width: 4px; 
+}
+
+.activity-document-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.activity-document-list::-webkit-scrollbar-thumb {
+  background-color: rgba(136, 136, 136, 0.6);
+  border-radius: 10px;
+}
+
+.activity-document-list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(136, 136, 136, 1);
+}
+
+@media (max-width: 600px) {
+  .activity-document-list {
+    height: 700px;
+  }
+}
 .stats-mini-item {
   background:var(--surface); border:1px solid var(--border);
   border-radius:var(--radius-sm); padding:12px 18px;
@@ -93,41 +123,44 @@
 </form>
 
 <!-- Knowledge chunks -->
-<div class="kb-grid">
-  {% for chunk in chunks %}
-  <div class="kb-card">
-    <div class="flex items-center gap-2 mb-2" style="flex-wrap:wrap;">
-      <span class="kb-source-badge source-{{ chunk.source_type }}">
-        <i class="fa-solid fa-{% if chunk.source_type == 'document' %}file-lines{% elif chunk.source_type == 'message' %}comments{% else %}pencil{% endif %}"></i>
-        {{ chunk.source_type.title() }}
-      </span>
-      {% if chunk.department %}
-      <span class="badge badge-blue">{{ chunk.department }}</span>
+<div class="activity-document-list">
+  <div class="kb-grid">
+    {% for chunk in chunks %}
+    <div class="kb-card">
+      <div class="flex items-center gap-2 mb-2" style="flex-wrap:wrap;">
+        <span class="kb-source-badge source-{{ chunk.source_type }}">
+          <i class="fa-solid fa-{% if chunk.source_type == 'document' %}file-lines{% elif chunk.source_type == 'message' %}comments{% else %}pencil{% endif %}"></i>
+          {{ chunk.source_type.title() }}
+        </span>
+        {% if chunk.department %}
+        <span class="badge badge-blue">{{ chunk.department }}</span>
+        {% endif %}
+        <span class="text-xs text-muted" style="margin-left:auto;">
+          {{ chunk.created_at.strftime('%b %d, %Y') if chunk.created_at else '' }}
+        </span>
+      </div>
+      <div class="kb-content">{{ chunk.content }}</div>
+      {% if chunk.summary %}
+      <div class="kb-summary">
+        <i class="fa-solid fa-robot" style="font-size:10px;margin-right:4px;color:var(--accent)"></i>
+        <strong style="color:var(--text2)">AI Summary:</strong> {{ chunk.summary }}
+      </div>
       {% endif %}
-      <span class="text-xs text-muted" style="margin-left:auto;">
-        {{ chunk.created_at.strftime('%b %d, %Y') if chunk.created_at else '' }}
-      </span>
     </div>
-    <div class="kb-content">{{ chunk.content }}</div>
-    {% if chunk.summary %}
-    <div class="kb-summary">
-      <i class="fa-solid fa-robot" style="font-size:10px;margin-right:4px;color:var(--accent)"></i>
-      <strong style="color:var(--text2)">AI Summary:</strong> {{ chunk.summary }}
+    {% else %}
+    <div class="card" style="text-align:center;padding:60px 20px;">
+      <i class="fa-solid fa-brain" style="font-size:48px;opacity:0.15;display:block;margin-bottom:16px;"></i>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Knowledge Base is Empty</div>
+      <div style="color:var(--text3);font-size:13px;max-width:400px;margin:0 auto;">
+        Upload documents or start conversations in Messages. The AI will automatically extract and store key knowledge.
+      </div>
+      <div class="flex gap-3 justify-between" style="margin-top:20px;justify-content:center;">
+        <a href="/documents/new" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload Document</a>
+        <a href="/messages" class="btn btn-ghost"><i class="fa-solid fa-comments"></i> Go to Messages</a>
+      </div>
     </div>
-    {% endif %}
+    {% endfor %}
   </div>
-  {% else %}
-  <div class="card" style="text-align:center;padding:60px 20px;">
-    <i class="fa-solid fa-brain" style="font-size:48px;opacity:0.15;display:block;margin-bottom:16px;"></i>
-    <div style="font-size:16px;font-weight:600;margin-bottom:8px;">Knowledge Base is Empty</div>
-    <div style="color:var(--text3);font-size:13px;max-width:400px;margin:0 auto;">
-      Upload documents or start conversations in Messages. The AI will automatically extract and store key knowledge.
-    </div>
-    <div class="flex gap-3 justify-between" style="margin-top:20px;justify-content:center;">
-      <a href="/documents/new" class="btn btn-primary"><i class="fa-solid fa-file-arrow-up"></i> Upload Document</a>
-      <a href="/messages" class="btn btn-ghost"><i class="fa-solid fa-comments"></i> Go to Messages</a>
-    </div>
-  </div>
-  {% endfor %}
 </div>
+
 {% endblock %}

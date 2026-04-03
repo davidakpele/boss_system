@@ -1,3 +1,4 @@
+# app/models.py
 from sqlalchemy import (
     Column, Integer, String, Text, DateTime, Boolean, ForeignKey,
     Float, JSON, Enum as SAEnum
@@ -8,7 +9,10 @@ import enum
 
 Base = declarative_base()
 
-
+class TransactionType(str, enum.Enum):
+    income  = "income"
+    expense = "expense"
+    
 class UserRole(str, enum.Enum):
     super_admin = "super_admin"
     admin = "admin"
@@ -60,6 +64,7 @@ class Channel(Base):
     department = Column(String(100))
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    last_activity_at = Column(DateTime(timezone=True), nullable=True)   # NEW: tracks last message time
 
     messages = relationship("Message", back_populates="channel")
     members = relationship("ChannelMember", back_populates="channel")
@@ -81,35 +86,22 @@ class Message(Base):
     id = Column(Integer, primary_key=True, index=True)
     channel_id = Column(Integer, ForeignKey("channels.id"))
     sender_id = Column(Integer, ForeignKey("users.id"))
-    content = Column(Text, nullable=True)           # nullable=True so deleted messages can be cleared
-    message_type = Column(String(50), default="text")  # "text" | "file"
-
-    # ── Soft delete ───────────────────────────────────────────────────────────
-    is_deleted = Column(Boolean, default=False, nullable=False)
-
-    # ── File attachment ───────────────────────────────────────────────────────
-    file_url = Column(String(512))                  # public URL served by /static
-    file_name = Column(String(255))                 # original filename shown in UI
-    file_size = Column(Integer)                     # bytes
-
-    # ── Reply threading ───────────────────────────────────────────────────────
-    # We store a denormalised snapshot of the parent message so the quote
-    # remains readable even if the parent is later deleted.
-    reply_to_id = Column(Integer, ForeignKey("messages.id", ondelete="SET NULL"), nullable=True)
-    reply_to_sender = Column(String(255), nullable=True)   # snapshot of sender name
-    reply_to_content = Column(Text, nullable=True)         # snapshot of content / "[file]"
-
-    # ── Legacy / AI fields (kept from original model) ─────────────────────────
+    content = Column(Text, nullable=True)
+    message_type = Column(String(50), default="text")
+    file_url = Column(String(500))
+    file_name = Column(String(255))
+    file_size = Column(Integer)
+    reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    reply_to_sender = Column(String(255), nullable=True)
+    reply_to_content = Column(Text, nullable=True)
     is_ai_extracted = Column(Boolean, default=False)
+    is_deleted = Column(Boolean, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     edited_at = Column(DateTime(timezone=True), nullable=True)
 
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-    # ── Relationships ─────────────────────────────────────────────────────────
     channel = relationship("Channel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
-    reply_to = relationship("Message", remote_side="Message.id", foreign_keys=[reply_to_id])
-
+    reply_to = relationship("Message", remote_side="Message.id")
 
 class Document(Base):
     __tablename__ = "documents"
@@ -145,9 +137,35 @@ class KnowledgeChunk(Base):
     summary = Column(Text)
     keywords = Column(JSON, default=list)
     department = Column(String(100))
+    embedding = Column(Text, nullable=True)   # NEW: JSON-encoded float list
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="knowledge_chunks")
+
+
+class MeetingSummary(Base):
+    """NEW: Auto-generated channel conversation summaries."""
+    __tablename__ = "meeting_summaries"
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id"))
+    summary = Column(Text, nullable=False)
+    message_count = Column(Integer, default=0)
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+    generated_for_date = Column(String(20))  # YYYY-MM-DD
+
+    channel = relationship("Channel")
+
+
+class OnboardingConversation(Base):
+    """NEW: Tracks onboarding AI chat sessions per employee."""
+    __tablename__ = "onboarding_conversations"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    role = Column(String(20))   # user | assistant
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User")
 
 
 class AIConversation(Base):
@@ -167,7 +185,8 @@ class AIMessage(Base):
     conversation_id = Column(Integer, ForeignKey("ai_conversations.id"))
     role = Column(String(20))
     content = Column(Text, nullable=False)
-    sources = Column(JSON, default=list)
+    sources = Column(JSON, default=list)          # list of chunk_ids used
+    source_chunks = Column(JSON, default=list)    # NEW: full chunk metadata for citations
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     conversation = relationship("AIConversation", back_populates="messages")
@@ -199,6 +218,9 @@ class RiskItem(Base):
     status = Column(String(50), default="open")
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     mitigation_plan = Column(Text)
+    auto_detected = Column(Boolean, default=False)   # NEW: flagged if AI-detected
+    source_type = Column(String(50), nullable=True)  # NEW: 'document' | 'message'
+    source_id = Column(Integer, nullable=True)        # NEW: doc/channel id
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     owner = relationship("User")
@@ -250,3 +272,316 @@ class AppSettings(Base):
     value = Column(Text)
     description = Column(Text)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+class Task(Base):
+    __tablename__ = "tasks"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text)
+    department = Column(String(100))
+    status = Column(String(50), default="todo")  # todo | in_progress | done
+    priority = Column(String(20), default="medium")  # low | medium | high | urgent
+    assigned_to = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    due_date = Column(DateTime(timezone=True), nullable=True)
+    ai_priority_reason = Column(Text, nullable=True)
+    position = Column(Integer, default=0)  # order within column
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    assignee = relationship("User", foreign_keys=[assigned_to])
+    creator = relationship("User", foreign_keys=[created_by])
+
+
+class MeetingRoom(Base):
+    __tablename__ = "meeting_rooms"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    description = Column(Text)
+    organizer_id = Column(Integer, ForeignKey("users.id"))
+    start_time = Column(DateTime(timezone=True), nullable=False)
+    end_time = Column(DateTime(timezone=True), nullable=False)
+    location = Column(String(255))
+    agenda = Column(Text)
+    ai_agenda_generated = Column(Boolean, default=False)
+    channel_id = Column(Integer, ForeignKey("channels.id"), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    organizer = relationship("User")
+    attendees = relationship("MeetingAttendee", back_populates="meeting")
+
+
+class MeetingAttendee(Base):
+    __tablename__ = "meeting_attendees"
+    id = Column(Integer, primary_key=True, index=True)
+    meeting_id = Column(Integer, ForeignKey("meeting_rooms.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    status = Column(String(20), default="invited")  # invited | accepted | declined
+
+    meeting = relationship("MeetingRoom", back_populates="attendees")
+    user = relationship("User")
+
+
+class Announcement(Base):
+    __tablename__ = "announcements"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(500), nullable=False)
+    content = Column(Text, nullable=False)
+    priority = Column(String(20), default="normal")  # normal | important | urgent
+    created_by = Column(Integer, ForeignKey("users.id"))
+    expires_at = Column(DateTime(timezone=True), nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    author = relationship("User")
+    reads = relationship("AnnouncementRead", back_populates="announcement")
+
+
+class AnnouncementRead(Base):
+    __tablename__ = "announcement_reads"
+    id = Column(Integer, primary_key=True, index=True)
+    announcement_id = Column(Integer, ForeignKey("announcements.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
+    read_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    announcement = relationship("Announcement", back_populates="reads")
+    user = relationship("User")
+
+
+class LeaveRequest(Base):
+    __tablename__ = "leave_requests"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    leave_type = Column(String(50))  # annual | sick | maternity | paternity | unpaid | other
+    start_date = Column(DateTime(timezone=True), nullable=False)
+    end_date = Column(DateTime(timezone=True), nullable=False)
+    days_count = Column(Float, default=0)
+    reason = Column(Text)
+    status = Column(String(20), default="pending")  # pending | approved | rejected
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    review_note = Column(Text)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    employee = relationship("User", foreign_keys=[user_id])
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
+
+
+class ReportingLine(Base):
+    """Who reports to whom."""
+    __tablename__ = "reporting_lines"
+    id = Column(Integer, primary_key=True, index=True)
+    employee_id = Column(Integer, ForeignKey("users.id"), unique=True)
+    manager_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    employee = relationship("User", foreign_keys=[employee_id])
+    manager = relationship("User", foreign_keys=[manager_id])
+    
+class IPAllowlist(Base):
+    """Office IP ranges/addresses that are allowed to access the system."""
+    __tablename__ = "ip_allowlist"
+    id         = Column(Integer, primary_key=True, index=True)
+    label      = Column(String(100), nullable=False)   # "Head Office", "VPN"
+    ip_range   = Column(String(50),  nullable=False)   # "192.168.1.0/24" | "203.0.113.5"
+    is_active  = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    creator = relationship("User", foreign_keys=[created_by])
+ 
+ 
+class OAuthAccount(Base):
+    """Links a Google / Microsoft account to a local BOSS user."""
+    __tablename__ = "oauth_accounts"
+    id               = Column(Integer, primary_key=True, index=True)
+    user_id          = Column(Integer, ForeignKey("users.id"))
+    provider         = Column(String(50),  nullable=False)   # "google" | "microsoft"
+    provider_user_id = Column(String(255), nullable=False)
+    email            = Column(String(255))
+    access_token     = Column(Text, nullable=True)
+    refresh_token    = Column(Text, nullable=True)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")
+ 
+ 
+class PushSubscription(Base):
+    """One row per browser/device that has enabled push notifications."""
+    __tablename__ = "push_subscriptions"
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id"))
+    endpoint   = Column(Text, nullable=False)
+    p256dh     = Column(Text, nullable=False)
+    auth       = Column(Text, nullable=False)
+    user_agent = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")
+
+
+class AccountingRecord(Base):
+    __tablename__ = "accounting_records"
+    id            = Column(Integer, primary_key=True, index=True)
+    type          = Column(SAEnum(TransactionType, name="transactiontype"), nullable=False)
+    amount        = Column(Float, nullable=False)
+    currency      = Column(String(10), default="USD")
+    category      = Column(String(100))           # e.g. "Transportation", "Salaries", "Sales"
+    description   = Column(Text, nullable=False)
+    reference     = Column(String(200))           # invoice / receipt number
+    recorded_by   = Column(Integer, ForeignKey("users.id"))
+    ai_parsed     = Column(Boolean, default=False)   # True if created via natural-language
+    date          = Column(DateTime(timezone=True), server_default=func.now())
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    recorder = relationship("User", foreign_keys=[recorded_by])
+ 
+ 
+class AccountingCategory(Base):
+    __tablename__ = "accounting_categories"
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String(100), unique=True, nullable=False)
+    type       = Column(String(20))   # income | expense
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  INVENTORY
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+    id              = Column(Integer, primary_key=True, index=True)
+    name            = Column(String(300), nullable=False)
+    sku             = Column(String(100), unique=True, index=True)
+    category        = Column(String(100))
+    description     = Column(Text)
+    unit            = Column(String(50), default="unit")   # unit, kg, litre, box …
+    quantity        = Column(Float, default=0)
+    reorder_level   = Column(Float, default=0)             # alert when qty ≤ this
+    cost_price      = Column(Float, default=0)
+    selling_price   = Column(Float, default=0)
+    supplier        = Column(String(200))
+    location        = Column(String(200))                  # shelf / warehouse
+    is_active       = Column(Boolean, default=True)
+    created_by      = Column(Integer, ForeignKey("users.id"))
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+ 
+    creator    = relationship("User", foreign_keys=[created_by])
+    movements  = relationship("InventoryMovement", back_populates="item")
+ 
+ 
+class MovementType(str, enum.Enum):
+    stock_in  = "stock_in"
+    stock_out = "stock_out"
+    adjustment = "adjustment"
+    return_in  = "return_in"
+ 
+ 
+class InventoryMovement(Base):
+    __tablename__ = "inventory_movements"
+    id          = Column(Integer, primary_key=True, index=True)
+    item_id     = Column(Integer, ForeignKey("inventory_items.id"))
+    type        = Column(SAEnum(MovementType, name="movementtype"), nullable=False)
+    quantity    = Column(Float, nullable=False)
+    unit_cost   = Column(Float, nullable=True)
+    reference   = Column(String(200))
+    notes       = Column(Text)
+    recorded_by = Column(Integer, ForeignKey("users.id"))
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    item     = relationship("InventoryItem", back_populates="movements")
+    recorder = relationship("User", foreign_keys=[recorded_by])
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  HR — RECRUITMENT PIPELINE
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+class JobStatus(str, enum.Enum):
+    open   = "open"
+    paused = "paused"
+    closed = "closed"
+ 
+class JobPosting(Base):
+    __tablename__ = "job_postings"
+    id              = Column(Integer, primary_key=True, index=True)
+    title           = Column(String(300), nullable=False)
+    department      = Column(String(100))
+    description     = Column(Text, nullable=False)
+    requirements    = Column(Text)                # bullet list of requirements
+    salary_range    = Column(String(100))
+    location        = Column(String(200), default="On-site")
+    employment_type = Column(String(50), default="Full-time")
+    status          = Column(SAEnum(JobStatus, name="jobstatus"), default=JobStatus.open)
+    created_by      = Column(Integer, ForeignKey("users.id"))
+    deadline        = Column(DateTime(timezone=True), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    creator      = relationship("User")
+    applications = relationship("JobApplication", back_populates="job")
+ 
+ 
+class ApplicationStatus(str, enum.Enum):
+    received   = "received"
+    screening  = "screening"
+    shortlisted= "shortlisted"
+    interview  = "interview"
+    offer      = "offer"
+    hired      = "hired"
+    rejected   = "rejected"
+ 
+class JobApplication(Base):
+    __tablename__ = "job_applications"
+    id              = Column(Integer, primary_key=True, index=True)
+    job_id          = Column(Integer, ForeignKey("job_postings.id"))
+    applicant_name  = Column(String(300), nullable=False)
+    applicant_email = Column(String(255))
+    applicant_phone = Column(String(50))
+    cv_path         = Column(String(500))           # uploaded CV file path
+    cv_text         = Column(Text)                  # extracted text from CV
+    cover_letter    = Column(Text)
+    status          = Column(SAEnum(ApplicationStatus, name="applicationstatus"),
+                             default=ApplicationStatus.received)
+    ai_score        = Column(Float, nullable=True)       # 0-100 AI match score
+    ai_summary      = Column(Text, nullable=True)        # AI-generated candidate summary
+    ai_recommendation = Column(Text, nullable=True)      # AI recommendation paragraph
+    interview_date  = Column(DateTime(timezone=True), nullable=True)
+    interview_notes = Column(Text)
+    offer_sent      = Column(Boolean, default=False)
+    rejection_sent  = Column(Boolean, default=False)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+ 
+    job = relationship("JobPosting", back_populates="applications")
+ 
+ 
+class HRNotification(Base):
+    """System-generated HR messages sent to applicants (stored for audit)."""
+    __tablename__ = "hr_notifications"
+    id              = Column(Integer, primary_key=True, index=True)
+    application_id  = Column(Integer, ForeignKey("job_applications.id"))
+    type            = Column(String(50))    # screening | interview | offer | rejection
+    subject         = Column(String(500))
+    body            = Column(Text)
+    sent_at         = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    application = relationship("JobApplication")
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  INTERNAL NOTIFICATIONS  (in-app)
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+class InternalNotification(Base):
+    __tablename__ = "internal_notifications"
+    id          = Column(Integer, primary_key=True, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id"))
+    title       = Column(String(300), nullable=False)
+    body        = Column(Text)
+    type        = Column(String(50), default="info")  # info|success|warning|error|message|hr
+    link        = Column(String(500))                  # click-through URL
+    is_read     = Column(Boolean, default=False)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")

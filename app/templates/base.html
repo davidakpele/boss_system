@@ -6,8 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}BOSS System{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <link rel="stylesheet" href="{{ url_for('static', path='css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/custom.css') }}">
+  <script src="{{ url_for('static', path='js/app.js') }}"></script>
   <style>
     :root {
       /* ── Core palette: charcoal sidebar, white canvas ── */
@@ -629,7 +630,19 @@
       <a href="/ask-boss"   class="nav-item {% if page == 'ask_boss' %}active{% endif %}">
         <i class="fa-solid fa-microchip"></i> Ask BOSS
       </a>
-
+       <div class="nav-section-label mt-4">Command Centre</div>
+        <a href="/bcc" class="nav-item {% if request.url.path == '/bcc' %}active{% endif %}">
+          <i class="fa-solid fa-sliders"></i> BCC Dashboard
+        </a>
+        <a href="/bcc/accounting" class="nav-item {% if request.url.path.startswith('/bcc/accounting') %}active{% endif %}">
+          <i class="fa-solid fa-coins"></i> Accounting
+        </a>
+        <a href="/bcc/inventory" class="nav-item {% if request.url.path.startswith('/bcc/inventory') %}active{% endif %}">
+          <i class="fa-solid fa-boxes-stacked"></i> Inventory
+        </a>
+        <a href="/bcc/hr" class="nav-item {% if request.url.path.startswith('/bcc/hr') %}active{% endif %}">
+          <i class="fa-solid fa-user-tie"></i> AI Recruitment
+        </a>
       <div class="nav-section-label">Knowledge</div>
       <a href="/knowledge-base" class="nav-item {% if page == 'knowledge_base' %}active{% endif %}">
         <i class="fa-regular fa-folder-open"></i> Knowledge Base
@@ -653,7 +666,23 @@
       <a href="/risk-management" class="nav-item {% if page == 'risk_management' %}active{% endif %}">
         <i class="fa-solid fa-circle-exclamation"></i> Risk Management
       </a>
-
+      <div class="nav-section-label mt-4">Operations</div>
+        <a href="/tasks" class="nav-item {% if page == 'tasks' %}active{% endif %}">
+          <i class="fa-solid fa-square-check"></i> Task Board
+        </a>
+        <a href="/meetings" class="nav-item {% if page == 'meetings' %}active{% endif %}">
+          <i class="fa-regular fa-calendar"></i> Meetings
+        </a>
+        <a href="/announcements" class="nav-item {% if page == 'announcements' %}active{% endif %}">
+          <i class="fa-solid fa-bullhorn"></i> Announcements
+        </a>
+        <a href="/directory" class="nav-item {% if page == 'directory' %}active{% endif %}">
+          <i class="fa-solid fa-address-book"></i> Directory
+        </a>
+        <a href="/leave" class="nav-item {% if page == 'leave' %}active{% endif %}">
+          <i class="fa-regular fa-calendar-minus"></i> Leave Tracker
+        </a>
+       
       {% if user.role in ('super_admin', 'admin') %}
       <div class="nav-section-label">System</div>
       <a href="/audit-logs" class="nav-item {% if page == 'audit' %}active{% endif %}">
@@ -709,9 +738,20 @@
           <i class="fa-regular fa-comment-dots"></i>
           {% if unread_count %}<span class="notif-dot"></span>{% endif %}
         </a>
-        <div class="icon-btn" title="Notifications">
-          <i class="fa-regular fa-bell"></i>
+        <div style="position:relative;">
+          <div class="icon-btn" id="notifBtn" onclick="toggleNotifPanel()" title="Notifications">
+            <i class="fa-solid fa-bell"></i>
+            <span id="notifBadge" style="display:none;position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:var(--red);border-radius:50%;font-size:9px;font-weight:700;color:#fff;display:flex;align-items:center;justify-content:center;border:2px solid var(--bg2);" id="notifBadge">0</span>
         </div>
+          <!-- Dropdown panel -->
+        <div id="notifPanel" style="display:none;position:absolute;top:44px;right:0;width:320px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);box-shadow:0 8px 32px rgba(0,0,0,0.4);z-index:500;max-height:440px;overflow-y:auto;">
+          <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+            <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:13px;">Notifications</span>
+            <button class="btn btn-ghost btn-xs" onclick="markAllRead()">Mark all read</button>
+          </div>
+          <div id="notifList"></div>
+        </div>
+      </div>
         <a href="/settings" class="icon-btn" title="Settings">
           <i class="fa-regular fa-gear"></i>
         </a>
@@ -733,6 +773,8 @@
   <div id="toast-container"></div>
 
   <script>
+    let _notifOpen = false;
+
     (function () {
       const sidebar = document.getElementById('sidebar');
       const overlay = document.getElementById('sidebarOverlay');
@@ -776,6 +818,180 @@
     document.querySelectorAll('.modal-overlay').forEach(o => {
       o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
     });
+
+    // ── 1. Register Service Worker ────────────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(r  => console.log('[BOSS SW] registered', r.scope))
+          .catch(e => console.warn('[BOSS SW] failed', e));
+      });
+    }
+    
+    // ── 2. Push Notifications ─────────────────────────────────────────────────────
+    let _pushEnabled = false;
+    
+    async function _getPushKey() {
+      try {
+        const r = await fetch('/push/vapid-public-key');
+        const d = await r.json();
+        return d.publicKey || null;
+      } catch { return null; }
+    }
+    
+    async function initPushNotifications() {
+      if (!('Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window)) return;
+      const key = await _getPushKey();
+      if (!key) return;   // VAPID not configured server-side
+    
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { _pushEnabled = true; _updatePushBtn(true); }
+    }
+    
+    async function requestPushPermission() {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { if (typeof toast !== 'undefined') toast('Notification permission denied', 'error'); return; }
+    
+      const key = await _getPushKey();
+      if (!key) { if (typeof toast !== 'undefined') toast('Push not configured on server (no VAPID key)', 'error'); return; }
+    
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: _urlB64ToUint8(key),
+      });
+    
+      const r = await fetch('/push/subscribe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(sub),
+      });
+      if (r.ok) {
+        _pushEnabled = true;
+        _updatePushBtn(true);
+        if (typeof toast !== 'undefined') toast('Push notifications enabled 🔔', 'success');
+      }
+    }
+    
+    async function disablePush() {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/push/subscribe', {
+          method:  'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      _pushEnabled = false;
+      _updatePushBtn(false);
+      if (typeof toast !== 'undefined') toast('Push notifications disabled', 'info');
+    }
+    
+    function _updatePushBtn(enabled) {
+      const btn = document.getElementById('pushToggleBtn');
+      if (!btn) return;
+      btn.innerHTML = enabled
+        ? '<i class="fa-solid fa-bell-slash"></i> Disable Notifications'
+        : '<i class="fa-solid fa-bell"></i> Enable Notifications';
+      btn.onclick = enabled ? disablePush : requestPushPermission;
+    }
+    
+    function _urlB64ToUint8(b64) {
+      const padding = '='.repeat((4 - b64.length % 4) % 4);
+      const raw = atob((b64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+    
+    // ── 3. PWA Install Prompt ─────────────────────────────────────────────────────
+    let _deferredInstall = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      _deferredInstall = e;
+      const btn = document.getElementById('installPwaBtn');
+      if (btn) { btn.style.display = 'flex'; }
+      const na = document.getElementById('pwaNotAvailableBadge');
+      if (na)  { na.style.display = 'none'; }
+    });
+    
+    async function installPWA() {
+      if (!_deferredInstall) return;
+      _deferredInstall.prompt();
+      const { outcome } = await _deferredInstall.userChoice;
+      if (outcome === 'accepted' && typeof toast !== 'undefined')
+        toast('BOSS installed on your device 🎉', 'success');
+      _deferredInstall = null;
+      const btn = document.getElementById('installPwaBtn');
+      if (btn) btn.style.display = 'none';
+    }
+    async function loadNotifications() {
+      const r = await fetch('/notifications');
+      if (!r.ok) return;
+      const d = await r.json();
+      const badge = document.getElementById('notifBadge');
+      if (badge) {
+        badge.style.display = d.unread > 0 ? 'flex' : 'none';
+        badge.textContent = d.unread > 9 ? '9+' : d.unread;
+      }
+      const list = document.getElementById('notifList');
+      if (!list) return;
+      if (!d.notifications.length) {
+        list.innerHTML = '<div style="padding:30px;text-align:center;color:var(--text3);font-size:12.5px;"><i class="fa-solid fa-bell-slash" style="font-size:24px;opacity:.2;display:block;margin-bottom:8px;"></i>No notifications</div>';
+        return;
+      }
+      list.innerHTML = d.notifications.map(n => `
+        <div onclick="openNotif(${n.id}, '${n.link}')" style="display:flex;align-items:flex-start;gap:10px;padding:12px 16px;border-bottom:1px solid rgba(31,45,66,0.4);cursor:pointer;background:${n.is_read?'transparent':'rgba(59,130,246,0.04)'};transition:background .12s;" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background='${n.is_read?'transparent':'rgba(59,130,246,0.04)'}'">
+          <div style="width:8px;height:8px;border-radius:50%;background:${n.is_read?'transparent':'var(--accent)'};flex-shrink:0;margin-top:5px;"></div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:13px;font-weight:${n.is_read?'400':'600'};color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.title}</div>
+            ${n.body?`<div style="font-size:11.5px;color:var(--text3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.body}</div>`:''}
+            <div style="font-size:10px;color:var(--text3);margin-top:3px;">${new Date(n.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    async function openNotif(id, link) {
+      await fetch(`/notifications/${id}/read`, {method:'POST'});
+      if (link) location.href = link;
+      loadNotifications();
+    }
+    
+    async function markAllRead() {
+      await fetch('/notifications/read-all', {method:'POST'});
+      loadNotifications();
+    }
+    
+    function toggleNotifPanel() {
+      const panel = document.getElementById('notifPanel');
+      _notifOpen = !_notifOpen;
+      panel.style.display = _notifOpen ? 'block' : 'none';
+      if (_notifOpen) loadNotifications();
+    }
+    
+    document.addEventListener('click', e => {
+      if (_notifOpen && !document.getElementById('notifBtn').contains(e.target) &&
+          !document.getElementById('notifPanel').contains(e.target)) {
+        _notifOpen = false;
+        document.getElementById('notifPanel').style.display = 'none';
+      }
+    });
+    
+
+
+    window.addEventListener('appinstalled', () => {
+      _deferredInstall = null;
+      if (typeof toast !== 'undefined') toast('BOSS is installed!', 'success');
+    });
+    
+    // Poll for new notifications every 30s
+    loadNotifications();
+    setInterval(loadNotifications, 30000);
+    // Initialise on load
+    window.addEventListener('DOMContentLoaded', initPushNotifications);
+
   </script>
 
   {% block extra_js %}{% endblock %}

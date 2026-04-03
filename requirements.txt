@@ -17,4 +17,12 @@ pandas
 openpyxl
 python-dotenv
 Pillow
+pywebpush
 chardet
+sentence-transformers 
+pgvector 
+numpy
+starlette
+itsdangerous
+authlib  
+py-vapid

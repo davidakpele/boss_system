@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+{% block title %}Meetings — BOSS{% endblock %}
+{% block page_title %}Meeting Scheduler{% endblock %}
+{% block page_sub %}Book rooms, invite attendees, AI agendas{% endblock %}
+{% block extra_css %}
+.meet-grid { display:grid; grid-template-columns:1fr 340px; gap:20px; align-items:start; }
+.meeting-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:12px; transition:border-color 0.15s; }
+.meeting-card:hover { border-color:var(--border2); }
+.meeting-card.upcoming { border-left:3px solid var(--accent); }
+.meeting-card.past { opacity:0.6; }
+.meet-time { font-size:12px; color:var(--text3); font-family:'JetBrains Mono',monospace; margin-bottom:6px; }
+.meet-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; margin-bottom:6px; }
+.attendee-av { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:#fff; border:2px solid var(--bg2); margin-left:-6px; }
+.attendee-stack { display:flex; padding-left:6px; }
+.agenda-box { background:var(--bg3); border-radius:8px; padding:10px 14px; font-size:12.5px; line-height:1.7; color:var(--text2); margin-top:10px; white-space:pre-wrap; }
+.rsvp-btns { display:flex; gap:6px; margin-top:10px; }
+@media(max-width:900px){ .meet-grid{ grid-template-columns:1fr; } }
+{% endblock %}
+{% block content %}
+<div class="meet-grid">
+  <div>
+    <div class="flex justify-between items-center mb-6">
+      <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;">Your Meetings</div>
+      <button class="btn btn-primary" onclick="openModal('newMeetModal')"><i class="fa-solid fa-plus"></i> Schedule Meeting</button>
+    </div>
+    {% if meetings %}
+      {% for item in meetings %}
+      {% set m = item.meeting %}
+      {% set is_past = m.end_time < now %}
+      <div class="meeting-card {% if not is_past %}upcoming{% else %}past{% endif %}">
+        <div class="meet-time">
+          <i class="fa-regular fa-calendar" style="margin-right:4px;"></i>
+          {{ m.start_time.strftime('%a %b %d, %Y') }} &nbsp;·&nbsp;
+          {{ m.start_time.strftime('%H:%M') }} – {{ m.end_time.strftime('%H:%M') }}
+          {% if m.location %}&nbsp;·&nbsp;<i class="fa-solid fa-location-dot" style="margin-right:3px;"></i>{{ m.location }}{% endif %}
+        </div>
+        <div class="meet-title">{{ m.title }}</div>
+        {% if m.description %}
+        <div style="font-size:13px;color:var(--text3);margin-bottom:8px;">{{ m.description }}</div>
+        {% endif %}
+        <div class="flex items-center gap-3" style="flex-wrap:wrap;">
+          <!-- Attendees -->
+          <div class="attendee-stack">
+            {% for att, aname, acolor in item.attendees[:5] %}
+            <div class="attendee-av" style="background:{{ acolor or '#6366f1' }}" title="{{ aname }}">{{ aname[:2].upper() }}</div>
+            {% endfor %}
+            {% if item.attendees|length > 5 %}<div class="attendee-av" style="background:var(--text3)">+{{ item.attendees|length - 5 }}</div>{% endif %}
+          </div>
+          <span style="font-size:11px;color:var(--text3);">{{ item.attendees|length }} attendee{{ 's' if item.attendees|length != 1 else '' }}</span>
+          {% if m.ai_agenda_generated %}<span class="badge badge-purple"><i class="fa-solid fa-robot" style="font-size:9px;"></i> AI Agenda</span>{% endif %}
+          {% if is_past %}<span class="badge badge-gray">Past</span>{% else %}<span class="badge badge-green">Upcoming</span>{% endif %}
+        </div>
+        {% if m.agenda %}
+        <div class="agenda-box"><strong style="color:var(--text2);">📋 Agenda</strong><br>{{ m.agenda }}</div>
+        {% endif %}
+        <div class="flex gap-2 mt-3" style="flex-wrap:wrap;">
+          {% if not is_past %}
+          <button class="btn btn-ghost btn-xs" onclick="generateAgenda({{ m.id }}, this)">
+            <i class="fa-solid fa-robot"></i> AI Agenda
+          </button>
+          {% endif %}
+          {% if m.organizer_id == user.id %}
+          <button class="btn btn-danger btn-xs" onclick="deleteMeeting({{ m.id }})">
+            <i class="fa-solid fa-trash"></i> Cancel
+          </button>
+          {% else %}
+          <!-- RSVP -->
+          {% for att, aname, _ in item.attendees %}
+          {% if att.user_id == user.id %}
+          <button class="btn btn-success btn-xs {% if att.status == 'accepted' %}active{% endif %}" onclick="rsvp({{ m.id }}, 'accepted')">✓ Accept</button>
+          <button class="btn btn-danger btn-xs {% if att.status == 'declined' %}active{% endif %}" onclick="rsvp({{ m.id }}, 'declined')">✗ Decline</button>
+          {% endif %}
+          {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="card" style="text-align:center;padding:60px 20px;">
+      <i class="fa-regular fa-calendar" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px;"></i>
+      <div style="color:var(--text3);">No meetings scheduled yet.</div>
+      <button class="btn btn-primary" style="margin-top:16px;" onclick="openModal('newMeetModal')"><i class="fa-solid fa-plus"></i> Schedule First Meeting</button>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Quick stats sidebar -->
+  <div>
+    <div class="card mb-4">
+      <div class="card-title"><i class="fa-solid fa-chart-bar" style="color:var(--accent)"></i> Overview</div>
+      {% set upcoming_count = meetings|selectattr('meeting.end_time','gt',now)|list|length %}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#60a5fa;">{{ upcoming_count }}</div>
+          <div style="font-size:11px;color:var(--text3);">Upcoming</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center;">
+          <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#34d399;">{{ meetings|length }}</div>
+          <div style="font-size:11px;color:var(--text3);">Total</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title"><i class="fa-solid fa-lightbulb" style="color:var(--yellow)"></i> Tips</div>
+      <div style="font-size:12.5px;color:var(--text2);line-height:1.8;">
+        <div>🤖 Use <strong>AI Agenda</strong> to auto-generate agendas from recent channel chats</div>
+        <div style="margin-top:8px;">📢 Link a channel when creating a meeting to pull recent discussions into the agenda</div>
+        <div style="margin-top:8px;">✉️ Attendees can Accept or Decline from this page</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Meeting Modal -->
+<div class="modal-overlay" id="newMeetModal">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-calendar-plus" style="color:var(--accent)"></i> Schedule Meeting</span>
+      <span class="modal-close" onclick="closeModal('newMeetModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Title *</label>
+      <input type="text" id="nm-title" class="form-control" placeholder="e.g. Q3 Sales Review" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea id="nm-desc" class="form-control" rows="2" style="padding-left:12px"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Start *</label>
+        <input type="datetime-local" id="nm-start" class="form-control" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">End *</label>
+        <input type="datetime-local" id="nm-end" class="form-control" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Location</label>
+        <input type="text" id="nm-loc" class="form-control" placeholder="Room / Link" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Link Channel (optional)</label>
+        <select id="nm-channel" class="form-control" style="padding-left:12px">
+          <option value="">None</option>
+          {% for ch in channels %}<option value="{{ ch.id }}">{{ ch.name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Attendees</label>
+      <select id="nm-attendees" class="form-control" multiple style="height:100px;">
+        {% for u in all_users %}<option value="{{ u.id }}">{{ u.full_name }} ({{ u.department or '—' }})</option>{% endfor %}
+      </select>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">Hold Ctrl/Cmd to select multiple</div>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('newMeetModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createMeeting()"><i class="fa-solid fa-calendar-plus"></i> Schedule</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+async function createMeeting() {
+  const title = document.getElementById('nm-title').value.trim();
+  if (!title) { toast('Title required', 'error'); return; }
+  const attendees = [...document.getElementById('nm-attendees').selectedOptions].map(o=>o.value).join(',');
+  const fd = new FormData();
+  fd.append('title', title); fd.append('description', document.getElementById('nm-desc').value);
+  fd.append('start_time', document.getElementById('nm-start').value);
+  fd.append('end_time', document.getElementById('nm-end').value);
+  fd.append('location', document.getElementById('nm-loc').value);
+  fd.append('attendee_ids', attendees);
+  fd.append('channel_id', document.getElementById('nm-channel').value || 0);
+  const r = await fetch('/meetings/create', {method:'POST', body:fd});
+  if (r.ok) { toast('Meeting scheduled!', 'success'); closeModal('newMeetModal'); setTimeout(()=>location.reload(),600); }
+  else toast('Error', 'error');
+}
+
+async function generateAgenda(id, btn) {
+  btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating...';
+  const r = await fetch(`/meetings/${id}/generate-agenda`, {method:'POST'});
+  if (r.ok) { toast('AI agenda generated!', 'success'); setTimeout(()=>location.reload(),800); }
+  else { toast('Could not generate agenda', 'error'); btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-robot"></i> AI Agenda'; }
+}
+
+async function rsvp(id, status) {
+  const fd = new FormData(); fd.append('status', status);
+  const r = await fetch(`/meetings/${id}/rsvp`, {method:'POST', body:fd});
+  if (r.ok) { toast(status === 'accepted' ? 'Accepted!' : 'Declined', status==='accepted'?'success':'info'); setTimeout(()=>location.reload(),500); }
+}
+
+async function deleteMeeting(id) {
+  if (!confirm('Cancel this meeting?')) return;
+  const r = await fetch(`/meetings/${id}`, {method:'DELETE'});
+  if (r.ok) { toast('Meeting cancelled', 'info'); setTimeout(()=>location.reload(),500); }
+}
+</script>
+{% endblock %}

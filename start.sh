@@ -50,7 +50,7 @@ fi
 
 echo ""
 echo "🚀 Starting BOSS System..."
-echo "   → http://localhost:8000"
+echo "   → http://localhost:8144"
 echo ""
 
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn main:app --host 0.0.0.0 --port 8144 --reload

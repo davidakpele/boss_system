@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Announcements — BOSS{% endblock %}
+{% block page_title %}Announcements{% endblock %}
+{% block page_sub %}Company-wide notices{% endblock %}
+{% block extra_css %}
+.ann-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px 22px; margin-bottom:12px; position:relative; transition:border-color 0.15s; }
+.ann-card.unread { border-left:4px solid var(--accent); }
+.ann-card.priority-urgent { border-left:4px solid #ef4444; }
+.ann-card.priority-important { border-left:4px solid #f59e0b; }
+.ann-title { font-family:'Syne',sans-serif; font-weight:700; font-size:16px; margin-bottom:6px; }
+.ann-content { font-size:13.5px; color:var(--text2); line-height:1.7; white-space:pre-wrap; }
+.ann-footer { display:flex; align-items:center; gap:10px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); flex-wrap:wrap; }
+.read-badge { font-size:11px; color:var(--text3); display:flex; align-items:center; gap:4px; }
+{% endblock %}
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div>{% set unread_count = announcements|selectattr('is_read','equalto',False)|list|length %}
+    {% if unread_count > 0 %}<span class="badge badge-red">{{ unread_count }} unread</span>{% else %}<span class="badge badge-green">All read</span>{% endif %}
+  </div>
+  {% if user.role in ('super_admin', 'admin') %}
+  <button class="btn btn-primary" onclick="openModal('newAnnModal')"><i class="fa-solid fa-bullhorn"></i> New Announcement</button>
+  {% endif %}
+</div>
+
+{% if announcements %}
+  {% for item in announcements %}
+  {% set ann = item.ann %}
+  <div class="ann-card {% if not item.is_read %}unread{% endif %} priority-{{ ann.priority }}" id="ann-{{ ann.id }}">
+    <div class="flex items-center gap-2 mb-2" style="flex-wrap:wrap;">
+      <span class="badge badge-{% if ann.priority=='urgent' %}red{% elif ann.priority=='important' %}yellow{% else %}blue{% endif %}">
+        {% if ann.priority=='urgent' %}🚨{% elif ann.priority=='important' %}⚠️{% else %}📢{% endif %}
+        {{ ann.priority.title() }}
+      </span>
+      {% if not item.is_read %}<span class="badge badge-blue">New</span>{% endif %}
+      {% if ann.expires_at %}<span class="text-xs text-muted"><i class="fa-regular fa-clock"></i> Expires {{ ann.expires_at.strftime('%b %d') }}</span>{% endif %}
+    </div>
+    <div class="ann-title">{{ ann.title }}</div>
+    <div class="ann-content">{{ ann.content }}</div>
+    <div class="ann-footer">
+      {% if item.author %}
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:{{ item.author.avatar_color }};display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:#fff;">{{ item.author.full_name[:2].upper() }}</div>
+        <span style="font-size:12px;color:var(--text3);">{{ item.author.full_name }}</span>
+      </div>
+      {% endif %}
+      <span class="text-xs text-muted">{{ ann.created_at.strftime('%b %d, %Y at %H:%M') if ann.created_at else '' }}</span>
+      <div class="read-badge" style="margin-left:auto;"><i class="fa-solid fa-eye"></i> {{ item.read_count }} read</div>
+      {% if not item.is_read %}
+      <button class="btn btn-ghost btn-xs" onclick="markRead({{ ann.id }}, this)"><i class="fa-solid fa-check"></i> Mark as Read</button>
+      {% else %}
+      <span class="text-xs text-muted"><i class="fa-solid fa-check" style="color:var(--green)"></i> Read</span>
+      {% endif %}
+      {% if user.role in ('super_admin', 'admin') %}
+      <button class="btn btn-danger btn-xs" onclick="archiveAnn({{ ann.id }})"><i class="fa-solid fa-archive"></i> Archive</button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+{% else %}
+<div class="card" style="text-align:center;padding:60px 20px;">
+  <i class="fa-solid fa-bullhorn" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px;"></i>
+  <div style="color:var(--text3);">No announcements yet.</div>
+  {% if user.role in ('super_admin', 'admin') %}
+  <button class="btn btn-primary" style="margin-top:16px;" onclick="openModal('newAnnModal')">Post First Announcement</button>
+  {% endif %}
+</div>
+{% endif %}
+
+<!-- New Announcement Modal -->
+{% if user.role in ('super_admin', 'admin') %}
+<div class="modal-overlay" id="newAnnModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-bullhorn" style="color:var(--accent)"></i> New Announcement</span>
+      <span class="modal-close" onclick="closeModal('newAnnModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Title *</label>
+      <input type="text" id="na-title" class="form-control" placeholder="Announcement title" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Content *</label>
+      <textarea id="na-content" class="form-control" rows="5" placeholder="Write your announcement..." style="padding-left:12px"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select id="na-priority" class="form-control" style="padding-left:12px">
+          <option value="normal">📢 Normal</option>
+          <option value="important">⚠️ Important</option>
+          <option value="urgent">🚨 Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expires (optional)</label>
+        <input type="datetime-local" id="na-expires" class="form-control" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('newAnnModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="postAnnouncement()"><i class="fa-solid fa-bullhorn"></i> Post</button>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block extra_js %}
+<script>
+async function markRead(id, btn) {
+  await fetch(`/announcements/${id}/read`, {method:'POST'});
+  const card = document.getElementById('ann-'+id);
+  card?.classList.remove('unread');
+  btn.innerHTML = '<i class="fa-solid fa-check" style="color:var(--green)"></i> Read';
+  btn.disabled = true;
+}
+async function archiveAnn(id) {
+  if (!confirm('Archive this announcement?')) return;
+  const r = await fetch(`/announcements/${id}`, {method:'DELETE'});
+  if (r.ok) { document.getElementById('ann-'+id)?.remove(); toast('Archived', 'info'); }
+}
+async function postAnnouncement() {
+  const title = document.getElementById('na-title').value.trim();
+  const content = document.getElementById('na-content').value.trim();
+  if (!title || !content) { toast('Title and content required', 'error'); return; }
+  const fd = new FormData();
+  fd.append('title', title); fd.append('content', content);
+  fd.append('priority', document.getElementById('na-priority').value);
+  fd.append('expires_at', document.getElementById('na-expires').value);
+  const r = await fetch('/announcements/create', {method:'POST', body:fd});
+  if (r.ok) { toast('Announcement posted!', 'success'); closeModal('newAnnModal'); setTimeout(()=>location.reload(),600); }
+  else toast('Error', 'error');
+}
+</script>
+{% endblock %}

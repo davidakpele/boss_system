@@ -1,195 +1,72 @@
-
-{# Ask BOSS template #}
 {% extends "base.html" %}
 {% block title %}Ask BOSS — AI Assistant{% endblock %}
 {% block page_title %}Ask BOSS{% endblock %}
-{% block page_sub %}Powered by {{ "Ollama · " }}{{ "codellama:7b-instruct-q4_K_M" }}{% endblock %}
+{% block page_sub %}Powered by Ollama · {{ "codellama:7b-instruct-q4_K_M" }}{% endblock %}
 
 {% block extra_css %}
-.boss-layout {
-  display: grid;
-  grid-template-columns: 240px 1fr;
-  height: calc(100vh - 60px);
-  margin: -24px;
-  overflow: hidden;
-}
-.sessions-panel {
-  background: var(--bg2);
-  border-right: 1px solid var(--border);
-  display: flex; flex-direction: column;
-  overflow: hidden;
-}
-.sessions-header {
-  padding: 16px;
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; justify-content: space-between;
-}
-.sessions-title { font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:700; font-size:14px; }
+.boss-layout { display:grid; grid-template-columns:240px 1fr; height:calc(100vh - 60px); margin:-24px; overflow:hidden; }
+.sessions-panel { background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+.sessions-header { padding:16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.sessions-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; }
 .session-list { flex:1; overflow-y:auto; padding:8px; }
-.session-item {
-  padding:10px 12px; border-radius:8px; cursor:pointer;
-  margin-bottom:2px; transition:background 0.12s; color:var(--text2); font-size:13px;
-}
+.session-item { padding:10px 12px; border-radius:8px; cursor:pointer; margin-bottom:2px; transition:background 0.12s; color:var(--text2); font-size:13px; }
 .session-item:hover { background:var(--surface); }
 .session-item.active { background:var(--accent-glow); color:var(--accent2); border:1px solid rgba(59,130,246,0.2); }
 .session-date { font-size:10px; color:var(--text3); margin-top:2px; }
-
-/* Chat */
 .boss-chat { display:flex; flex-direction:column; background:var(--bg); overflow:hidden; }
-.boss-header {
-  padding:0 20px; height:56px;
-  border-bottom:1px solid var(--border);
-  display:flex; align-items:center; gap:12px;
-  background:var(--bg2); flex-shrink:0;
-}
-.ai-status {
-  display:flex; align-items:center; gap:6px;
-  font-size:12px;
-  padding:4px 10px;
-  border-radius:20px;
-  margin-left:auto;
-}
+.boss-header { padding:0 20px; height:56px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; background:var(--bg2); flex-shrink:0; }
+.ai-status { display:flex; align-items:center; gap:6px; font-size:12px; padding:4px 10px; border-radius:20px; margin-left:auto; }
 .ai-status.online { background:rgba(16,185,129,0.1); color:#34d399; border:1px solid rgba(16,185,129,0.2); }
 .ai-status.offline { background:rgba(239,68,68,0.1); color:#f87171; border:1px solid rgba(239,68,68,0.2); }
 .status-dot { width:7px; height:7px; border-radius:50%; }
 .online .status-dot { background:var(--green); box-shadow:0 0 6px var(--green); }
 .offline .status-dot { background:var(--red); }
-
-.boss-messages {
-  flex:1; overflow-y:auto; padding:24px;
-  display:flex; flex-direction:column; gap:20px;
-}
-
-/* Welcome state */
-.welcome-state {
-  display:flex; flex-direction:column; align-items:center;
-  justify-content:center; flex:1; gap:16px; text-align:center; padding:40px;
-}
-.boss-logo-big {
-  width:72px; height:72px;
-  background: #3f3f46;
-  border-radius:20px;
-  display:flex; align-items:center; justify-content:center;
-  font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:800; font-size:24px; color:#fff;
-  box-shadow:0 12px 40px rgba(59,130,246,0.25);
-  animation:float 3s ease-in-out infinite;
-}
-@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-.welcome-title { font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:700; font-size:22px; }
+.boss-messages { flex:1; overflow-y:auto; padding:24px; display:flex; flex-direction:column; gap:20px; }
+.welcome-state { display:flex; flex-direction:column; align-items:center; justify-content:center; flex:1; gap:16px; text-align:center; padding:40px; }
+.boss-logo-big { width:72px; height:72px;  background: linear-gradient(135deg, #3f3f46, #52525b); border-radius:20px; display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:800; font-size:24px; color:#fff; box-shadow:0 12px 40px rgba(59,130,246,0.25); animation:float 3s ease-in-out infinite; }
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+.welcome-title { font-family:'Syne',sans-serif; font-weight:700; font-size:22px; }
 .welcome-sub { color:var(--text3); font-size:14px; max-width:400px; line-height:1.6; }
 .suggestion-chips { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:8px; }
-.chip {
-  padding:8px 14px;
-  border:1px solid var(--border);
-  border-radius:20px;
-  font-size:12.5px;
-  color:var(--text2);
-  cursor:pointer;
-  transition:all 0.15s;
-  background:var(--surface);
-}
+.chip { padding:8px 14px; border:1px solid var(--border); border-radius:20px; font-size:12.5px; color:var(--text2); cursor:pointer; transition:all 0.15s; background:var(--surface); }
 .chip:hover { border-color:var(--accent); color:var(--accent2); background:var(--accent-glow); }
-
-/* Message bubbles */
 .msg-wrapper { display:flex; gap:12px; max-width:800px; }
 .msg-wrapper.user { align-self:flex-end; flex-direction:row-reverse; }
-.ai-avatar {
-  width:36px; height:36px; border-radius:10px;
-  background: #3f3f46;
-  display:flex; align-items:center; justify-content:center;
-  font-size:14px; color:#fff; flex-shrink:0; font-family:system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-                 Roboto, Oxygen, Ubuntu, Cantarell,
-                 'Open Sans', 'Helvetica Neue', sans-seri; font-weight:700;
-}
-.user-avatar {
-  width:36px; height:36px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  font-size:13px; color:#fff; flex-shrink:0; font-weight:700;
-}
-.msg-content {
-  flex:1; padding:12px 16px;
-  border-radius:14px;
-  font-size:14px; line-height:1.65;
-}
-.msg-content.ai {
-  background:var(--surface);
-  border:1px solid var(--border);
-  color:var(--text);
-  border-top-left-radius:4px;
-}
-.msg-content.user-msg {
-  background:linear-gradient(135deg,var(--accent),#2563eb);
-  color:#fff;
-  border-top-right-radius:4px;
-}
+.ai-avatar { width:36px; height:36px; border-radius:10px;  background: linear-gradient(135deg, #3f3f46, #52525b); display:flex; align-items:center; justify-content:center; font-size:14px; color:#fff; flex-shrink:0; font-family:'Syne',sans-serif; font-weight:700; }
+.user-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; color:#fff; flex-shrink:0; font-weight:700; }
+.msg-content { flex:1; padding:12px 16px; border-radius:14px; font-size:14px; line-height:1.65; }
+.msg-content.ai { background:var(--surface); border:1px solid var(--border); color:var(--text); border-top-left-radius:4px; }
+.msg-content.user-msg { background: linear-gradient(135deg, #3f3f46, #52525b); color:#fff; border-top-right-radius:4px; }
 .msg-time { font-size:11px; color:var(--text3); margin-top:6px; }
-
-/* Typing dots for AI */
-.ai-thinking {
-  display:flex; gap:5px; padding:4px 0;
-}
-.ai-thinking span {
-  width:7px; height:7px; background:var(--text3); border-radius:50%;
-  animation:bounce 1.2s infinite;
-}
-.ai-thinking span:nth-child(2){ animation-delay:0.2s; }
-.ai-thinking span:nth-child(3){ animation-delay:0.4s; }
+.ai-thinking { display:flex; gap:5px; padding:4px 0; }
+.ai-thinking span { width:7px; height:7px; background:var(--text3); border-radius:50%; animation:bounce 1.2s infinite; }
+.ai-thinking span:nth-child(2){animation-delay:0.2s} .ai-thinking span:nth-child(3){animation-delay:0.4s}
 @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-
+/* Citations */
+.citation-bar { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+.cite-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; background:var(--accent-glow); color:var(--accent2); border:1px solid rgba(59,130,246,0.2); cursor:pointer; transition:all 0.15s; text-decoration:none; }
+.cite-chip:hover { background:rgba(59,130,246,0.2); }
 /* Input */
-.boss-input-area {
-  padding:16px 20px;
-  border-top:1px solid var(--border);
-  background:var(--bg2); flex-shrink:0;
-}
-.boss-input-row {
-  display:flex; align-items:flex-end; gap:10px;
-  background:var(--surface);
-  border:1px solid var(--border); border-radius:14px;
-  padding:6px 8px 6px 16px;
-  transition:border-color 0.15s;
-}
-.boss-input-row:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow); }
-.boss-textarea {
-  flex:1; background:none; border:none; outline:none;
-  color:var(--text); font-size:14px;
-  font-family:'DM Sans',sans-serif;
-  padding:8px 0; resize:none; max-height:150px;
-}
+.boss-input-area { padding:16px 20px; border-top:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
+.boss-input-row { display:flex; align-items:flex-end; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:6px 8px 6px 16px; transition:border-color 0.15s; }
+.boss-input-row:focus-within { border-color:#3f3f46; box-shadow:0 0 0 3px var(--accent-glow); }
+.boss-textarea { flex:1; background:none; border:none; outline:none; color:var(--text); font-size:14px; font-family:'DM Sans',sans-serif; padding:8px 0; resize:none; max-height:150px; }
 .boss-textarea::placeholder { color:var(--text3); }
-.boss-send {
-  width:38px; height:38px;
-  background: #3f3f46;
-  border:none; border-radius:10px;
-  color:#fff; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  font-size:14px; transition:opacity 0.15s; flex-shrink:0;
-}
-.boss-send:hover { opacity:0.85; }
-.boss-send:disabled { opacity:0.3; cursor:not-allowed; }
-
+.boss-send { width:38px; height:38px; background:linear-gradient(135deg, #3f3f46, #3f3f46); border:none; border-radius:10px; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; transition:opacity 0.15s; flex-shrink:0; }
+.boss-send:hover{opacity:0.85} .boss-send:disabled{opacity:0.3;cursor:not-allowed}
 .input-hint { font-size:11px; color:var(--text3); margin-top:8px; text-align:center; }
-
-/* Markdown-ish styling */
-.msg-content.ai strong { color:var(--text); font-weight:600; }
-.msg-content.ai code {
-  background:rgba(0,0,0,0.3); padding:1px 5px;
-  border-radius:4px; font-family:'JetBrains Mono',monospace;
-  font-size:12px; color:#a78bfa;
+.msg-content.ai strong{color:var(--text);font-weight:600}
+.msg-content.ai code{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#a78bfa}
+.msg-content.ai ul,.msg-content.ai ol{padding-left:18px}
+.msg-content.ai li{margin:3px 0}
+@media (max-width:1000px) {
+  .sessions-panel { display:none; }
+  .boss-layout { grid-template-columns:1fr; }
 }
-.msg-content.ai ul,.msg-content.ai ol { padding-left:18px; }
-.msg-content.ai li { margin:3px 0; }
 {% endblock %}
 
 {% block content %}
 <div class="boss-layout">
-  <!-- Sessions sidebar -->
   <div class="sessions-panel">
     <div class="sessions-header">
       <div class="sessions-title"><i class="fa-solid fa-robot" style="color:var(--accent);margin-right:6px"></i>Sessions</div>
@@ -197,28 +74,32 @@
     </div>
     <div class="session-list" id="sessionList">
       {% for sess in sessions %}
-      <div class="session-item {% if loop.first %}active{% endif %}"
-           data-session-id="{{ sess.session_id }}"
-           onclick="loadSession('{{ sess.session_id }}', this)">
+      <div class="session-item {% if loop.first %}active{% endif %}" data-session-id="{{ sess.session_id }}" onclick="loadSession('{{ sess.session_id }}', this)">
         <div style="font-weight:500">Chat Session</div>
         <div class="session-date">{{ sess.created_at.strftime('%b %d · %H:%M') if sess.created_at else '' }}</div>
       </div>
       {% else %}
       <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">
-        <i class="fa-solid fa-robot" style="font-size:22px;opacity:0.2;display:block;margin-bottom:8px"></i>
-        No sessions yet
+        <i class="fa-solid fa-robot" style="font-size:22px;opacity:0.2;display:block;margin-bottom:8px"></i>No sessions yet
       </div>
       {% endfor %}
     </div>
+    <!-- Onboarding assistant link for new employees -->
+    {% if user.role.value == 'new_employee' or not user.onboarding_complete %}
+    <div style="padding:12px;border-top:1px solid var(--border);">
+      <a href="/ask-boss/onboarding-assistant" class="btn btn-primary" style="width:100%;justify-content:center;gap:8px;">
+        <i class="fa-solid fa-rocket"></i> Onboarding Assistant
+      </a>
+    </div>
+    {% endif %}
   </div>
 
-  <!-- Chat -->
   <div class="boss-chat">
     <div class="boss-header">
       <div class="ai-avatar" style="width:36px;height:36px;border-radius:10px;font-size:14px;">AI</div>
       <div>
         <div style="font-weight:600;font-size:14px;">BOSS AI Assistant</div>
-        
+        <div style="font-size:11px;color:var(--text3);">Vector RAG · {{ "codellama:7b-instruct-q4_K_M" }}</div>
       </div>
       <div class="ai-status {% if ai_online %}online{% else %}offline{% endif %}">
         <div class="status-dot"></div>
@@ -230,16 +111,13 @@
       <div class="welcome-state" id="welcomeState">
         <div class="boss-logo-big">AI</div>
         <div class="welcome-title">Ask BOSS Anything</div>
-        <div class="welcome-sub">
-          I'm your intelligent business assistant. Ask me about company policies, procedures,
-          knowledge, or anything in your knowledge base.
-        </div>
+        <div class="welcome-sub">I use your company's knowledge base to answer questions. I'll show you exactly which sources I used.</div>
         <div class="suggestion-chips">
           <div class="chip" onclick="usePrompt('What are our pricing policies?')">💰 Pricing policies</div>
           <div class="chip" onclick="usePrompt('How do I onboard a new client?')">🤝 Client onboarding</div>
           <div class="chip" onclick="usePrompt('What is our leave policy?')">📅 Leave policy</div>
           <div class="chip" onclick="usePrompt('Summarize our sales process')">📊 Sales process</div>
-          <div class="chip" onclick="usePrompt('What compliance requirements do we have?')">🛡️ Compliance info</div>
+          <div class="chip" onclick="usePrompt('What compliance requirements do we have?')">🛡️ Compliance</div>
           <div class="chip" onclick="usePrompt('How should I handle customer complaints?')">💬 Customer complaints</div>
         </div>
       </div>
@@ -247,14 +125,10 @@
 
     <div class="boss-input-area">
       <div class="boss-input-row">
-        <textarea class="boss-textarea" id="bossInput" rows="1"
-          placeholder="Ask BOSS about policies, procedures, company knowledge..."
-          onkeydown="handleBossKey(event)" oninput="autoResizeBoss(this)"></textarea>
-        <button class="boss-send" id="bossSendBtn" onclick="sendBossMessage()">
-          <i class="fa-solid fa-paper-plane"></i>
-        </button>
+        <textarea class="boss-textarea" id="bossInput" rows="1" placeholder="Ask BOSS about policies, procedures, company knowledge..." onkeydown="handleBossKey(event)" oninput="autoResizeBoss(this)"></textarea>
+        <button class="boss-send" id="bossSendBtn" onclick="sendBossMessage()"><i class="fa-solid fa-paper-plane"></i></button>
       </div>
-      <div class="input-hint">Press <kbd style="background:var(--surface);padding:1px 5px;border-radius:4px;font-size:10px;">Enter</kbd> to send · <kbd style="background:var(--surface);padding:1px 5px;border-radius:4px;font-size:10px;">Shift+Enter</kbd> for new line</div>
+      <div class="input-hint">Press <kbd style="background:var(--surface);padding:1px 5px;border-radius:4px;font-size:10px;">Enter</kbd> to send</div>
     </div>
   </div>
 </div>
@@ -262,10 +136,10 @@
 
 {% block extra_js %}
 <script>
-const ME_BOSS = { id: {{ user.id }}, name: "{{ user.full_name }}", color: "{{ user.avatar_color }}" };
+const ME_BOSS = { id:{{ user.id }}, name:"{{ user.full_name }}", color:"{{ user.avatar_color }}" };
 let currentSessionId = null;
 let isStreaming = false;
-let msgCounter = 0; // ← unique counter for each message bubble
+let msgCounter = 0;
 
 {% if sessions %}
 window.addEventListener('DOMContentLoaded', () => {
@@ -277,7 +151,6 @@ async function newSession() {
   const resp = await fetch('/ask-boss/session/new', { method:'POST' });
   const data = await resp.json();
   currentSessionId = data.session_id;
-
   const list = document.getElementById('sessionList');
   const item = document.createElement('div');
   item.className = 'session-item active';
@@ -286,7 +159,6 @@ async function newSession() {
   item.innerHTML = `<div style="font-weight:500">New Chat</div><div class="session-date">Just now</div>`;
   list.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
   list.prepend(item);
-
   clearMessages();
 }
 
@@ -294,15 +166,18 @@ async function loadSession(sessionId, el) {
   currentSessionId = sessionId;
   document.querySelectorAll('.session-item').forEach(i => i.classList.remove('active'));
   el?.classList.add('active');
-
   clearMessages();
-
   const resp = await fetch(`/ask-boss/session/${sessionId}/history`);
   const msgs = await resp.json();
   if (msgs.length > 0) {
-    const ws = document.getElementById('welcomeState');
-    if (ws) ws.remove();
-    msgs.forEach(m => appendBossMessage(m.role, m.content, false));
+    document.getElementById('welcomeState')?.remove();
+    msgs.forEach(m => {
+      const wrapper = appendBossMessage(m.role, m.content, false);
+      if (m.role === 'assistant' && m.source_chunks?.length) {
+        const bubble = wrapper?.querySelector('.msg-content');
+        if (bubble) buildCitations(m.source_chunks, bubble);
+      }
+    });
     scrollBossBottom();
   }
 }
@@ -312,12 +187,10 @@ function clearMessages() {
   container.innerHTML = '';
   msgCounter = 0;
   const ws = document.createElement('div');
-  ws.id = 'welcomeState';
-  ws.className = 'welcome-state';
-  ws.innerHTML = `
-    <div class="boss-logo-big">AI</div>
+  ws.id = 'welcomeState'; ws.className = 'welcome-state';
+  ws.innerHTML = `<div class="boss-logo-big">AI</div>
     <div class="welcome-title">Ask BOSS Anything</div>
-    <div class="welcome-sub">I'm your intelligent business assistant. Ask me about company policies, procedures, knowledge, or anything in your knowledge base.</div>
+    <div class="welcome-sub">I use your company's knowledge base to answer questions. I'll show you exactly which sources I used.</div>
     <div class="suggestion-chips">
       <div class="chip" onclick="usePrompt('What are our pricing policies?')">💰 Pricing policies</div>
       <div class="chip" onclick="usePrompt('How do I onboard a new client?')">🤝 Client onboarding</div>
@@ -334,53 +207,34 @@ function usePrompt(text) {
 }
 
 function appendBossMessage(role, content, scroll=true) {
-  const ws = document.getElementById('welcomeState');
-  if (ws) ws.remove();
-
+  document.getElementById('welcomeState')?.remove();
   msgCounter++;
   const container = document.getElementById('bossMessages');
   const initials = ME_BOSS.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
   const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-
   const div = document.createElement('div');
   div.className = `msg-wrapper ${role === 'user' ? 'user' : ''}`;
-
   if (role === 'user') {
     div.innerHTML = `
       <div class="user-avatar" style="background:${ME_BOSS.color}">${initials}</div>
-      <div>
-        <div class="msg-content user-msg">${escHtml(content)}</div>
-        <div class="msg-time" style="text-align:right">${time}</div>
-      </div>`;
+      <div><div class="msg-content user-msg">${escHtml(content)}</div><div class="msg-time" style="text-align:right">${time}</div></div>`;
   } else {
     div.innerHTML = `
       <div class="ai-avatar">AI</div>
-      <div style="flex:1">
-        <div class="msg-content ai">${formatAI(content)}</div>
-        <div class="msg-time">${time}</div>
-      </div>`;
+      <div style="flex:1"><div class="msg-content ai">${formatAI(content)}</div><div class="msg-time">${time}</div></div>`;
   }
-
   container.appendChild(div);
   if (scroll) scrollBossBottom();
   return div;
 }
 
 function addThinkingBubble() {
-  const ws = document.getElementById('welcomeState');
-  if (ws) ws.remove();
-
+  document.getElementById('welcomeState')?.remove();
   const container = document.getElementById('bossMessages');
   const div = document.createElement('div');
-  div.className = 'msg-wrapper';
-  div.id = 'thinkingBubble';
-  div.innerHTML = `
-    <div class="ai-avatar">AI</div>
-    <div>
-      <div class="msg-content ai"><div class="ai-thinking"><span></span><span></span><span></span></div></div>
-    </div>`;
-  container.appendChild(div);
-  scrollBossBottom();
+  div.className = 'msg-wrapper'; div.id = 'thinkingBubble';
+  div.innerHTML = `<div class="ai-avatar">AI</div><div><div class="msg-content ai"><div class="ai-thinking"><span></span><span></span><span></span></div></div></div>`;
+  container.appendChild(div); scrollBossBottom();
   return div;
 }
 
@@ -389,91 +243,75 @@ async function sendBossMessage() {
   const input = document.getElementById('bossInput');
   const msg = input.value.trim();
   if (!msg) return;
-
   if (!currentSessionId) {
-    const resp = await fetch('/ask-boss/session/new', { method:'POST' });
-    const d = await resp.json();
+    const r = await fetch('/ask-boss/session/new', {method:'POST'});
+    const d = await r.json();
     currentSessionId = d.session_id;
   }
-
-  input.value = '';
-  autoResizeBoss(input);
+  input.value = ''; autoResizeBoss(input);
   isStreaming = true;
   document.getElementById('bossSendBtn').disabled = true;
-
   appendBossMessage('user', msg);
-
   const thinking = addThinkingBubble();
-
   try {
     const resp = await fetch('/ask-boss/chat', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json' },
-      body: JSON.stringify({ session_id: currentSessionId, message: msg }),
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ session_id:currentSessionId, message:msg }),
     });
-
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
     let aiContent = '';
-    let hasStartedReceiving = false;  
-    const container = document.getElementById('bossMessages');
-    const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    let sources = [];
+    thinking.remove();
     const bubbleClass = `ai-bubble-${Date.now()}-${msgCounter++}`;
-
     const wrapper = document.createElement('div');
     wrapper.className = 'msg-wrapper';
-    wrapper.innerHTML = `
-      <div class="ai-avatar">AI</div>
-      <div style="flex:1">
-        <div class="msg-content ai ${bubbleClass}"></div>
-        <div class="msg-time">${time}</div>
-      </div>`;
-    container.appendChild(wrapper);
+    const time = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    wrapper.innerHTML = `<div class="ai-avatar">AI</div>
+      <div style="flex:1"><div class="msg-content ai ${bubbleClass}"></div><div class="msg-time">${time}</div></div>`;
+    document.getElementById('bossMessages').appendChild(wrapper);
     const aiEl = wrapper.querySelector(`.${bubbleClass}`);
-
+    scrollBossBottom();
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      
-      const text = decoder.decode(value);
-      const lines = text.split('\n');
-      
-      for (const line of lines) {
+      for (const line of decoder.decode(value).split('\n')) {
         if (line.startsWith('data: ')) {
           try {
             const data = JSON.parse(line.slice(6));
-            if (data.content) {
-              if (!hasStartedReceiving && thinking && thinking.parentNode) {
-                thinking.remove();
-                hasStartedReceiving = true;
-              }
-              
-              aiContent += data.content;
-              aiEl.innerHTML = formatAI(aiContent);
-              scrollBossBottom();
-            }
+            if (data.content) { aiContent += data.content; aiEl.innerHTML = formatAI(aiContent); scrollBossBottom(); }
             if (data.session_id) currentSessionId = data.session_id;
+            if (data.done && data.sources) { sources = data.sources; }
           } catch {}
         }
       }
     }
-    
-    // Cleanup: if response was empty, remove loader now
-    if (!hasStartedReceiving && thinking && thinking.parentNode) {
-      thinking.remove();
-    }
-    
-  } catch (e) {
-    // Only remove thinking bubble if it still exists
-    if (thinking && thinking.parentNode) {
-      thinking.remove();
-    }
-    appendBossMessage('assistant', 'Error connecting to AI. Please ensure Ollama is running.');
-    console.error(e);
+    // Show citations
+    if (sources.length) buildCitations(sources, aiEl);
+  } catch(e) {
+    thinking.remove();
+    appendBossMessage('assistant', '⚠️ Error connecting to AI. Ensure Ollama is running.');
   }
-
   isStreaming = false;
   document.getElementById('bossSendBtn').disabled = false;
+}
+
+function buildCitations(sources, bubbleEl) {
+  if (!sources?.length) return;
+  const bar = document.createElement('div');
+  bar.className = 'citation-bar';
+  sources.forEach((s, i) => {
+    const chip = document.createElement('a');
+    chip.className = 'cite-chip';
+    const label = s.document_title
+      ? `[${i+1}] ${s.document_title.slice(0,28)}`
+      : `[${i+1}] ${(s.source||'').replace('_',' ')}`;
+    chip.innerHTML = `<i class="fa-solid fa-${s.source==='document'?'file-lines':'comments'}"></i> ${escHtml(label)}`;
+    chip.href = s.document_id ? '/documents' : '/knowledge-base';
+    chip.title = `Relevance: ${Math.round((s.score||0)*100)}% | Dept: ${s.department||'—'}`;
+    bar.appendChild(chip);
+  });
+  bubbleEl.appendChild(bar);
 }
 
 function formatAI(text) {
@@ -482,28 +320,11 @@ function formatAI(text) {
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/`(.+?)`/g,'<code>$1</code>')
     .replace(/\n\n/g,'</p><p>').replace(/\n/g,'<br>')
-    .replace(/^(.+)$/,'<p>$1</p>');
+    .replace(/^/,'<p>').replace(/$/,'</p>');
 }
-
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
-}
-
-function handleBossKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendBossMessage();
-  }
-}
-
-function autoResizeBoss(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 150) + 'px';
-}
-
-function scrollBossBottom() {
-  const c = document.getElementById('bossMessages');
-  c.scrollTop = c.scrollHeight;
-}
+function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function handleBossKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendBossMessage();} }
+function autoResizeBoss(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,150)+'px'; }
+function scrollBossBottom() { const c=document.getElementById('bossMessages'); c.scrollTop=c.scrollHeight; }
 </script>
 {% endblock %}

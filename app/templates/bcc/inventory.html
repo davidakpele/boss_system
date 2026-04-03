@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Inventory — BOSS BCC{% endblock %}
+{% block page_title %}Inventory Management{% endblock %}
+{% block page_sub %}Stock levels · Movements · Low stock alerts{% endblock %}
+{% block extra_css %}
+.inv-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:14px; }
+.inv-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; position:relative; transition:border-color .15s; }
+.inv-card:hover { border-color:var(--border2); }
+.inv-card.low { border-left:3px solid var(--yellow); }
+.inv-card.out { border-left:3px solid var(--red); }
+.qty-badge { font-family:'Syne',sans-serif; font-weight:800; font-size:20px; }
+.inv-actions { display:none; position:absolute; top:10px; right:10px; gap:4px; }
+.inv-card:hover .inv-actions { display:flex; }
+.progress-bar { height:5px; background:var(--border); border-radius:10px; overflow:hidden; margin-top:8px; }
+.progress-fill { height:100%; border-radius:10px; transition:width .3s; }
+{% endblock %}
+{% block content %}
+
+<div class="flex gap-3 mb-6" style="flex-wrap:wrap;align-items:center;">
+  <div style="display:flex;gap:10px;flex:1;min-width:200px;">
+    <div style="flex:1;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;">
+      <i class="fa-solid fa-search" style="color:var(--text3);font-size:12px;"></i>
+      <input type="text" id="invSearch" placeholder="Search items, SKU..." style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13.5px;" oninput="filterItems(this.value)"/>
+    </div>
+  </div>
+  <div style="display:flex;gap:8px;flex-shrink:0;">
+    {% if low_stock_count > 0 %}<span class="badge badge-yellow"><i class="fa-solid fa-triangle-exclamation"></i> {{ low_stock_count }} low stock</span>{% endif %}
+    <span class="badge badge-blue">Total value: ${{ "{:,.2f}".format(total_value) }}</span>
+    <button class="btn btn-primary" onclick="openModal('newItemModal')"><i class="fa-solid fa-plus"></i> Add Item</button>
+  </div>
+</div>
+
+<div class="inv-grid" id="invGrid">
+  {% for item in items %}
+  {% set pct = [100, (item.quantity / item.reorder_level * 100)|int if item.reorder_level > 0 else 100]|min %}
+  <div class="inv-card {% if item.quantity == 0 %}out{% elif item.quantity <= item.reorder_level %}low{% endif %}" data-name="{{ item.name|lower }} {{ item.sku|lower }} {{ item.category|lower }}">
+    <div class="inv-actions">
+      <button class="tact-btn" onclick="openMovement({{ item.id }}, '{{ item.name }}', {{ item.quantity }}, '{{ item.unit }}')" title="Stock Movement"><i class="fa-solid fa-arrows-up-down"></i></button>
+      <button class="tact-btn" onclick="openEdit({{ item.id }}, '{{ item.name }}', '{{ item.category }}', {{ item.reorder_level }}, {{ item.cost_price }}, {{ item.selling_price }}, '{{ item.supplier }}', '{{ item.location }}')" title="Edit"><i class="fa-solid fa-pen"></i></button>
+      <button class="tact-btn del" onclick="archiveItem({{ item.id }})" title="Archive"><i class="fa-solid fa-archive"></i></button>
+    </div>
+    <div class="flex items-center gap-2 mb-2">
+      {% if item.category %}<span class="badge badge-blue" style="font-size:10px;">{{ item.category }}</span>{% endif %}
+      {% if item.quantity == 0 %}<span class="badge badge-red" style="font-size:10px;">Out of Stock</span>
+      {% elif item.quantity <= item.reorder_level %}<span class="badge badge-yellow" style="font-size:10px;">Low Stock</span>{% endif %}
+    </div>
+    <div style="font-weight:600;font-size:14px;margin-bottom:3px;">{{ item.name }}</div>
+    <div style="font-size:11px;color:var(--text3);font-family:'JetBrains Mono',monospace;margin-bottom:8px;">SKU: {{ item.sku }}</div>
+    <div class="flex items-center justify-between">
+      <div>
+        <div class="qty-badge" style="color:{% if item.quantity == 0 %}var(--red){% elif item.quantity <= item.reorder_level %}var(--yellow){% else %}var(--green){% endif %};">
+          {{ item.quantity }} <span style="font-size:12px;font-weight:400;color:var(--text3);">{{ item.unit }}</span>
+        </div>
+        <div style="font-size:10px;color:var(--text3);">Reorder at {{ item.reorder_level }}</div>
+      </div>
+      <div style="text-align:right;">
+        <div style="font-size:11px;color:var(--text3);">Cost: ${{ "{:,.2f}".format(item.cost_price) }}</div>
+        <div style="font-size:11px;color:var(--green);">Sell: ${{ "{:,.2f}".format(item.selling_price) }}</div>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:{{ [pct, 100]|min }}%;background:{% if pct < 20 %}var(--red){% elif pct < 50 %}var(--yellow){% else %}var(--green){% endif %};"></div></div>
+    {% if item.supplier %}<div style="font-size:11px;color:var(--text3);margin-top:6px;"><i class="fa-solid fa-truck" style="font-size:9px;"></i> {{ item.supplier }}</div>{% endif %}
+  </div>
+  {% else %}
+  <div class="card" style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text3);">
+    <i class="fa-solid fa-boxes-stacked" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
+    No inventory items yet. Add your first item above.
+  </div>
+  {% endfor %}
+</div>
+
+{# ── New Item Modal ── #}
+<div class="modal-overlay" id="newItemModal">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-box" style="color:var(--accent)"></i> Add Inventory Item</span>
+      <span class="modal-close" onclick="closeModal('newItemModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Name *</label><input type="text" id="ni-name" class="form-control" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">SKU (auto if blank)</label><input type="text" id="ni-sku" class="form-control" placeholder="Auto-generated" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Category</label><input type="text" id="ni-cat" class="form-control" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Unit</label>
+        <select id="ni-unit" class="form-control" style="padding-left:12px">
+          <option>unit</option><option>kg</option><option>litre</option><option>box</option><option>pack</option><option>piece</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Initial Quantity</label><input type="number" id="ni-qty" class="form-control" value="0" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Reorder Level</label><input type="number" id="ni-reorder" class="form-control" value="0" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Cost Price ($)</label><input type="number" id="ni-cost" class="form-control" value="0" step="0.01" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Selling Price ($)</label><input type="number" id="ni-sell" class="form-control" value="0" step="0.01" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Supplier</label><input type="text" id="ni-supplier" class="form-control" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Storage Location</label><input type="text" id="ni-loc" class="form-control" placeholder="Shelf A-3" style="padding-left:12px"/></div>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('newItemModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createItem()"><i class="fa-solid fa-plus"></i> Add Item</button>
+    </div>
+  </div>
+</div>
+
+{# ── Movement Modal ── #}
+<div class="modal-overlay" id="movementModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-arrows-up-down" style="color:var(--accent)"></i> Stock Movement</span>
+      <span class="modal-close" onclick="closeModal('movementModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:14px;">
+      <strong id="mv-name" style="color:var(--text);"></strong>
+      — Current stock: <strong id="mv-qty" style="color:var(--accent2);"></strong>
+    </div>
+    <input type="hidden" id="mv-id"/>
+    <div class="form-group"><label class="form-label">Movement Type</label>
+      <select id="mv-type" class="form-control" style="padding-left:12px">
+        <option value="stock_in">📥 Stock In (received)</option>
+        <option value="stock_out">📤 Stock Out (sold/used)</option>
+        <option value="return_in">🔄 Return In</option>
+        <option value="adjustment">⚖️ Adjustment (set exact qty)</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Quantity</label><input type="number" id="mv-qty-in" class="form-control" value="1" min="0" step="0.1" style="padding-left:12px"/></div>
+    <div class="form-group"><label class="form-label">Notes</label><input type="text" id="mv-notes" class="form-control" placeholder="Reference, reason..." style="padding-left:12px"/></div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('movementModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveMovement()"><i class="fa-solid fa-floppy-disk"></i> Record</button>
+    </div>
+  </div>
+</div>
+
+{# ── Edit Modal ── #}
+<div class="modal-overlay" id="editItemModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-pen" style="color:var(--accent)"></i> Edit Item</span>
+      <span class="modal-close" onclick="closeModal('editItemModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <input type="hidden" id="ei-id"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Name *</label><input type="text" id="ei-name" class="form-control" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Category</label><input type="text" id="ei-cat" class="form-control" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Reorder Level</label><input type="number" id="ei-reorder" class="form-control" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Cost Price</label><input type="number" id="ei-cost" class="form-control" step="0.01" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Selling Price</label><input type="number" id="ei-sell" class="form-control" step="0.01" style="padding-left:12px"/></div>
+      <div class="form-group"><label class="form-label">Supplier</label><input type="text" id="ei-supplier" class="form-control" style="padding-left:12px"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Location</label><input type="text" id="ei-loc" class="form-control" style="padding-left:12px"/></div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('editItemModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function filterItems(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.inv-card').forEach(c => {
+    c.style.display = (c.dataset.name||'').includes(q) ? '' : 'none';
+  });
+}
+async function createItem() {
+  const fd = new FormData();
+  ['name','sku','category','unit','quantity','reorder_level','cost_price','selling_price','supplier','location']
+    .forEach(k => fd.append(k, document.getElementById('ni-'+k.replace('_level','_reorder').replace('cost_price','cost').replace('selling_price','sell').replace('reorder_level','reorder').replace('location','loc').replace('quantity','qty').replace('category','cat').replace('supplier','supplier'))));
+  fd.set('name', document.getElementById('ni-name').value);
+  fd.set('sku', document.getElementById('ni-sku').value);
+  fd.set('category', document.getElementById('ni-cat').value);
+  fd.set('unit', document.getElementById('ni-unit').value);
+  fd.set('quantity', document.getElementById('ni-qty').value);
+  fd.set('reorder_level', document.getElementById('ni-reorder').value);
+  fd.set('cost_price', document.getElementById('ni-cost').value);
+  fd.set('selling_price', document.getElementById('ni-sell').value);
+  fd.set('supplier', document.getElementById('ni-supplier').value);
+  fd.set('location', document.getElementById('ni-loc').value);
+  const r = await fetch('/bcc/inventory/create', {method:'POST', body:fd});
+  const d = await r.json();
+  if (r.ok) { toast('Item added!', 'success'); closeModal('newItemModal'); setTimeout(()=>location.reload(), 600); }
+  else toast(d.error || 'Error', 'error');
+}
+function openMovement(id, name, qty, unit) {
+  document.getElementById('mv-id').value = id;
+  document.getElementById('mv-name').textContent = name;
+  document.getElementById('mv-qty').textContent = qty + ' ' + unit;
+  openModal('movementModal');
+}
+async function saveMovement() {
+  const id = document.getElementById('mv-id').value;
+  const fd = new FormData();
+  fd.append('movement_type', document.getElementById('mv-type').value);
+  fd.append('quantity', document.getElementById('mv-qty-in').value);
+  fd.append('notes', document.getElementById('mv-notes').value);
+  const r = await fetch(`/bcc/inventory/${id}/movement`, {method:'POST', body:fd});
+  const d = await r.json();
+  if (r.ok) { toast(`Recorded! New qty: ${d.new_quantity}`, 'success'); closeModal('movementModal'); setTimeout(()=>location.reload(), 600); }
+  else toast('Error', 'error');
+}
+function openEdit(id, name, cat, reorder, cost, sell, supplier, loc) {
+  document.getElementById('ei-id').value = id;
+  document.getElementById('ei-name').value = name;
+  document.getElementById('ei-cat').value = cat;
+  document.getElementById('ei-reorder').value = reorder;
+  document.getElementById('ei-cost').value = cost;
+  document.getElementById('ei-sell').value = sell;
+  document.getElementById('ei-supplier').value = supplier;
+  document.getElementById('ei-loc').value = loc;
+  openModal('editItemModal');
+}
+async function saveEdit() {
+  const id = document.getElementById('ei-id').value;
+  const fd = new FormData();
+  ['name','category','reorder_level','cost_price','selling_price','supplier','location'].forEach(k => {
+    const elId = 'ei-' + k.replace('reorder_level','reorder').replace('cost_price','cost').replace('selling_price','sell').replace('location','loc').replace('category','cat');
+    fd.append(k, document.getElementById(elId).value);
+  });
+  fd.set('name', document.getElementById('ei-name').value);
+  fd.set('category', document.getElementById('ei-cat').value);
+  fd.set('reorder_level', document.getElementById('ei-reorder').value);
+  fd.set('cost_price', document.getElementById('ei-cost').value);
+  fd.set('selling_price', document.getElementById('ei-sell').value);
+  fd.set('supplier', document.getElementById('ei-supplier').value);
+  fd.set('location', document.getElementById('ei-loc').value);
+  const r = await fetch(`/bcc/inventory/${id}/update`, {method:'POST', body:fd});
+  if (r.ok) { toast('Updated!', 'success'); closeModal('editItemModal'); setTimeout(()=>location.reload(), 500); }
+  else toast('Error', 'error');
+}
+async function archiveItem(id) {
+  if (!confirm('Archive this item?')) return;
+  const r = await fetch(`/bcc/inventory/${id}`, {method:'DELETE'});
+  if (r.ok) { toast('Archived', 'info'); setTimeout(()=>location.reload(), 400); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Directory — BOSS{% endblock %}
+{% block page_title %}Employee Directory{% endblock %}
+{% block page_sub %}Org chart & contact info{% endblock %}
+{% block extra_css %}
+.dir-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; display:flex; align-items:center; gap:14px; transition:border-color 0.15s; }
+.dir-card:hover { border-color:var(--border2); }
+.dir-av { width:46px; height:46px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:700; color:#fff; flex-shrink:0; }
+.dept-section { margin-bottom:24px; }
+.dept-label { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.06em; color:var(--text3); padding:8px 0 10px; border-bottom:1px solid var(--border); margin-bottom:12px; display:flex; align-items:center; gap:8px; }
+.dept-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:10px; }
+.reports-to { font-size:11px; color:var(--text3); display:flex; align-items:center; gap:4px; margin-top:2px; }
+.online-indicator { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+{% endblock %}
+{% block content %}
+<!-- Search & filter -->
+<form method="GET" action="/directory">
+  <div class="flex gap-3 mb-6" style="flex-wrap:wrap;">
+    <div style="flex:1;min-width:180px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;">
+      <i class="fa-solid fa-magnifying-glass" style="color:var(--text3)"></i>
+      <input type="text" name="search" value="{{ filters.search or '' }}" placeholder="Search by name, email, department..." style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:14px;"/>
+    </div>
+    <select name="dept" class="form-control" style="width:auto;padding-left:12px;" onchange="this.form.submit()">
+      <option value="">All Departments</option>
+      {% for d in departments %}<option value="{{ d }}" {% if filters.dept == d %}selected{% endif %}>{{ d }}</option>{% endfor %}
+    </select>
+    <button type="submit" class="btn btn-primary"><i class="fa-solid fa-search"></i></button>
+    {% if filters.search or filters.dept %}<a href="/directory" class="btn btn-ghost"><i class="fa-solid fa-times"></i></a>{% endif %}
+  </div>
+</form>
+
+<div style="font-size:12px;color:var(--text3);margin-bottom:16px;">{{ all_users|length }} employee{{ 's' if all_users|length != 1 else '' }}</div>
+
+{% for dept, users in by_dept.items() %}
+<div class="dept-section">
+  <div class="dept-label">
+    <i class="fa-solid fa-building" style="font-size:12px;"></i>
+    {{ dept }}
+    <span style="background:var(--surface2);border-radius:20px;padding:1px 8px;font-size:10px;font-weight:600;color:var(--text3);">{{ users|length }}</span>
+  </div>
+  <div class="dept-grid">
+    {% for u in users %}
+    <div class="dir-card">
+      <div class="dir-av" style="background:{{ u.avatar_color }}">{{ u.full_name[:2].upper() }}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div class="online-indicator" style="background:{% if u.is_online %}var(--green);box-shadow:0 0 5px var(--green){% else %}var(--border2){% endif %}"></div>
+          <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ u.full_name }}</div>
+        </div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:1px;">{{ u.role.value.replace('_',' ').title() }}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;"><i class="fa-solid fa-envelope" style="font-size:9px;margin-right:3px;"></i>{{ u.email }}</div>
+        {% if manager_map.get(u.id) %}
+        <div class="reports-to"><i class="fa-solid fa-arrow-up" style="font-size:9px;"></i> Reports to {{ manager_map[u.id].full_name }}</div>
+        {% endif %}
+      </div>
+      {% if user.role in ('super_admin', 'admin') %}
+      <button class="btn btn-ghost btn-xs" onclick="setManager({{ u.id }}, '{{ u.full_name }}')" title="Set Manager" style="flex-shrink:0;">
+        <i class="fa-solid fa-sitemap"></i>
+      </button>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:60px 20px;">
+  <i class="fa-solid fa-users" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px;"></i>
+  <div style="color:var(--text3);">No employees found.</div>
+</div>
+{% endfor %}
+
+<!-- Set Manager Modal -->
+<div class="modal-overlay" id="setManagerModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-sitemap" style="color:var(--accent)"></i> Set Manager</span>
+      <span class="modal-close" onclick="closeModal('setManagerModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <input type="hidden" id="sm-emp-id"/>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px;">Setting manager for: <strong id="sm-emp-name"></strong></div>
+    <div class="form-group">
+      <label class="form-label">Manager</label>
+      <select id="sm-manager" class="form-control" style="padding-left:12px">
+        <option value="">No Manager</option>
+        {% for u in all_users %}<option value="{{ u.id }}">{{ u.full_name }} ({{ u.department or '—' }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('setManagerModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveManager()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+function setManager(empId, empName) {
+  document.getElementById('sm-emp-id').value = empId;
+  document.getElementById('sm-emp-name').textContent = empName;
+  openModal('setManagerModal');
+}
+async function saveManager() {
+  const fd = new FormData();
+  fd.append('employee_id', document.getElementById('sm-emp-id').value);
+  fd.append('manager_id', document.getElementById('sm-manager').value);
+  const r = await fetch('/directory/set-manager', {method:'POST', body:fd});
+  if (r.ok) { toast('Manager updated!', 'success'); closeModal('setManagerModal'); setTimeout(()=>location.reload(),600); }
+  else toast('Error', 'error');
+}
+</script>
+{% endblock %}

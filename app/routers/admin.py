@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from app.database import get_db
+from app.config import settings
 from app.models import (
     User, UserRole, AuditLog, OnboardingStep, OnboardingProgress,
     ComplianceRecord, RiskItem, Document
@@ -359,3 +360,86 @@ async def change_password(
     current_user.hashed_password = get_password_hash(new_password)
     await db.commit()
     return JSONResponse({"status": "updated"})
+
+@router.get("/settings/ip-allowlist", response_class=HTMLResponse)
+async def ip_allowlist_page(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import IPAllowlist
+    if current_user.role.value != "super_admin":
+        raise HTTPException(status_code=403)
+    rules = (await db.execute(
+        select(IPAllowlist).order_by(IPAllowlist.created_at.desc())
+    )).scalars().all()
+    return templates.TemplateResponse(
+        request=request,
+        name="settings/ip_allowlist.html",
+        context={
+            "user": current_user,
+            "rules": rules,
+            "ip_enabled": settings.IP_ALLOWLIST_ENABLED,
+            "page": "settings",
+        },
+    )
+ 
+ 
+@router.post("/settings/ip-allowlist/add")
+async def add_ip_rule(
+    label: str = Form(...),
+    ip_range: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import IPAllowlist
+    import ipaddress
+    if current_user.role.value != "super_admin":
+        raise HTTPException(status_code=403)
+    try:
+        if "/" in ip_range:
+            ipaddress.ip_network(ip_range, strict=False)
+        else:
+            ipaddress.ip_address(ip_range)
+    except ValueError:
+        return JSONResponse({"error": "Invalid IP address or CIDR range"}, status_code=400)
+    db.add(IPAllowlist(label=label, ip_range=ip_range, created_by=current_user.id))
+    await db.commit()
+    return JSONResponse({"status": "added"})
+ 
+ 
+@router.delete("/settings/ip-allowlist/{rule_id}")
+async def delete_ip_rule(
+    rule_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import IPAllowlist
+    if current_user.role.value != "super_admin":
+        raise HTTPException(status_code=403)
+    rule = (await db.execute(
+        select(IPAllowlist).where(IPAllowlist.id == rule_id)
+    )).scalar_one_or_none()
+    if rule:
+        await db.delete(rule)
+        await db.commit()
+    return JSONResponse({"status": "deleted"})
+ 
+ 
+@router.post("/settings/ip-allowlist/{rule_id}/toggle")
+async def toggle_ip_rule(
+    rule_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import IPAllowlist
+    if current_user.role.value != "super_admin":
+        raise HTTPException(status_code=403)
+    rule = (await db.execute(
+        select(IPAllowlist).where(IPAllowlist.id == rule_id)
+    )).scalar_one_or_none()
+    if not rule:
+        raise HTTPException(status_code=404)
+    rule.is_active = not rule.is_active
+    await db.commit()
+    return JSONResponse({"is_active": rule.is_active})

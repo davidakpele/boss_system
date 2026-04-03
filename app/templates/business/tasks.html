@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+{% block title %}Task Board — BOSS{% endblock %}
+{% block page_title %}Task Board{% endblock %}
+{% block page_sub %}Kanban board — {{ current_dept or 'All Departments' }}{% endblock %}
+{% block extra_css %}
+.board { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; height:calc(100vh - 140px); }
+.col { background:var(--bg2); border:1px solid var(--border); border-radius:var(--radius); display:flex; flex-direction:column; overflow:hidden; }
+.col-header { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.col-title { font-family:'Syne',sans-serif; font-weight:700; font-size:14px; display:flex; align-items:center; gap:8px; }
+.col-count { background:var(--surface); border:1px solid var(--border); border-radius:20px; padding:2px 8px; font-size:11px; font-weight:600; color:var(--text3); }
+.col-body { flex:1; overflow-y:auto; padding:10px; display:flex; flex-direction:column; gap:8px; }
+.task-card { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:12px 14px; cursor:pointer; transition:all 0.15s; position:relative; }
+.task-card:hover { border-color:var(--border2); box-shadow:0 4px 12px rgba(0,0,0,0.15); transform:translateY(-1px); }
+.task-card.dragging { opacity:0.4; }
+.col-body.drag-over { background:var(--accent-glow); border-radius:8px; }
+.task-title { font-size:13.5px; font-weight:600; margin-bottom:6px; line-height:1.4; }
+.task-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-top:8px; }
+.priority-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.p-urgent { background:#ef4444; box-shadow:0 0 6px #ef4444; }
+.p-high { background:#f59e0b; }
+.p-medium { background:#3b82f6; }
+.p-low { background:#10b981; }
+.assignee-av { width:22px; height:22px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:8px; font-weight:700; color:#fff; flex-shrink:0; }
+.due-badge { font-size:10px; padding:2px 7px; border-radius:10px; font-weight:600; }
+.due-ok { background:rgba(16,185,129,0.1); color:#34d399; }
+.due-warn { background:rgba(245,158,11,0.1); color:#fbbf24; }
+.due-over { background:rgba(239,68,68,0.1); color:#f87171; }
+.task-actions { display:none; position:absolute; top:8px; right:8px; gap:4px; }
+.task-card:hover .task-actions { display:flex; }
+.tact-btn { width:24px; height:24px; border:none; border-radius:6px; background:var(--bg2); color:var(--text3); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:10px; transition:all 0.12s; }
+.tact-btn:hover { background:var(--surface2); color:var(--text); }
+.tact-btn.del:hover { color:#f87171; }
+.add-task-btn { width:100%; padding:8px; background:none; border:1px dashed var(--border); border-radius:8px; color:var(--text3); cursor:pointer; font-size:12.5px; display:flex; align-items:center; justify-content:center; gap:6px; transition:all 0.15s; margin-top:4px; flex-shrink:0; }
+.add-task-btn:hover { border-color:var(--accent); color:var(--accent2); background:var(--accent-glow); }
+.dept-filter { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.df-btn { padding:5px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:12px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+.df-btn.active, .df-btn:hover { background:var(--accent-glow); color:var(--accent2); border-color:rgba(59,130,246,0.3); }
+@media(max-width:768px){ .board{ grid-template-columns:1fr; height:auto; } }
+{% endblock %}
+{% block content %}
+<div class="dept-filter">
+  <a href="/tasks" class="df-btn {% if not current_dept %}active{% endif %}">All</a>
+  {% for d in departments %}
+  <a href="/tasks?dept={{ d }}" class="df-btn {% if current_dept == d %}active{% endif %}">{{ d }}</a>
+  {% endfor %}
+  <button class="btn btn-primary btn-sm" style="margin-left:auto;" onclick="openModal('newTaskModal')">
+    <i class="fa-solid fa-plus"></i> New Task
+  </button>
+</div>
+
+<div class="board">
+  {% for col_id, col_label, col_color, col_icon in [
+    ('todo','To Do','#94a3b8','fa-circle'),
+    ('in_progress','In Progress','#f59e0b','fa-circle-half-stroke'),
+    ('done','Done','#10b981','fa-circle-check')
+  ] %}
+  <div class="col" id="col-{{ col_id }}" ondragover="dragOver(event,'{{ col_id }}')" ondrop="drop(event,'{{ col_id }}')" ondragleave="dragLeave(event)">
+    <div class="col-header">
+      <div class="col-title">
+        <i class="fa-solid {{ col_icon }}" style="color:{{ col_color }};font-size:12px;"></i>
+        {{ col_label }}
+        <span class="col-count">{{ board[col_id]|length }}</span>
+      </div>
+    </div>
+    <div class="col-body" id="body-{{ col_id }}">
+      {% for item in board[col_id] %}
+      {% set t = item.task %}
+      {% set aname = item.assignee_name %}
+      {% set acolor = item.assignee_color %}
+      {% set p_class = {'urgent':'p-urgent','high':'p-high','medium':'p-medium','low':'p-low'}[t.priority] %}
+      <div class="task-card" id="task-{{ t.id }}" draggable="true"
+           ondragstart="dragStart(event,{{ t.id }})"
+           onclick="openEditTask({{ t.id }},'{{ t.title|replace("'","\\'")|e }}','{{ (t.description or '')|replace("'","\\'")|e }}','{{ t.priority }}','{{ t.status }}',{{ t.assigned_to or 'null' }},'{{ t.due_date.strftime("%Y-%m-%dT%H:%M") if t.due_date else "" }}')">
+        <div class="task-actions">
+          <button class="tact-btn" onclick="aiPriority(event,{{ t.id }})" title="AI Priority"><i class="fa-solid fa-robot"></i></button>
+          <button class="tact-btn del" onclick="deleteTask(event,{{ t.id }})" title="Delete"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div class="task-title">{{ t.title }}</div>
+        {% if t.description %}
+        <div style="font-size:12px;color:var(--text3);line-height:1.4;margin-bottom:4px;">{{ t.description[:80] }}{% if t.description|length > 80 %}…{% endif %}</div>
+        {% endif %}
+        {% if t.ai_priority_reason %}
+        <div style="font-size:10.5px;color:var(--accent2);margin-bottom:4px;font-style:italic;"><i class="fa-solid fa-robot" style="font-size:9px;"></i> {{ t.ai_priority_reason[:60] }}…</div>
+        {% endif %}
+        <div class="task-meta">
+          <div class="priority-dot {{ p_class }}"></div>
+          <span style="font-size:10px;color:var(--text3);text-transform:capitalize;">{{ t.priority }}</span>
+          {% if aname %}
+          <div class="assignee-av" style="background:{{ acolor or '#6366f1' }}" title="{{ aname }}">{{ aname[:2].upper() }}</div>
+          {% endif %}
+          {% if t.due_date %}
+          {% set days_left = (t.due_date.date() - now.date()).days if t.due_date else 0 %}
+          <span class="due-badge {% if days_left < 0 %}due-over{% elif days_left <= 2 %}due-warn{% else %}due-ok{% endif %}">
+            <i class="fa-regular fa-calendar" style="font-size:9px;"></i>
+            {% if days_left < 0 %}{{ (-days_left) }}d overdue{% elif days_left == 0 %}Today{% else %}{{ days_left }}d left{% endif %}
+          </span>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <div style="padding:0 10px 10px;flex-shrink:0;">
+      <button class="add-task-btn" onclick="openNewTaskInCol('{{ col_id }}')">
+        <i class="fa-solid fa-plus"></i> Add task
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- New Task Modal -->
+<div class="modal-overlay" id="newTaskModal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-square-check" style="color:var(--accent)"></i> New Task</span>
+      <span class="modal-close" onclick="closeModal('newTaskModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <input type="hidden" id="nt-status" value="todo"/>
+    <div class="form-group">
+      <label class="form-label">Title *</label>
+      <input type="text" id="nt-title" class="form-control" placeholder="What needs to be done?" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea id="nt-desc" class="form-control" rows="2" placeholder="More details..." style="padding-left:12px"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select id="nt-priority" class="form-control" style="padding-left:12px">
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Due Date</label>
+        <input type="datetime-local" id="nt-due" class="form-control" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Assign To</label>
+      <select id="nt-assign" class="form-control" style="padding-left:12px">
+        <option value="">Unassigned</option>
+        {% for u in all_users %}<option value="{{ u.id }}">{{ u.full_name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('newTaskModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createTask()"><i class="fa-solid fa-plus"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div class="modal-overlay" id="editTaskModal">
+  <div class="modal" style="max-width:500px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-pen" style="color:var(--accent)"></i> Edit Task</span>
+      <span class="modal-close" onclick="closeModal('editTaskModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <input type="hidden" id="et-id"/>
+    <div class="form-group">
+      <label class="form-label">Title *</label>
+      <input type="text" id="et-title" class="form-control" style="padding-left:12px"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea id="et-desc" class="form-control" rows="2" style="padding-left:12px"></textarea>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select id="et-status" class="form-control" style="padding-left:12px">
+          <option value="todo">To Do</option>
+          <option value="in_progress">In Progress</option>
+          <option value="done">Done</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Priority</label>
+        <select id="et-priority" class="form-control" style="padding-left:12px">
+          <option value="low">Low</option>
+          <option value="medium">Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Assign To</label>
+        <select id="et-assign" class="form-control" style="padding-left:12px">
+          <option value="">Unassigned</option>
+          {% for u in all_users %}<option value="{{ u.id }}">{{ u.full_name }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Due Date</label>
+      <input type="datetime-local" id="et-due" class="form-control" style="padding-left:12px"/>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('editTaskModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="updateTask()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+let draggedId = null;
+const NOW = new Date();
+
+function dragStart(e, id) { draggedId = id; e.target.classList.add('dragging'); }
+function dragOver(e, col) { e.preventDefault(); document.getElementById('body-'+col).classList.add('drag-over'); }
+function dragLeave(e) { document.querySelectorAll('.col-body').forEach(c=>c.classList.remove('drag-over')); }
+async function drop(e, col) {
+  e.preventDefault(); dragLeave(e);
+  if (!draggedId) return;
+  const fd = new FormData(); fd.append('status', col);
+  await fetch(`/tasks/${draggedId}/move`, {method:'POST', body:fd});
+  document.getElementById('task-'+draggedId)?.classList.remove('dragging');
+  location.reload();
+}
+
+function openNewTaskInCol(col) {
+  document.getElementById('nt-status').value = col;
+  openModal('newTaskModal');
+}
+
+async function createTask() {
+  const fd = new FormData();
+  fd.append('title', document.getElementById('nt-title').value.trim());
+  fd.append('description', document.getElementById('nt-desc').value);
+  fd.append('priority', document.getElementById('nt-priority').value);
+  fd.append('status', document.getElementById('nt-status').value);
+  fd.append('assigned_to', document.getElementById('nt-assign').value);
+  fd.append('due_date', document.getElementById('nt-due').value);
+  fd.append('department', '{{ current_dept or user.department or "" }}');
+  if (!fd.get('title')) { toast('Title required', 'error'); return; }
+  const r = await fetch('/tasks/create', {method:'POST', body:fd});
+  if (r.ok) { toast('Task created!', 'success'); closeModal('newTaskModal'); setTimeout(()=>location.reload(), 500); }
+  else toast('Error', 'error');
+}
+
+function openEditTask(id, title, desc, priority, status, assignId, due) {
+  document.getElementById('et-id').value = id;
+  document.getElementById('et-title').value = title;
+  document.getElementById('et-desc').value = desc;
+  document.getElementById('et-priority').value = priority;
+  document.getElementById('et-status').value = status;
+  document.getElementById('et-assign').value = assignId || '';
+  document.getElementById('et-due').value = due || '';
+  openModal('editTaskModal');
+}
+
+async function updateTask() {
+  const id = document.getElementById('et-id').value;
+  const fd = new FormData();
+  fd.append('title', document.getElementById('et-title').value);
+  fd.append('description', document.getElementById('et-desc').value);
+  fd.append('priority', document.getElementById('et-priority').value);
+  fd.append('status', document.getElementById('et-status').value);
+  fd.append('assigned_to', document.getElementById('et-assign').value);
+  fd.append('due_date', document.getElementById('et-due').value);
+  const r = await fetch(`/tasks/${id}/update`, {method:'POST', body:fd});
+  if (r.ok) { toast('Updated!', 'success'); closeModal('editTaskModal'); setTimeout(()=>location.reload(), 500); }
+  else toast('Error', 'error');
+}
+
+async function deleteTask(e, id) {
+  e.stopPropagation();
+  if (!confirm('Delete this task?')) return;
+  const r = await fetch(`/tasks/${id}`, {method:'DELETE'});
+  if (r.ok) { document.getElementById('task-'+id)?.remove(); toast('Deleted', 'info'); }
+}
+
+async function aiPriority(e, id) {
+  e.stopPropagation();
+  toast('AI analyzing...', 'info');
+  const r = await fetch(`/tasks/${id}/ai-priority`, {method:'POST'});
+  if (r.ok) {
+    const d = await r.json();
+    toast(`AI suggests: ${d.priority} — ${d.reason}`, 'success');
+    setTimeout(()=>location.reload(), 1500);
+  }
+}
+</script>
+{% endblock %}
