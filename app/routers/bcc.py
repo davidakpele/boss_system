@@ -464,28 +464,120 @@ async def ai_screen_application(
     job = (await db.execute(select(JobPosting).where(JobPosting.id == app.job_id))).scalar_one_or_none()
 
     cv_content = app.cv_text or app.cover_letter or "No CV text available"
+
+    # ── Sanitize CV text before embedding in prompt ──────────────────────────
+    # Strip control characters and normalise whitespace so raw CV formatting
+    # (tables, columns, bullets, special chars) cannot break JSON output.
+    import re, unicodedata
+
+    def sanitize_cv(text: str) -> str:
+        # Normalise unicode (handles fancy quotes, dashes, ligatures, etc.)
+        text = unicodedata.normalize("NFKD", text)
+        # Replace non-printable / control chars (except newline/tab) with space
+        text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', ' ', text)
+        # Collapse runs of whitespace / blank lines
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        text = re.sub(r'[ \t]{2,}', ' ', text)
+        return text.strip()
+
+    safe_cv = sanitize_cv(cv_content)[:4000]  # hard cap keeps tokens manageable
+
     msgs = [
-        {"role": "system", "content": (
-            "You are an expert HR AI. Screen this candidate against the job requirements.\n"
-            "Return ONLY valid JSON with:\n"
-            "  score: 0-100 match percentage\n"
-            "  summary: 2-sentence candidate summary\n"
-            "  strengths: [list of 3 key strengths]\n"
-            "  gaps: [list of 1-3 gaps or concerns]\n"
-            "  recommendation: one of 'shortlist' | 'consider' | 'reject'\n"
-            "  reason: 2-sentence justification\n"
-        )},
-        {"role": "user", "content": (
-            f"JOB: {job.title}\n"
-            f"REQUIREMENTS:\n{job.requirements or job.description}\n\n"
-            f"CANDIDATE CV:\n{cv_content[:3000]}\n\n"
-            f"COVER LETTER:\n{app.cover_letter or 'None'}"
-        )},
+        {
+            "role": "system",
+            "content": (
+                "You are an expert HR screening AI. Your ONLY output must be a single valid JSON object "
+                "— no markdown, no prose, no code fences, no trailing commas.\n"
+                "Required JSON shape (use exactly these keys, all values must be JSON-safe strings/numbers/arrays):\n"
+                "{\n"
+                '  "score": <integer 0-100>,\n'
+                '  "summary": "<2 sentences, no line breaks, no quotes inside>",\n'
+                '  "strengths": ["<strength 1>", "<strength 2>", "<strength 3>"],\n'
+                '  "gaps": ["<gap 1>", "<gap 2>"],\n'
+                '  "recommendation": "<shortlist|consider|reject>",\n'
+                '  "reason": "<2 sentences, no line breaks, no quotes inside>"\n'
+                "}\n"
+                "Rules:\n"
+                "- Never embed raw CV text in your output.\n"
+                "- Escape any double quotes inside string values with \\\".\n"
+                "- Do not use newlines inside string values.\n"
+                "- Evaluate based on skills, experience, and relevance regardless of how the CV is formatted.\n"
+                "- A candidate with an unusual CV layout but good skills should NOT be penalised.\n"
+                "- If CV text is sparse or poorly extracted, base score on what IS available and note it in summary."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"JOB TITLE: {job.title if job else 'Unknown'}\n"
+                f"JOB REQUIREMENTS:\n{(job.requirements or job.description or 'Not specified')[:1500]}\n\n"
+                f"--- CANDIDATE CV (extracted text) ---\n{safe_cv}\n"
+                f"--- COVER LETTER ---\n{sanitize_cv(app.cover_letter or 'None')[:500]}"
+            ),
+        },
     ]
+
     result = await ai_service.chat_complete(msgs)
+
+    # ── Robust JSON extraction ────────────────────────────────────────────────
+    def extract_json(raw: str) -> dict:
+        """Try multiple strategies to extract a valid JSON object from the response."""
+        import json, re
+
+        # Strategy 1: strip common wrappers and parse directly
+        cleaned = raw.strip()
+        for fence in ("```json", "```"):
+            cleaned = cleaned.replace(fence, "")
+        cleaned = cleaned.strip()
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            pass
+
+        # Strategy 2: find the first {...} block (handles extra prose before/after)
+        match = re.search(r'\{[\s\S]*\}', cleaned)
+        if match:
+            try:
+                return json.loads(match.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 3: fix common AI mistakes — trailing commas, single quotes
+        attempt = re.sub(r',\s*([}\]])', r'\1', cleaned)   # trailing commas
+        attempt = attempt.replace("'", '"')                  # single → double quotes
+        match2 = re.search(r'\{[\s\S]*\}', attempt)
+        if match2:
+            try:
+                return json.loads(match2.group(0))
+            except json.JSONDecodeError:
+                pass
+
+        # Strategy 4: key-by-key regex scrape as last resort
+        def scrape(key, default):
+            m = re.search(rf'"{key}"\s*:\s*"([^"]*)"', raw)
+            return m.group(1) if m else default
+
+        def scrape_num(key, default):
+            m = re.search(rf'"{key}"\s*:\s*(\d+)', raw)
+            return int(m.group(1)) if m else default
+
+        def scrape_list(key):
+            m = re.search(rf'"{key}"\s*:\s*\[([^\]]*)\]', raw)
+            if not m: return []
+            return [x.strip().strip('"') for x in m.group(1).split(',') if x.strip()]
+
+        return {
+            "score":          scrape_num("score", 50),
+            "summary":        scrape("summary", "Could not fully parse AI response. Manual review recommended."),
+            "strengths":      scrape_list("strengths") or ["See raw CV"],
+            "gaps":           scrape_list("gaps") or ["Unable to determine"],
+            "recommendation": scrape("recommendation", "consider"),
+            "reason":         scrape("reason", "AI response parsing failed; please re-screen."),
+            "_parse_warning": True,
+        }
+
     try:
-        clean = result.strip().replace("```json","").replace("```","").strip()
-        data = json.loads(clean)
+        data = extract_json(result)
         app.ai_score = float(data.get("score", 50))
         app.ai_summary = data.get("summary", "")
         app.ai_recommendation = json.dumps(data)
@@ -493,8 +585,11 @@ async def ai_screen_application(
         await db.commit()
         return JSONResponse({"status": "screened", "data": data})
     except Exception as e:
-        return JSONResponse({"error": f"AI parse error: {e}", "raw": result}, status_code=422)
-
+        logger.error(f"AI screen fatal error for app {app_id}: {e}\nRaw: {result[:500]}")
+        return JSONResponse(
+            {"error": f"Fatal screening error: {e}", "raw": result[:300]},
+            status_code=422,
+        )
 
 @router.post("/bcc/hr/applications/{app_id}/bulk-screen")
 async def bulk_screen(
@@ -555,7 +650,7 @@ async def generate_hr_message(
         {"role": "user", "content": (
             f"Candidate: {app.applicant_name}\n"
             f"Job: {job.title if job else 'the position'}\n"
-            f"Company: BOSS System / MindSync AI Consults\n\n"
+            f"Company: BOSS System / WillStone Group AI Consults\n\n"
             f"Task: {type_prompts.get(msg_type, type_prompts['screening'])}"
         )},
     ]
