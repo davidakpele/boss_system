@@ -1,3 +1,4 @@
+# src/app/auth.py
 from datetime import datetime, timedelta
 from typing import Optional
 import bcrypt
@@ -67,3 +68,10 @@ async def require_admin(current_user: User = Depends(require_user)) -> User:
     if current_user.role not in ("super_admin", "admin"):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+def require_role(roles: list[str]):
+    async def _check(current_user: User = Depends(require_user)) -> User:
+        if current_user.role not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return current_user
+    return _check

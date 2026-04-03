@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BOSS — Offline</title>
+  <link rel="manifest" href="/static/manifest.json">
+  <style>
+    :root {
+      --bg:      #0a0a0f;
+      --surface: #12121a;
+      --border:  #1e1e2e;
+      --accent:  #4f46e5;
+      --text:    #e2e8f0;
+      --muted:   #64748b;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      text-align: center;
+      padding: 40px 24px;
+      max-width: 400px;
+    }
+    .icon {
+      width: 80px; height: 80px;
+      background: rgba(79,70,229,0.1);
+      border: 1px solid rgba(79,70,229,0.3);
+      border-radius: 20px;
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 32px;
+    }
+    .icon svg { color: #818cf8; }
+    h1 {
+      font-size: 24px; font-weight: 700;
+      margin-bottom: 12px; letter-spacing: -0.5px;
+    }
+    p {
+      color: var(--muted); font-size: 15px;
+      line-height: 1.6; margin-bottom: 32px;
+    }
+    .actions { display: flex; flex-direction: column; gap: 12px; }
+    button {
+      padding: 12px 24px; border-radius: 10px;
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent); color: white; border: none;
+    }
+    .btn-primary:hover { background: #4338ca; }
+    .btn-secondary {
+      background: var(--surface); color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent); }
+    .status {
+      margin-top: 24px; font-size: 12px; color: var(--muted);
+    }
+    .dot {
+      display: inline-block; width: 8px; height: 8px;
+      border-radius: 50%; background: #ef4444;
+      margin-right: 6px; animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="icon">
+      <svg width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path d="M1 6s4-4 11-4 11 4 11 4"/>
+        <path d="m1 1 22 22"/>
+        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/>
+        <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/>
+        <path d="M10.71 5.05A16 16 0 0 1 22.56 9"/>
+        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/>
+        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+        <circle cx="12" cy="20" r="1"/>
+      </svg>
+    </div>
+
+    <h1>You're Offline</h1>
+    <p>
+      BOSS can't reach the server right now. You can still browse
+      previously cached pages and documents.
+    </p>
+
+    <div class="actions">
+      <button class="btn-primary" onclick="window.location.reload()">
+        Try Again
+      </button>
+      <button class="btn-secondary" onclick="window.history.back()">
+        Go Back
+      </button>
+    </div>
+
+    <div class="status">
+      <span class="dot"></span>
+      No connection · BOSS v1.0
+    </div>
+  </div>
+
+  <script>
+    // Auto-reload when back online
+    window.addEventListener('online', () => window.location.reload());
+  </script>
+</body>
+</html>

@@ -56,6 +56,7 @@ async def dashboard(
         name="dashboard/index.html",
         context={
             "user": current_user,
+            "current_user": current_user,
             "stats": {
                 "documents": doc_count,
                 "users": user_count,

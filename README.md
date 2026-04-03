@@ -548,6 +548,7 @@ boss_system/
     ├── routers/
     │   ├── __init__.py
     │   ├── auth.py                 # /auth/* — login, register, logout, ws-token
+    │   ├── business_ops.py         # /Tasks/ -Meetings schedules
     │   ├── dashboard.py            # /dashboard — stats, activity feed
     │   ├── messages.py             # /messages/* — chat, WebSocket, file upload, delete
     │   ├── ask_boss.py             # /ask-boss/* — AI chat, SSE streaming, sessions

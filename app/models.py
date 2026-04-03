@@ -373,3 +373,45 @@ class ReportingLine(Base):
 
     employee = relationship("User", foreign_keys=[employee_id])
     manager = relationship("User", foreign_keys=[manager_id])
+    
+class IPAllowlist(Base):
+    """Office IP ranges/addresses that are allowed to access the system."""
+    __tablename__ = "ip_allowlist"
+    id         = Column(Integer, primary_key=True, index=True)
+    label      = Column(String(100), nullable=False)   # "Head Office", "VPN"
+    ip_range   = Column(String(50),  nullable=False)   # "192.168.1.0/24" | "203.0.113.5"
+    is_active  = Column(Boolean, default=True)
+    created_by = Column(Integer, ForeignKey("users.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    creator = relationship("User", foreign_keys=[created_by])
+ 
+ 
+class OAuthAccount(Base):
+    """Links a Google / Microsoft account to a local BOSS user."""
+    __tablename__ = "oauth_accounts"
+    id               = Column(Integer, primary_key=True, index=True)
+    user_id          = Column(Integer, ForeignKey("users.id"))
+    provider         = Column(String(50),  nullable=False)   # "google" | "microsoft"
+    provider_user_id = Column(String(255), nullable=False)
+    email            = Column(String(255))
+    access_token     = Column(Text, nullable=True)
+    refresh_token    = Column(Text, nullable=True)
+    created_at       = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")
+ 
+ 
+class PushSubscription(Base):
+    """One row per browser/device that has enabled push notifications."""
+    __tablename__ = "push_subscriptions"
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id"))
+    endpoint   = Column(Text, nullable=False)
+    p256dh     = Column(Text, nullable=False)
+    auth       = Column(Text, nullable=False)
+    user_agent = Column(String(255))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")
+ 

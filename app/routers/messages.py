@@ -71,6 +71,7 @@ async def messages_page(
         name="messages/index.html",
         context={
             "user": current_user,
+            "current_user": current_user,
             "channels": channels,
             "all_users": all_users,
             "all_channels": all_channels,

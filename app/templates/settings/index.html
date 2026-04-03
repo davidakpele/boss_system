@@ -40,6 +40,86 @@
     </form>
   </div>
 
+  {# ── Notifications & PWA Card ── #}
+<div class="card mt-4">
+  <div class="card-title">
+    <i class="fa-solid fa-bell" style="color:var(--accent)"></i> Notifications & App
+  </div>
+ 
+  {# Push Notifications row #}
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:14px 0;border-bottom:1px solid var(--border);gap:16px;flex-wrap:wrap;">
+    <div style="min-width:0;">
+      <div style="font-weight:600;font-size:13.5px;">Push Notifications</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">
+        Get notified of new messages and @mentions even when the tab is closed.
+        Requires browser permission.
+      </div>
+    </div>
+    <button id="pushToggleBtn" class="btn btn-ghost btn-sm"
+            style="flex-shrink:0;" onclick="requestPushPermission()">
+      <i class="fa-solid fa-bell"></i> Enable Notifications
+    </button>
+  </div>
+ 
+  {# Test row #}
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:14px 0;border-bottom:1px solid var(--border);gap:16px;flex-wrap:wrap;">
+    <div style="min-width:0;">
+      <div style="font-weight:600;font-size:13.5px;">Send Test Notification</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">
+        Verify your push setup is working correctly.
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" style="flex-shrink:0;" onclick="testPush()">
+      <i class="fa-solid fa-paper-plane"></i> Send Test
+    </button>
+  </div>
+ 
+  {# Install PWA row #}
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              padding:14px 0;gap:16px;flex-wrap:wrap;">
+    <div style="min-width:0;">
+      <div style="font-weight:600;font-size:13.5px;">Install BOSS App</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">
+        Add BOSS to your home screen for a native-app experience — works offline too.
+      </div>
+    </div>
+    <div style="flex-shrink:0;">
+      <button id="installPwaBtn" class="btn btn-primary btn-sm"
+              onclick="installPWA()" style="display:none;">
+        <i class="fa-solid fa-download"></i> Install App
+      </button>
+      <span id="pwaInstalledBadge" class="badge badge-green" style="display:none;">
+        <i class="fa-solid fa-check"></i> Installed
+      </span>
+      <span id="pwaNotAvailableBadge" class="text-xs text-muted">
+        Open in a supported browser to install
+      </span>
+    </div>
+  </div>
+</div>
+ 
+{# ── IP Allowlist Link (super_admin only) ── #}
+{% if user.role.value == 'super_admin' %}
+<div class="card mt-4">
+  <div class="card-title">
+    <i class="fa-solid fa-shield-halved" style="color:var(--accent)"></i> Security
+  </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+    <div>
+      <div style="font-weight:600;font-size:13.5px;">IP Allowlist</div>
+      <div style="font-size:12px;color:var(--text3);margin-top:3px;">
+        Restrict system access to specific office IP ranges.
+      </div>
+    </div>
+    <a href="/settings/ip-allowlist" class="btn btn-ghost btn-sm" style="flex-shrink:0;">
+      <i class="fa-solid fa-network-wired"></i> Manage
+    </a>
+  </div>
+</div>
+{% endif %}
+
   <!-- Change Password -->
   <div class="card">
     <div class="card-title"><i class="fa-solid fa-lock" style="color:var(--yellow)"></i> Security</div>
@@ -81,28 +161,45 @@
 
 {% block extra_js %}
 <script>
-async function updateProfile(e) {
-  e.preventDefault();
-  const fd = new FormData();
-  fd.append('full_name', document.getElementById('p-name').value);
-  fd.append('department', document.getElementById('p-dept').value);
-  const resp = await fetch('/settings/profile', { method:'POST', body:fd });
-  if (resp.ok) toast('Profile updated!', 'success');
-  else toast('Error updating profile', 'error');
-}
+  async function testPush() {
+    const r = await fetch('/push/test', { method: 'POST' });
+    const d = await r.json();
+    if (r.ok && d.sent > 0) toast(`Test sent to ${d.sent} device(s) 🔔`, 'success');
+    else if (d.error)       toast(d.error, 'error');
+    else                    toast('No active subscriptions. Enable notifications first.', 'error');
+  }
+  
+  // Update Install button visibility
+  if (window.matchMedia('(display-mode: standalone)').matches || navigator.standalone) {
+    document.getElementById('installPwaBtn')?.style && (document.getElementById('installPwaBtn').style.display = 'none');
+    document.getElementById('pwaInstalledBadge').style.display  = 'inline-flex';
+    document.getElementById('pwaNotAvailableBadge').style.display = 'none';
+  } else {
+    document.getElementById('pwaNotAvailableBadge').style.display = 'none';
+  }
 
-async function changePassword(e) {
-  e.preventDefault();
-  const newpw = document.getElementById('pw-new').value;
-  const conf = document.getElementById('pw-conf').value;
-  if (newpw !== conf) { toast('Passwords do not match', 'error'); return; }
-  const fd = new FormData();
-  fd.append('current_password', document.getElementById('pw-cur').value);
-  fd.append('new_password', newpw);
-  const resp = await fetch('/settings/password', { method:'POST', body:fd });
-  const data = await resp.json();
-  if (resp.ok) { toast('Password updated!', 'success'); document.getElementById('pw-cur').value=''; document.getElementById('pw-new').value=''; document.getElementById('pw-conf').value=''; }
-  else toast(data.error || 'Error', 'error');
-}
+  async function updateProfile(e) {
+    e.preventDefault();
+    const fd = new FormData();
+    fd.append('full_name', document.getElementById('p-name').value);
+    fd.append('department', document.getElementById('p-dept').value);
+    const resp = await fetch('/settings/profile', { method:'POST', body:fd });
+    if (resp.ok) toast('Profile updated!', 'success');
+    else toast('Error updating profile', 'error');
+  }
+
+  async function changePassword(e) {
+    e.preventDefault();
+    const newpw = document.getElementById('pw-new').value;
+    const conf = document.getElementById('pw-conf').value;
+    if (newpw !== conf) { toast('Passwords do not match', 'error'); return; }
+    const fd = new FormData();
+    fd.append('current_password', document.getElementById('pw-cur').value);
+    fd.append('new_password', newpw);
+    const resp = await fetch('/settings/password', { method:'POST', body:fd });
+    const data = await resp.json();
+    if (resp.ok) { toast('Password updated!', 'success'); document.getElementById('pw-cur').value=''; document.getElementById('pw-new').value=''; document.getElementById('pw-conf').value=''; }
+    else toast(data.error || 'Error', 'error');
+  }
 </script>
 {% endblock %}

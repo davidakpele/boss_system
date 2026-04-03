@@ -1,0 +1,212 @@
+{# app/templates/settings/ip_allowlist.html #}
+{% extends "base.html" %}
+{% block title %}IP Allowlist — BOSS Settings{% endblock %}
+{% block page_title %}IP Allowlist{% endblock %}
+{% block page_sub %}Restrict access to authorised network ranges{% endblock %}
+
+{% block content %}
+<div style="max-width:720px;">
+
+  {# ── Status banner ── #}
+  <div class="card mb-6" style="border-left:4px solid {% if ip_enabled %}var(--green){% else %}var(--text3){% endif %};">
+    <div class="flex items-center gap-3">
+      <div style="flex:1;">
+        <div style="font-weight:600;font-size:14px;">
+          IP Allowlist is
+          <strong style="color:{% if ip_enabled %}var(--green){% else %}var(--text3){% endif %};">
+            {% if ip_enabled %}ENFORCED{% else %}DISABLED{% endif %}
+          </strong>
+        </div>
+        <div style="font-size:12px;color:var(--text3);margin-top:4px;">
+          {% if ip_enabled %}
+            Only IPs listed below can access the system.
+          {% else %}
+            Set <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;">IP_ALLOWLIST_ENABLED=true</code>
+            in <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;">.env</code>
+            to enforce these rules.
+          {% endif %}
+        </div>
+      </div>
+      <span class="badge badge-{% if ip_enabled %}green{% else %}gray{% endif %}" style="flex-shrink:0;">
+        <i class="fa-solid fa-shield-halved"></i>
+        {% if ip_enabled %}Active{% else %}Inactive{% endif %}
+      </span>
+    </div>
+  </div>
+
+  {# ── Your current IP helper ── #}
+  <div class="card mb-6" style="background:var(--accent-glow);border-color:rgba(59,130,246,.25);">
+    <div class="flex items-center gap-3">
+      <i class="fa-solid fa-circle-info" style="color:var(--accent);font-size:18px;"></i>
+      <div>
+        <div style="font-size:13px;font-weight:600;">Your current IP address:</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent2);margin-top:2px;" id="myIp">
+          Detecting…
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-xs" style="margin-left:auto;" onclick="addMyIp()">
+        <i class="fa-solid fa-plus"></i> Add my IP
+      </button>
+    </div>
+  </div>
+
+  {# ── Add Rule Form ── #}
+  <div class="card mb-6">
+    <div class="card-title"><i class="fa-solid fa-plus-circle" style="color:var(--accent)"></i> Add IP Rule</div>
+    <div style="display:grid;grid-template-columns:1fr 2fr auto;gap:12px;align-items:end;">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Label</label>
+        <input type="text" id="ip-label" class="form-control" placeholder="Head Office" style="padding-left:12px"/>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">IP Address or CIDR Range</label>
+        <input type="text" id="ip-range" class="form-control"
+               placeholder="e.g. 192.168.1.0/24 or 203.0.113.5" style="padding-left:12px"/>
+      </div>
+      <button class="btn btn-primary" onclick="addRule()" style="flex-shrink:0;">
+        <i class="fa-solid fa-plus"></i> Add
+      </button>
+    </div>
+    <div style="font-size:11.5px;color:var(--text3);margin-top:8px;">
+      Examples:
+      <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;">10.0.0.0/8</code> (LAN) ·
+      <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;">203.0.113.0/24</code> (office block) ·
+      <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;">1.2.3.4</code> (single IP) ·
+      <code style="background:var(--bg3);padding:1px 5px;border-radius:4px;">127.0.0.1</code> (localhost)
+    </div>
+  </div>
+
+  {# ── Rules Table ── #}
+  <div class="card">
+    <div class="card-title">
+      <i class="fa-solid fa-network-wired" style="color:var(--accent)"></i>
+      Allowed Ranges
+      <span class="badge badge-blue" style="margin-left:4px;">{{ rules|length }}</span>
+    </div>
+
+    {% if rules %}
+    <div style="overflow-x:auto;">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Label</th>
+            <th>IP / CIDR</th>
+            <th>Status</th>
+            <th>Added</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rulesBody">
+          {% for r in rules %}
+          <tr id="rule-{{ r.id }}">
+            <td style="font-weight:500;">{{ r.label }}</td>
+            <td>
+              <code style="background:var(--bg3);padding:2px 8px;border-radius:5px;font-size:12px;font-family:'JetBrains Mono',monospace;">
+                {{ r.ip_range }}
+              </code>
+            </td>
+            <td>
+              <span class="badge badge-{% if r.is_active %}green{% else %}gray{% endif %}" id="badge-{{ r.id }}">
+                {% if r.is_active %}● Active{% else %}○ Disabled{% endif %}
+              </span>
+            </td>
+            <td class="text-xs text-muted">{{ r.created_at.strftime('%b %d, %Y') if r.created_at else '—' }}</td>
+            <td>
+              <div class="flex gap-2">
+                <button class="btn btn-ghost btn-xs" id="toggle-{{ r.id }}"
+                        onclick="toggleRule({{ r.id }}, {{ r.is_active|lower }})">
+                  {% if r.is_active %}
+                  <i class="fa-solid fa-pause"></i> Disable
+                  {% else %}
+                  <i class="fa-solid fa-play"></i> Enable
+                  {% endif %}
+                </button>
+                <button class="btn btn-danger btn-xs" onclick="deleteRule({{ r.id }})">
+                  <i class="fa-solid fa-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:48px 20px;color:var(--text3);">
+      <i class="fa-solid fa-network-wired" style="font-size:36px;opacity:.2;display:block;margin-bottom:12px;"></i>
+      No IP rules yet. Add your office IP ranges above.
+      <div style="font-size:11.5px;margin-top:8px;color:var(--red);">
+        ⚠️ If you enable the allowlist without any rules, <strong>everyone will be blocked</strong> including you!
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  {# ── Back link ── #}
+  <div style="margin-top:16px;">
+    <a href="/settings" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> Back to Settings</a>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let MY_IP = '';
+
+// Detect user's current IP
+fetch('https://api.ipify.org?format=json')
+  .then(r => r.json())
+  .then(d => { MY_IP = d.ip; document.getElementById('myIp').textContent = d.ip; })
+  .catch(() => { document.getElementById('myIp').textContent = 'Could not detect (check ipify.org)'; });
+
+async function addMyIp() {
+  if (!MY_IP) { toast('IP not detected yet', 'error'); return; }
+  document.getElementById('ip-label').value = 'My IP';
+  document.getElementById('ip-range').value = MY_IP;
+  await addRule();
+}
+
+async function addRule() {
+  const label = document.getElementById('ip-label').value.trim();
+  const range  = document.getElementById('ip-range').value.trim();
+  if (!label || !range) { toast('Label and IP/CIDR are required', 'error'); return; }
+  const fd = new FormData();
+  fd.append('label', label);
+  fd.append('ip_range', range);
+  const r = await fetch('/settings/ip-allowlist/add', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (r.ok) { toast('Rule added!', 'success'); setTimeout(() => location.reload(), 500); }
+  else toast(d.error || 'Invalid IP/CIDR format', 'error');
+}
+
+async function deleteRule(id) {
+  if (!confirm('Remove this IP rule?')) return;
+  const r = await fetch(`/settings/ip-allowlist/${id}`, { method: 'DELETE' });
+  if (r.ok) {
+    document.getElementById('rule-' + id)?.remove();
+    toast('Rule removed', 'info');
+  }
+}
+
+async function toggleRule(id, isActive) {
+  const r = await fetch(`/settings/ip-allowlist/${id}/toggle`, { method: 'POST' });
+  if (r.ok) {
+    const d = await r.json();
+    const badge  = document.getElementById('badge-' + id);
+    const button = document.getElementById('toggle-' + id);
+    if (d.is_active) {
+      badge.className  = 'badge badge-green';
+      badge.textContent = '● Active';
+      button.innerHTML = '<i class="fa-solid fa-pause"></i> Disable';
+      button.onclick   = () => toggleRule(id, true);
+    } else {
+      badge.className  = 'badge badge-gray';
+      badge.textContent = '○ Disabled';
+      button.innerHTML = '<i class="fa-solid fa-play"></i> Enable';
+      button.onclick   = () => toggleRule(id, false);
+    }
+    toast('Updated', 'success');
+  }
+}
+</script>
+{% endblock %}

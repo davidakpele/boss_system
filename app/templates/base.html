@@ -792,6 +792,122 @@
     document.querySelectorAll('.modal-overlay').forEach(o => {
       o.addEventListener('click', e => { if (e.target === o) o.classList.remove('open'); });
     });
+
+    // ── 1. Register Service Worker ────────────────────────────────────────────────
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' })
+          .then(r  => console.log('[BOSS SW] registered', r.scope))
+          .catch(e => console.warn('[BOSS SW] failed', e));
+      });
+    }
+    
+    // ── 2. Push Notifications ─────────────────────────────────────────────────────
+    let _pushEnabled = false;
+    
+    async function _getPushKey() {
+      try {
+        const r = await fetch('/push/vapid-public-key');
+        const d = await r.json();
+        return d.publicKey || null;
+      } catch { return null; }
+    }
+    
+    async function initPushNotifications() {
+      if (!('Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window)) return;
+      const key = await _getPushKey();
+      if (!key) return;   // VAPID not configured server-side
+    
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) { _pushEnabled = true; _updatePushBtn(true); }
+    }
+    
+    async function requestPushPermission() {
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { if (typeof toast !== 'undefined') toast('Notification permission denied', 'error'); return; }
+    
+      const key = await _getPushKey();
+      if (!key) { if (typeof toast !== 'undefined') toast('Push not configured on server (no VAPID key)', 'error'); return; }
+    
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly:      true,
+        applicationServerKey: _urlB64ToUint8(key),
+      });
+    
+      const r = await fetch('/push/subscribe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(sub),
+      });
+      if (r.ok) {
+        _pushEnabled = true;
+        _updatePushBtn(true);
+        if (typeof toast !== 'undefined') toast('Push notifications enabled 🔔', 'success');
+      }
+    }
+    
+    async function disablePush() {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch('/push/subscribe', {
+          method:  'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ endpoint: sub.endpoint }),
+        });
+        await sub.unsubscribe();
+      }
+      _pushEnabled = false;
+      _updatePushBtn(false);
+      if (typeof toast !== 'undefined') toast('Push notifications disabled', 'info');
+    }
+    
+    function _updatePushBtn(enabled) {
+      const btn = document.getElementById('pushToggleBtn');
+      if (!btn) return;
+      btn.innerHTML = enabled
+        ? '<i class="fa-solid fa-bell-slash"></i> Disable Notifications'
+        : '<i class="fa-solid fa-bell"></i> Enable Notifications';
+      btn.onclick = enabled ? disablePush : requestPushPermission;
+    }
+    
+    function _urlB64ToUint8(b64) {
+      const padding = '='.repeat((4 - b64.length % 4) % 4);
+      const raw = atob((b64 + padding).replace(/-/g, '+').replace(/_/g, '/'));
+      return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+    }
+    
+    // ── 3. PWA Install Prompt ─────────────────────────────────────────────────────
+    let _deferredInstall = null;
+    window.addEventListener('beforeinstallprompt', e => {
+      e.preventDefault();
+      _deferredInstall = e;
+      const btn = document.getElementById('installPwaBtn');
+      if (btn) { btn.style.display = 'flex'; }
+      const na = document.getElementById('pwaNotAvailableBadge');
+      if (na)  { na.style.display = 'none'; }
+    });
+    
+    async function installPWA() {
+      if (!_deferredInstall) return;
+      _deferredInstall.prompt();
+      const { outcome } = await _deferredInstall.userChoice;
+      if (outcome === 'accepted' && typeof toast !== 'undefined')
+        toast('BOSS installed on your device 🎉', 'success');
+      _deferredInstall = null;
+      const btn = document.getElementById('installPwaBtn');
+      if (btn) btn.style.display = 'none';
+    }
+    
+    window.addEventListener('appinstalled', () => {
+      _deferredInstall = null;
+      if (typeof toast !== 'undefined') toast('BOSS is installed!', 'success');
+    });
+    
+    // Initialise on load
+    window.addEventListener('DOMContentLoaded', initPushNotifications);
   </script>
 
   {% block extra_js %}{% endblock %}
