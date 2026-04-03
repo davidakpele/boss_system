@@ -630,7 +630,19 @@
       <a href="/ask-boss"   class="nav-item {% if page == 'ask_boss' %}active{% endif %}">
         <i class="fa-solid fa-microchip"></i> Ask BOSS
       </a>
-
+       <div class="nav-section-label mt-4">Command Centre</div>
+        <a href="/bcc" class="nav-item {% if request.url.path == '/bcc' %}active{% endif %}">
+          <i class="fa-solid fa-sliders"></i> BCC Dashboard
+        </a>
+        <a href="/bcc/accounting" class="nav-item {% if request.url.path.startswith('/bcc/accounting') %}active{% endif %}">
+          <i class="fa-solid fa-coins"></i> Accounting
+        </a>
+        <a href="/bcc/inventory" class="nav-item {% if request.url.path.startswith('/bcc/inventory') %}active{% endif %}">
+          <i class="fa-solid fa-boxes-stacked"></i> Inventory
+        </a>
+        <a href="/bcc/hr" class="nav-item {% if request.url.path.startswith('/bcc/hr') %}active{% endif %}">
+          <i class="fa-solid fa-user-tie"></i> AI Recruitment
+        </a>
       <div class="nav-section-label">Knowledge</div>
       <a href="/knowledge-base" class="nav-item {% if page == 'knowledge_base' %}active{% endif %}">
         <i class="fa-regular fa-folder-open"></i> Knowledge Base
@@ -670,19 +682,7 @@
         <a href="/leave" class="nav-item {% if page == 'leave' %}active{% endif %}">
           <i class="fa-regular fa-calendar-minus"></i> Leave Tracker
         </a>
-        <div class="nav-section-label mt-4">Command Centre</div>
-        <a href="/bcc" class="nav-item {% if page == 'bcc' %}active{% endif %}">
-          <i class="fa-solid fa-tower-control"></i> BCC Dashboard
-        </a>
-        <a href="/bcc/accounting" class="nav-item {% if page == 'accounting' %}active{% endif %}">
-          <i class="fa-solid fa-coins"></i> Accounting
-        </a>
-        <a href="/bcc/inventory" class="nav-item {% if page == 'inventory' %}active{% endif %}">
-          <i class="fa-solid fa-boxes-stacked"></i> Inventory
-        </a>
-        <a href="/bcc/hr" class="nav-item {% if page == 'hr' %}active{% endif %}">
-          <i class="fa-solid fa-user-tie"></i> AI Recruitment
-        </a>
+       
       {% if user.role in ('super_admin', 'admin') %}
       <div class="nav-section-label">System</div>
       <a href="/audit-logs" class="nav-item {% if page == 'audit' %}active{% endif %}">

@@ -56,13 +56,13 @@
 {# ── Module Cards ── #}
 <div class="bcc-module-grid">
   <a href="/bcc/accounting" class="module-card">
-    <div class="module-icon" style="background:rgba(16,185,129,0.1);color:#34d399;">💰</div>
+    <div class="module-icon" style="background:rgba(16,185,129,0.1);color:#34d399;"><i class="fa-solid fa-coins"></i></div>
     <div class="module-title">Accounting</div>
     <div class="module-desc">Income, expenses, P&L reports. Chat to record transactions in plain English.</div>
     <span class="badge badge-green">{{ recent_txns|length }} recent records</span>
   </a>
   <a href="/bcc/inventory" class="module-card">
-    <div class="module-icon" style="background:rgba(59,130,246,0.1);color:#60a5fa;">📦</div>
+    <div class="module-icon" style="background:rgba(59,130,246,0.1);color:#60a5fa;"><i class="fa-solid fa-boxes-stacked"></i></div>
     <div class="module-title">Inventory</div>
     <div class="module-desc">Track stock levels, movements, reorder alerts and supplier info.</div>
     <span class="badge badge-{% if low_stock|length > 0 %}red{% else %}green{% endif %}">
@@ -70,7 +70,7 @@
     </span>
   </a>
   <a href="/bcc/hr" class="module-card">
-    <div class="module-icon" style="background:rgba(139,92,246,0.1);color:#a78bfa;">🤖</div>
+    <div class="module-icon" style="background:rgba(139,92,246,0.1);color:#a78bfa;"><i class="fa-solid fa-robot"></i></div>
     <div class="module-title">AI Recruitment</div>
     <div class="module-desc">Post jobs, screen CVs with AI, manage the full hiring pipeline automatically.</div>
     <div class="flex gap-2" style="justify-content:center;">

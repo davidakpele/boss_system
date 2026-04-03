@@ -2,182 +2,568 @@
 {% block title %}Accounting — BOSS BCC{% endblock %}
 {% block page_title %}Accounting{% endblock %}
 {% block page_sub %}Income · Expenses · P&L · AI Transaction Entry{% endblock %}
+
 {% block extra_css %}
-.acc-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
-.acc-kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; }
-.acc-kpi-val { font-family:'Syne',sans-serif; font-weight:800; font-size:24px; margin-top:4px; }
-.txn-table { width:100%; border-collapse:collapse; }
-.txn-table th { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); font-weight:600; padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; }
-.txn-table td { padding:11px 14px; border-bottom:1px solid rgba(31,45,66,0.4); font-size:13.5px; }
-.txn-table tr:last-child td { border-bottom:none; }
-.txn-table tr:hover td { background:rgba(255,255,255,.015); }
-.ai-chat-bar {
-  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
-  padding:16px; margin-bottom:20px;
+/* ── Accounting Layout ── */
+.acc-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  margin-bottom: 24px;
 }
-.ai-input-row { display:flex; gap:10px; align-items:flex-end; }
-.ai-textarea { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; color:var(--text); font-size:13.5px; font-family:'DM Sans',sans-serif; resize:none; outline:none; transition:border-color .15s; }
-.ai-textarea:focus { border-color:var(--accent); }
-.ai-textarea::placeholder { color:var(--text3); }
-.ai-result { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px; margin-top:12px; display:none; }
-.type-badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
-.income-badge  { background:rgba(16,185,129,.1);  color:#34d399; }
-.expense-badge { background:rgba(239,68,68,.1);   color:#f87171; }
-@media(max-width:700px){ .acc-summary{grid-template-columns:1fr 1fr;} }
+.acc-kpi {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color .2s, box-shadow .2s;
+}
+.acc-kpi::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+.acc-kpi.income::before  { background: #34d399; }
+.acc-kpi.expense::before { background: #f87171; }
+.acc-kpi.net::before     { background: var(--accent); }
+.acc-kpi:hover { border-color: rgba(255,255,255,.08); box-shadow: 0 4px 24px rgba(0,0,0,.15); }
+.acc-kpi-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+.acc-kpi-icon.income  { background: rgba(52,211,153,.12); color: #34d399; }
+.acc-kpi-icon.expense { background: rgba(248,113,113,.12); color: #f87171; }
+.acc-kpi-icon.net     { background: rgba(var(--accent-rgb),.12); color: var(--accent); }
+.acc-kpi-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .09em; color: var(--text3); font-weight: 600; margin-bottom: 4px; }
+.acc-kpi-val   { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.1; }
+
+/* ── AI Transaction Card ── */
+.ai-entry-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  margin-bottom: 24px;
+  overflow: hidden;
+}
+.ai-entry-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.015);
+}
+.ai-entry-icon {
+  width: 40px; height: 40px; border-radius: 12px;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb),.25), rgba(var(--accent-rgb),.08));
+  border: 1px solid rgba(var(--accent-rgb),.2);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent); font-size: 17px;
+  flex-shrink: 0;
+}
+.ai-entry-header-text { flex: 1; min-width: 0; }
+.ai-entry-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 14.5px;
+  color: var(--text);
+  margin-bottom: 2px;
+}
+.ai-entry-subtitle { font-size: 12px; color: var(--text3); }
+.ai-status-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #34d399;
+  box-shadow: 0 0 0 3px rgba(52,211,153,.18);
+  flex-shrink: 0;
+  animation: pulse-dot 2.4s ease-in-out infinite;
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(52,211,153,.18); }
+  50%       { box-shadow: 0 0 0 6px rgba(52,211,153,.06); }
+}
+
+.ai-entry-body { padding: 20px 24px; }
+
+.ai-examples {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.ai-example-chip {
+  font-size: 11.5px; color: var(--text3);
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.ai-example-chip i { font-size: 10px; color: var(--accent); }
+.ai-example-chip:hover {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(var(--accent-rgb),.06);
+}
+
+.ai-input-wrap {
+  display: flex; gap: 10px; align-items: flex-end;
+}
+.ai-textarea-wrapper {
+  flex: 1; position: relative;
+}
+.ai-textarea-prefix {
+  position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+  color: var(--accent); font-size: 13px; pointer-events: none;
+}
+.ai-textarea {
+  width: 100%;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 13px 14px 13px 40px;
+  color: #52525b;
+  font-size: 13.5px;
+  font-family: 'DM Sans', sans-serif;
+  resize: none;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+  line-height: 1.5;
+  min-height: 52px;
+  box-sizing: border-box;
+}
+.ai-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb),.1);
+}
+.ai-textarea::placeholder { color: gray; }
+.ai-parse-btn {
+  display: flex; align-items: center; gap: 8px;
+  white-space: nowrap; flex-shrink: 0;
+  padding: 13px 20px;
+  height: 32px;
+  margin-bottom: 5px;
+}
+
+/* AI Result panel */
+.ai-result {
+  margin-top: 16px;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  display: none;
+}
+.ai-result-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255,255,255,.02);
+}
+.ai-result-header i.fa-circle-check { color: #34d399; }
+.ai-result-body { padding: 16px; }
+.ai-result-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.ai-result-actions {
+  display: flex; gap: 8px; flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+/* Type badge */
+.type-badge  { padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+.income-badge  { background: rgba(16,185,129,.12); color: #34d399; }
+.expense-badge { background: rgba(239,68,68,.12);  color: #f87171; }
+
+/* ── Toolbar ── */
+.acc-toolbar {
+  display: flex; align-items: center; gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.acc-toolbar-filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.acc-toolbar-actions { display: flex; gap: 8px; margin-left: auto; }
+
+/* ── Transaction Table ── */
+.txn-table { width: 100%; border-collapse: collapse; }
+.txn-table th {
+  font-size: 10.5px; text-transform: uppercase; letter-spacing: .07em;
+  color: var(--text3); font-weight: 600;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.txn-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid rgba(31,45,66,.4);
+  font-size: 13.5px;
+  vertical-align: middle;
+}
+.txn-table tr:last-child td { border-bottom: none; }
+.txn-table tr:hover td { background: rgba(255,255,255,.012); }
+.txn-amount { font-weight: 700; font-variant-numeric: tabular-nums; }
+.txn-desc   { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.txn-mono   { font-family: monospace; font-size: 12px; color: var(--text3); }
+.ai-tag     { font-size: 9px; color: var(--accent); margin-left: 5px; vertical-align: middle; }
+
+/* Mobile card view for table rows */
+.txn-card-view { display: none; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .acc-summary { grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .acc-kpi-val { font-size: 20px; }
+}
+
+@media (max-width: 700px) {
+  .acc-summary { grid-template-columns: 1fr 1fr; }
+  .acc-kpi:last-child { grid-column: 1 / -1; }
+  .acc-kpi { padding: 16px 18px; }
+  .acc-kpi-val { font-size: 22px; }
+  .ai-input-wrap { flex-direction: column; }
+  .ai-parse-btn  { width: 100%; justify-content: center; height: auto; padding: 13px 20px; }
+  .ai-entry-header { padding: 14px 16px; }
+  .ai-entry-body { padding: 14px 16px; }
+  .ai-textarea-wrapper { width: 100%; }
+.ai-textarea { width: 100%; box-sizing: border-box; }
+  .acc-toolbar { gap: 8px; }
+  .acc-toolbar-actions { margin-left: 0; width: 100%; justify-content: flex-end; }
+
+  /* Hide desktop table, show card list */
+  .txn-table-wrap { display: none; }
+  .txn-card-view  { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+  .txn-card {
+    background: rgb(184 164 183 / 9%);
+    border: 1px solid rgba(220, 38, 38, 0.08);
+    border-radius: 10px;
+    padding: 14px;
+  }
+  .txn-card-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .txn-card-meta { font-size: 11.5px; color: var(--text3); margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+}
+
+@media (max-width: 460px) {
+  .acc-summary { grid-template-columns: 1fr; }
+  .acc-kpi:last-child { grid-column: auto; }
+  .ai-examples { display: none; }
+  .ai-result-grid { grid-template-columns: 1fr; }
+}
 {% endblock %}
+
 {% block content %}
 
-{# ── KPI ── #}
+{# ── KPI Cards ── #}
 <div class="acc-summary">
-  <div class="acc-kpi">
-    <div class="stat-label">Total Income</div>
+  <div class="acc-kpi income">
+    <div class="acc-kpi-icon income"><i class="fa-solid fa-arrow-trend-up"></i></div>
+    <div class="acc-kpi-label">Total Income</div>
     <div class="acc-kpi-val" style="color:#34d399;">${{ "{:,.2f}".format(total_income) }}</div>
   </div>
-  <div class="acc-kpi">
-    <div class="stat-label">Total Expenses</div>
+  <div class="acc-kpi expense">
+    <div class="acc-kpi-icon expense"><i class="fa-solid fa-arrow-trend-down"></i></div>
+    <div class="acc-kpi-label">Total Expenses</div>
     <div class="acc-kpi-val" style="color:#f87171;">${{ "{:,.2f}".format(total_expense) }}</div>
   </div>
-  <div class="acc-kpi">
-    <div class="stat-label">Net {{ 'Profit' if net >= 0 else 'Loss' }}</div>
-    <div class="acc-kpi-val" style="color:{% if net >= 0 %}#34d399{% else %}#f87171{% endif %};">${{ "{:,.2f}".format(net|abs) }}</div>
+  <div class="acc-kpi net">
+    <div class="acc-kpi-icon net"><i class="fa-solid fa-scale-balanced"></i></div>
+    <div class="acc-kpi-label">Net {{ 'Profit' if net >= 0 else 'Loss' }}</div>
+    <div class="acc-kpi-val" style="color:{% if net >= 0 %}#34d399{% else %}#f87171{% endif %};">
+      ${{ "{:,.2f}".format(net|abs) }}
+    </div>
   </div>
 </div>
 
 {# ── AI Transaction Entry ── #}
-<div class="ai-chat-bar">
-  <div class="card-title mb-2"><i class="fa-solid fa-robot" style="color:var(--accent)"></i> Record Transaction with AI</div>
-  <div style="font-size:12.5px;color:var(--text3);margin-bottom:10px;">
-    Type naturally — e.g. <em>"I paid $15,000 for office supplies"</em> or <em>"Received $200,000 from client payment"</em>
-  </div>
-  <div class="ai-input-row">
-    <textarea class="ai-textarea" id="aiInput" rows="2" placeholder="Describe your transaction in plain English..."></textarea>
-    <button class="btn btn-primary" onclick="aiParse()"><i class="fa-solid fa-robot"></i> Parse</button>
-  </div>
-  <div class="ai-result" id="aiResult">
-    <div class="flex items-center gap-2 mb-3">
-      <span id="aiTypeBadge" class="type-badge"></span>
-      <span style="font-size:13px;color:var(--text3);">AI parsed your transaction — review and confirm</span>
+<div class="ai-entry-card">
+  <div class="ai-entry-header">
+    <div class="ai-entry-icon"><i class="fa-solid fa-microchip-ai"></i></div>
+    <div class="ai-entry-header-text">
+      <div class="ai-entry-title">Record Transaction with AI</div>
+      <div class="ai-entry-subtitle">Describe any transaction in plain language — AI extracts and structures it instantly</div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
-      <div><div class="form-label">Amount</div><input id="cfAmount" type="number" class="form-control" style="padding-left:12px"/></div>
-      <div><div class="form-label">Category</div><input id="cfCategory" type="text" class="form-control" style="padding-left:12px"/></div>
-      <div><div class="form-label">Date</div><input id="cfDate" type="datetime-local" class="form-control" style="padding-left:12px"/></div>
+    <div class="ai-status-dot" title="AI engine active"></div>
+  </div>
+
+  <div class="ai-entry-body">
+    {# Example chips #}
+    <div class="ai-examples">
+      <span class="ai-example-chip" onclick="fillExample(this)">
+        <i class="fa-solid fa-lightbulb"></i> Received $220,000 from client payment
+      </span>
+      <span class="ai-example-chip" onclick="fillExample(this)">
+        <i class="fa-solid fa-lightbulb"></i> Paid $15,000 for office supplies
+      </span>
+      <span class="ai-example-chip" onclick="fillExample(this)">
+        <i class="fa-solid fa-lightbulb"></i> Staff salaries $80,000 disbursed
+      </span>
     </div>
-    <div class="form-group"><div class="form-label">Description</div><input id="cfDesc" type="text" class="form-control" style="padding-left:12px"/></div>
-    <input type="hidden" id="cfType"/>
-    <div class="flex gap-2 mt-3">
-      <button class="btn btn-primary" onclick="confirmRecord()"><i class="fa-solid fa-check"></i> Confirm & Record</button>
-      <button class="btn btn-ghost" onclick="document.getElementById('aiResult').style.display='none'">Discard</button>
+
+    <div class="ai-input-wrap">
+      <div class="ai-textarea-wrapper">
+        <i class="fa-solid fa-pen-to-square ai-textarea-prefix"></i>
+        <textarea
+          class="ai-textarea"
+          id="aiInput"
+          rows="2"
+          placeholder="Describe your transaction — e.g. &quot;Paid $4,500 invoice to vendor for Q2 services&quot;">
+        </textarea>
+      </div>
+      <button class="btn btn-primary ai-parse-btn" onclick="aiParse()">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>Parse</span>
+      </button>
+    </div>
+
+    {# AI Result Panel #}
+    <div class="ai-result" id="aiResult">
+      <div class="ai-result-header">
+        <i class="fa-solid fa-circle-check"></i>
+        <span id="aiTypeBadge" class="type-badge"></span>
+        <span style="font-size:12.5px;color:var(--text3);flex:1;">AI parsed your transaction — review and confirm below</span>
+        <button class="btn btn-ghost btn-xs" onclick="document.getElementById('aiResult').style.display='none'" title="Dismiss">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+      <div class="ai-result-body">
+        <div class="ai-result-grid">
+          <div>
+            <div class="form-label"><i class="fa-solid fa-dollar-sign" style="margin-right:5px;color:var(--text3);font-size:10px;"></i>Amount</div>
+            <input id="cfAmount" type="number" class="form-control" style="padding-left:12px"/>
+          </div>
+          <div>
+            <div class="form-label"><i class="fa-solid fa-tag" style="margin-right:5px;color:var(--text3);font-size:10px;"></i>Category</div>
+            <input id="cfCategory" type="text" class="form-control" style="padding-left:12px"/>
+          </div>
+          <div>
+            <div class="form-label"><i class="fa-solid fa-calendar" style="margin-right:5px;color:var(--text3);font-size:10px;"></i>Date</div>
+            <input id="cfDate" type="datetime-local" class="form-control" style="padding-left:12px"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <div class="form-label"><i class="fa-solid fa-align-left" style="margin-right:5px;color:var(--text3);font-size:10px;"></i>Description</div>
+          <input id="cfDesc" type="text" class="form-control" style="padding-left:12px"/>
+        </div>
+        <input type="hidden" id="cfType"/>
+        <div class="ai-result-actions">
+          <button class="btn btn-primary" onclick="confirmRecord()">
+            <i class="fa-solid fa-circle-check"></i> Confirm &amp; Record
+          </button>
+          <button class="btn btn-ghost" onclick="document.getElementById('aiResult').style.display='none'">
+            <i class="fa-solid fa-trash-can"></i> Discard
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
-{# ── Filters + Manual Entry ── #}
-<div class="flex gap-3 mb-4" style="flex-wrap:wrap;align-items:center;">
-  <form method="GET" action="/bcc/accounting" style="display:flex;gap:10px;flex-wrap:wrap;">
-    <select name="type_filter" class="form-control" style="width:140px;padding-left:12px;" onchange="this.form.submit()">
-      <option value="">All Types</option>
-      <option value="income"  {% if filters.type=='income'  %}selected{% endif %}>Income</option>
-      <option value="expense" {% if filters.type=='expense' %}selected{% endif %}>Expense</option>
-    </select>
-    <input type="month" name="month" value="{{ filters.month or '' }}" class="form-control" style="width:160px;padding-left:12px;" onchange="this.form.submit()"/>
-    {% if filters.type or filters.month %}<a href="/bcc/accounting" class="btn btn-ghost btn-sm"><i class="fa-solid fa-times"></i></a>{% endif %}
-  </form>
-  <div style="margin-left:auto;display:flex;gap:8px;">
-    <a href="/bcc/accounting/export/csv" class="btn btn-ghost btn-sm"><i class="fa-solid fa-download"></i> Export CSV</a>
-    <button class="btn btn-primary btn-sm" onclick="openModal('manualModal')"><i class="fa-solid fa-plus"></i> Manual Entry</button>
+{# ── Toolbar: Filters + Actions ── #}
+<div class="acc-toolbar">
+  <div class="acc-toolbar-filters">
+    <form method="GET" action="/bcc/accounting" style="display:flex;gap:8px;flex-wrap:wrap;">
+      <select name="type_filter" class="form-control" style="width:140px;padding-left:12px;" onchange="this.form.submit()">
+        <option value="">All Types</option>
+        <option value="income"  {% if filters.type=='income'  %}selected{% endif %}>Income</option>
+        <option value="expense" {% if filters.type=='expense' %}selected{% endif %}>Expense</option>
+      </select>
+      <input type="month" name="month" value="{{ filters.month or '' }}" class="form-control" style="width:160px;padding-left:12px;" onchange="this.form.submit()"/>
+      {% if filters.type or filters.month %}
+        <a href="/bcc/accounting" class="btn btn-ghost btn-sm" title="Clear filters"><i class="fa-solid fa-filter-circle-xmark"></i></a>
+      {% endif %}
+    </form>
+  </div>
+  <div class="acc-toolbar-actions">
+    <a href="/bcc/accounting/export/csv" class="btn btn-ghost btn-sm">
+      <i class="fa-solid fa-file-csv"></i>
+      <span class="hide-xs">Export CSV</span>
+    </a>
+    <button class="btn btn-primary btn-sm" onclick="openModal('manualModal')">
+      <i class="fa-solid fa-circle-plus"></i>
+      <span class="hide-xs">Manual Entry</span>
+    </button>
   </div>
 </div>
 
-{# ── Table ── #}
+{# ── Transactions Table (desktop) ── #}
 <div class="card" style="overflow-x:auto;">
   {% if records %}
-  <table class="txn-table">
-    <thead><tr>
-      <th>Date</th><th>Type</th><th>Amount</th><th>Category</th><th>Description</th><th>Ref</th><th></th>
-    </tr></thead>
-    <tbody>
+
+  {# Desktop table #}
+  <div class="txn-table-wrap">
+    <table class="txn-table">
+      <thead>
+        <tr>
+          <th><i class="fa-regular fa-calendar" style="margin-right:5px;"></i>Date</th>
+          <th>Type</th>
+          <th>Amount</th>
+          <th><i class="fa-solid fa-tag" style="margin-right:5px;"></i>Category</th>
+          <th>Description</th>
+          <th>Ref</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for r in records %}
+      <tr>
+        <td class="txn-mono">{{ r.date.strftime('%b %d, %Y') if r.date else '—' }}</td>
+        <td>
+          <span class="type-badge {% if r.type.value=='income' %}income-badge{% else %}expense-badge{% endif %}">
+            <i class="fa-solid {% if r.type.value=='income' %}fa-arrow-up{% else %}fa-arrow-down{% endif %}" style="margin-right:4px;font-size:9px;"></i>
+            {{ r.type.value.title() }}
+          </span>
+        </td>
+        <td class="txn-amount" style="color:{% if r.type.value=='income' %}#34d399{% else %}#f87171{% endif %};">
+          {% if r.type.value=='income' %}+{% else %}–{% endif %}${{ "{:,.2f}".format(r.amount) }}
+          {% if r.ai_parsed %}<i class="fa-solid fa-microchip-ai ai-tag" title="AI parsed"></i>{% endif %}
+        </td>
+        <td style="color:var(--text3);">{{ r.category }}</td>
+        <td class="txn-desc">{{ r.description }}</td>
+        <td class="txn-mono">{{ r.reference or '—' }}</td>
+        <td>
+          <button class="btn btn-danger btn-xs" onclick="deleteRecord({{ r.id }})" title="Delete">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {# Mobile card list #}
+  <div class="txn-card-view">
     {% for r in records %}
-    <tr>
-      <td class="text-xs text-muted font-mono">{{ r.date.strftime('%b %d, %Y') if r.date else '—' }}</td>
-      <td><span class="type-badge {% if r.type.value=='income' %}income-badge{% else %}expense-badge{% endif %}">{{ r.type.value.title() }}</span></td>
-      <td style="font-weight:700;color:{% if r.type.value=='income' %}#34d399{% else %}#f87171{% endif %};">
-        {% if r.type.value=='income' %}+{% else %}-{% endif %}${{ "{:,.2f}".format(r.amount) }}
-        {% if r.ai_parsed %}<i class="fa-solid fa-robot" style="font-size:9px;color:var(--accent);margin-left:4px;" title="AI parsed"></i>{% endif %}
-      </td>
-      <td class="text-muted">{{ r.category }}</td>
-      <td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.description }}</td>
-      <td class="text-xs text-muted font-mono">{{ r.reference or '—' }}</td>
-      <td><button class="btn btn-danger btn-xs" onclick="deleteRecord({{ r.id }})"><i class="fa-solid fa-trash"></i></button></td>
-    </tr>
+    <div class="txn-card">
+      <div class="txn-card-top">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="type-badge {% if r.type.value=='income' %}income-badge{% else %}expense-badge{% endif %}">
+            <i class="fa-solid {% if r.type.value=='income' %}fa-arrow-up{% else %}fa-arrow-down{% endif %}" style="margin-right:4px;font-size:9px;"></i>
+            {{ r.type.value.title() }}
+          </span>
+          {% if r.ai_parsed %}<i class="fa-solid fa-microchip-ai" style="color:var(--accent);font-size:11px;" title="AI parsed"></i>{% endif %}
+        </div>
+        <button class="btn btn-danger btn-xs" onclick="deleteRecord({{ r.id }})"><i class="fa-solid fa-trash"></i></button>
+      </div>
+      <div style="font-weight:800;font-size:20px;color:{% if r.type.value=='income' %}#34d399{% else %}#f87171{% endif %};">
+        {% if r.type.value=='income' %}+{% else %}–{% endif %}${{ "{:,.2f}".format(r.amount) }}
+      </div>
+      <div style="font-size:13px;color:var(--text);margin-top:4px;">{{ r.description }}</div>
+      <div class="txn-card-meta">
+        <span><i class="fa-regular fa-calendar" style="margin-right:4px;"></i>{{ r.date.strftime('%b %d, %Y') if r.date else '—' }}</span>
+        <span><i class="fa-solid fa-tag" style="margin-right:4px;"></i>{{ r.category }}</span>
+        {% if r.reference %}<span><i class="fa-solid fa-hashtag" style="margin-right:4px;"></i>{{ r.reference }}</span>{% endif %}
+      </div>
+    </div>
     {% endfor %}
-    </tbody>
-  </table>
+  </div>
+
   {% else %}
   <div style="text-align:center;padding:60px 20px;color:var(--text3);">
-    <i class="fa-solid fa-receipt" style="font-size:36px;opacity:.15;display:block;margin-bottom:10px;"></i>
-    No transactions yet. Use AI entry above or Manual Entry to get started.
+    <i class="fa-solid fa-receipt" style="font-size:40px;opacity:.12;display:block;margin-bottom:14px;"></i>
+    <div style="font-size:14px;font-weight:600;margin-bottom:4px;">No transactions yet</div>
+    <div style="font-size:12.5px;">Use AI entry above or Manual Entry to get started.</div>
   </div>
   {% endif %}
 </div>
 
-{# ── Manual Modal ── #}
+{# ── Manual Entry Modal ── #}
 <div class="modal-overlay" id="manualModal">
   <div class="modal" style="max-width:480px;">
     <div class="modal-title">
-      <span><i class="fa-solid fa-plus-circle" style="color:var(--accent)"></i> Manual Entry</span>
+      <span><i class="fa-solid fa-circle-plus" style="color:var(--accent);margin-right:8px;"></i>Manual Entry</span>
       <span class="modal-close" onclick="closeModal('manualModal')"><i class="fa-solid fa-xmark"></i></span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group"><label class="form-label">Type *</label>
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-toggle-on" style="margin-right:5px;font-size:10px;"></i>Type *</label>
         <select id="m-type" class="form-control" style="padding-left:12px">
-          <option value="income">Income</option><option value="expense">Expense</option>
+          <option value="income">Income</option>
+          <option value="expense">Expense</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Amount *</label>
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-dollar-sign" style="margin-right:5px;font-size:10px;"></i>Amount *</label>
         <input type="number" id="m-amount" class="form-control" placeholder="0.00" style="padding-left:12px"/>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Description *</label>
+    <div class="form-group">
+      <label class="form-label"><i class="fa-solid fa-align-left" style="margin-right:5px;font-size:10px;"></i>Description *</label>
       <input type="text" id="m-desc" class="form-control" placeholder="What is this for?" style="padding-left:12px"/>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group"><label class="form-label">Category</label>
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-tag" style="margin-right:5px;font-size:10px;"></i>Category</label>
         <input type="text" id="m-cat" class="form-control" placeholder="e.g. Salaries" style="padding-left:12px"/>
       </div>
-      <div class="form-group"><label class="form-label">Reference</label>
+      <div class="form-group">
+        <label class="form-label"><i class="fa-solid fa-hashtag" style="margin-right:5px;font-size:10px;"></i>Reference</label>
         <input type="text" id="m-ref" class="form-control" placeholder="Invoice / Receipt #" style="padding-left:12px"/>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Date</label>
+    <div class="form-group">
+      <label class="form-label"><i class="fa-regular fa-calendar" style="margin-right:5px;font-size:10px;"></i>Date</label>
       <input type="datetime-local" id="m-date" class="form-control" style="padding-left:12px"/>
     </div>
     <div class="flex gap-2 justify-between mt-4">
-      <button class="btn btn-ghost" onclick="closeModal('manualModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="saveManual()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+      <button class="btn btn-ghost" onclick="closeModal('manualModal')"><i class="fa-solid fa-xmark" style="margin-right:6px;"></i>Cancel</button>
+      <button class="btn btn-primary" onclick="saveManual()"><i class="fa-solid fa-floppy-disk" style="margin-right:6px;"></i>Save Entry</button>
     </div>
   </div>
 </div>
 {% endblock %}
+
 {% block extra_js %}
 <script>
+function fillExample(el) {
+  const txt = el.innerText.replace(/^\s*\S+\s*/, '').trim();
+  document.getElementById('aiInput').value = txt;
+  document.getElementById('aiInput').focus();
+}
+
 async function aiParse() {
   const text = document.getElementById('aiInput').value.trim();
   if (!text) { toast('Enter a transaction description', 'error'); return; }
-  const r = await fetch('/bcc/accounting/ai-parse', {
-    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})
-  });
-  const d = await r.json();
-  if (!r.ok) { toast(d.error || 'Could not parse', 'error'); return; }
-  document.getElementById('cfType').value = d.type;
-  document.getElementById('cfAmount').value = d.amount;
-  document.getElementById('cfCategory').value = d.category || '';
-  document.getElementById('cfDesc').value = d.description || text;
-  document.getElementById('cfDate').value = new Date().toISOString().slice(0,16);
-  const badge = document.getElementById('aiTypeBadge');
-  badge.className = 'type-badge ' + (d.type === 'income' ? 'income-badge' : 'expense-badge');
-  badge.textContent = d.type.toUpperCase();
-  document.getElementById('aiResult').style.display = 'block';
+
+  const btn = document.querySelector('.ai-parse-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Parsing…';
+
+  try {
+    const r = await fetch('/bcc/accounting/ai-parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Could not parse', 'error'); return; }
+
+    document.getElementById('cfType').value     = d.type;
+    document.getElementById('cfAmount').value   = d.amount;
+    document.getElementById('cfCategory').value = d.category || '';
+    document.getElementById('cfDesc').value     = d.description || text;
+    document.getElementById('cfDate').value     = new Date().toISOString().slice(0, 16);
+
+    const badge = document.getElementById('aiTypeBadge');
+    badge.className = 'type-badge ' + (d.type === 'income' ? 'income-badge' : 'expense-badge');
+    badge.innerHTML = (d.type === 'income'
+      ? '<i class="fa-solid fa-arrow-up" style="margin-right:4px;font-size:9px;"></i>'
+      : '<i class="fa-solid fa-arrow-down" style="margin-right:4px;font-size:9px;"></i>')
+      + d.type.toUpperCase();
+
+    document.getElementById('aiResult').style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i><span>Parse</span>';
+  }
 }
 
 async function confirmRecord() {
@@ -187,9 +573,9 @@ async function confirmRecord() {
   fd.append('category',    document.getElementById('cfCategory').value);
   fd.append('description', document.getElementById('cfDesc').value);
   fd.append('date_str',    document.getElementById('cfDate').value);
-  const r = await fetch('/bcc/accounting/record', {method:'POST', body:fd});
-  if (r.ok) { toast('Recorded!', 'success'); setTimeout(()=>location.reload(), 600); }
-  else toast('Error', 'error');
+  const r = await fetch('/bcc/accounting/record', { method: 'POST', body: fd });
+  if (r.ok) { toast('Transaction recorded!', 'success'); setTimeout(() => location.reload(), 600); }
+  else toast('Error saving record', 'error');
 }
 
 async function saveManual() {
@@ -201,15 +587,15 @@ async function saveManual() {
   fd.append('reference',   document.getElementById('m-ref').value);
   fd.append('date_str',    document.getElementById('m-date').value);
   if (!fd.get('amount') || !fd.get('description')) { toast('Amount and description required', 'error'); return; }
-  const r = await fetch('/bcc/accounting/record', {method:'POST', body:fd});
-  if (r.ok) { toast('Saved!', 'success'); closeModal('manualModal'); setTimeout(()=>location.reload(), 600); }
-  else toast('Error', 'error');
+  const r = await fetch('/bcc/accounting/record', { method: 'POST', body: fd });
+  if (r.ok) { toast('Entry saved!', 'success'); closeModal('manualModal'); setTimeout(() => location.reload(), 600); }
+  else toast('Error saving entry', 'error');
 }
 
 async function deleteRecord(id) {
   if (!confirm('Delete this record?')) return;
-  const r = await fetch(`/bcc/accounting/${id}`, {method:'DELETE'});
-  if (r.ok) { toast('Deleted', 'info'); setTimeout(()=>location.reload(), 400); }
+  const r = await fetch(`/bcc/accounting/${id}`, { method: 'DELETE' });
+  if (r.ok) { toast('Deleted', 'info'); setTimeout(() => location.reload(), 400); }
 }
 </script>
 {% endblock %}

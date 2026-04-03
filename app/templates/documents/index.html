@@ -26,6 +26,43 @@
   font-size:16px; flex-shrink:0;
 }
 .doc-grid { display:flex; flex-direction:column; gap:10px; }
+.activity-documents-list {
+  height: 500px;
+  overflow-y: auto;
+  flex: 1;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: #888 transparent;
+}
+
+.activity-documents-list::-webkit-scrollbar {
+  width: 4px; 
+}
+
+.activity-documents-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.activity-documents-list::-webkit-scrollbar-thumb {
+  background-color: rgba(136, 136, 136, 0.6);
+  border-radius: 10px;
+}
+
+.activity-documents-list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(136, 136, 136, 1);
+}
+@media (max-width: 600px) {
+  .activity-documents-list {
+    height: 700px;
+  }
+  .doc-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .doc-type-icon {
+    margin-bottom: 10px;
+  }
+}
 {% endblock %}
 
 {% block content %}
@@ -42,77 +79,81 @@
   <a href="/documents/new" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Upload Document</a>
 </div>
 
-<div class="doc-grid">
-  {% for doc, author_name in documents %}
-  <div class="doc-card">
-    {% set ft = doc.file_type or 'doc' %}
-    <div class="doc-type-icon" style="background:
-      {% if ft == 'pdf' %}rgba(239,68,68,0.12)
-      {% elif ft == 'csv' %}rgba(16,185,129,0.12)
-      {% elif ft == 'docx' %}rgba(59,130,246,0.12)
-      {% else %}rgba(100,116,139,0.12){% endif %}">
-      <i class="fa-solid fa-file-
-        {% if ft == 'pdf' %}pdf{% elif ft == 'csv' %}csv{% else %}lines{% endif %}"
-        style="color:
-          {% if ft == 'pdf' %}#f87171
-          {% elif ft == 'csv' %}#34d399
-          {% elif ft == 'docx' %}#60a5fa
-          {% else %}#94a3b8{% endif %}"></i>
-    </div>
-    <div style="flex:1;min-width:0;">
-      <div class="flex items-center gap-2 mb-1" style="flex-wrap:wrap;">
-        <div style="font-size:14px;font-weight:600;">{{ doc.title }}</div>
-        <span class="badge badge-
-          {% if doc.status.value == 'approved' %}green
-          {% elif doc.status.value == 'pending' %}yellow
-          {% elif doc.status.value == 'rejected' %}red
-          {% else %}gray{% endif %}">
-          {{ doc.status.value }}
-        </span>
-        <span class="badge badge-
-          {% if doc.access_level.value == 'all_staff' %}blue
-          {% elif doc.access_level.value == 'restricted' %}yellow
-          {% else %}red{% endif %}">
-          {{ doc.access_level.value.replace('_', ' ') }}
-        </span>
-        {% if doc.is_compliance %}
-        <span class="badge" style="background:rgba(139,92,246,0.12);color:#a78bfa">
-          <i class="fa-solid fa-shield-halved" style="font-size:9px"></i> Compliance
-        </span>
+<div class="card mb-4 activity-documents-list">
+  <div class="card-title"><i class="fa-solid fa-file-lines" style="color:var(--accent)"></i> Document Repository</div>
+  <div style="font-size:14px;color:var(--text3);">Browse and manage company documents. Click on a document to view details or take action.</div>
+  <div class="doc-grid">
+    {% for doc, author_name in documents %}
+    <div class="doc-card">
+      {% set ft = doc.file_type or 'doc' %}
+      <div class="doc-type-icon" style="background:
+        {% if ft == 'pdf' %}rgba(239,68,68,0.12)
+        {% elif ft == 'csv' %}rgba(16,185,129,0.12)
+        {% elif ft == 'docx' %}rgba(59,130,246,0.12)
+        {% else %}rgba(100,116,139,0.12){% endif %}">
+        <i class="fa-solid fa-file-
+          {% if ft == 'pdf' %}pdf{% elif ft == 'csv' %}csv{% else %}lines{% endif %}"
+          style="color:
+            {% if ft == 'pdf' %}#f87171
+            {% elif ft == 'csv' %}#34d399
+            {% elif ft == 'docx' %}#60a5fa
+            {% else %}#94a3b8{% endif %}"></i>
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div class="flex items-center gap-2 mb-1" style="flex-wrap:wrap;">
+          <div style="font-size:14px;font-weight:600;">{{ doc.title }}</div>
+          <span class="badge badge-
+            {% if doc.status.value == 'approved' %}green
+            {% elif doc.status.value == 'pending' %}yellow
+            {% elif doc.status.value == 'rejected' %}red
+            {% else %}gray{% endif %}">
+            {{ doc.status.value }}
+          </span>
+          <span class="badge badge-
+            {% if doc.access_level.value == 'all_staff' %}blue
+            {% elif doc.access_level.value == 'restricted' %}yellow
+            {% else %}red{% endif %}">
+            {{ doc.access_level.value.replace('_', ' ') }}
+          </span>
+          {% if doc.is_compliance %}
+          <span class="badge" style="background:rgba(139,92,246,0.12);color:#a78bfa">
+            <i class="fa-solid fa-shield-halved" style="font-size:9px"></i> Compliance
+          </span>
+          {% endif %}
+        </div>
+        {% if doc.description %}
+        <div style="font-size:12.5px;color:var(--text3);margin-bottom:8px;">{{ doc.description[:120] }}{% if doc.description|length > 120 %}...{% endif %}</div>
+        {% endif %}
+        <div class="flex items-center gap-3" style="flex-wrap:wrap;">
+          <span class="text-xs text-muted"><i class="fa-solid fa-user fa-fw"></i> {{ author_name }}</span>
+          <span class="text-xs text-muted"><i class="fa-solid fa-building fa-fw"></i> {{ doc.department or '—' }}</span>
+          <span class="text-xs text-muted"><i class="fa-regular fa-clock fa-fw"></i> {{ doc.created_at.strftime('%b %d, %Y') if doc.created_at else '—' }}</span>
+          {% if doc.original_filename %}
+          <span class="text-xs" style="font-family:'JetBrains Mono',monospace;color:var(--text3);">{{ doc.original_filename }}</span>
+          {% endif %}
+        </div>
+      </div>
+      <div class="flex gap-2" style="flex-shrink:0;">
+        {% if user.role in ('super_admin', 'admin') and doc.status.value == 'pending' %}
+        <button class="btn btn-success btn-xs" onclick="approveDoc({{ doc.id }}, this)">
+          <i class="fa-solid fa-check"></i> Approve
+        </button>
+        <button class="btn btn-danger btn-xs" onclick="rejectDoc({{ doc.id }}, this)">
+          <i class="fa-solid fa-times"></i> Reject
+        </button>
         {% endif %}
       </div>
-      {% if doc.description %}
-      <div style="font-size:12.5px;color:var(--text3);margin-bottom:8px;">{{ doc.description[:120] }}{% if doc.description|length > 120 %}...{% endif %}</div>
-      {% endif %}
-      <div class="flex items-center gap-3" style="flex-wrap:wrap;">
-        <span class="text-xs text-muted"><i class="fa-solid fa-user fa-fw"></i> {{ author_name }}</span>
-        <span class="text-xs text-muted"><i class="fa-solid fa-building fa-fw"></i> {{ doc.department or '—' }}</span>
-        <span class="text-xs text-muted"><i class="fa-regular fa-clock fa-fw"></i> {{ doc.created_at.strftime('%b %d, %Y') if doc.created_at else '—' }}</span>
-        {% if doc.original_filename %}
-        <span class="text-xs" style="font-family:'JetBrains Mono',monospace;color:var(--text3);">{{ doc.original_filename }}</span>
-        {% endif %}
-      </div>
     </div>
-    <div class="flex gap-2" style="flex-shrink:0;">
-      {% if user.role in ('super_admin', 'admin') and doc.status.value == 'pending' %}
-      <button class="btn btn-success btn-xs" onclick="approveDoc({{ doc.id }}, this)">
-        <i class="fa-solid fa-check"></i> Approve
-      </button>
-      <button class="btn btn-danger btn-xs" onclick="rejectDoc({{ doc.id }}, this)">
-        <i class="fa-solid fa-times"></i> Reject
-      </button>
-      {% endif %}
+    {% else %}
+    <div class="card" style="text-align:center;padding:60px 20px;">
+      <i class="fa-solid fa-folder-open" style="font-size:40px;color:var(--text3);opacity:0.3;display:block;margin-bottom:12px;"></i>
+      <div style="color:var(--text3);font-size:14px;">No documents found</div>
+      <a href="/documents/new" class="btn btn-primary" style="margin-top:16px;display:inline-flex;">
+        <i class="fa-solid fa-plus"></i> Upload First Document
+      </a>
     </div>
+    {% endfor %}
   </div>
-  {% else %}
-  <div class="card" style="text-align:center;padding:60px 20px;">
-    <i class="fa-solid fa-folder-open" style="font-size:40px;color:var(--text3);opacity:0.3;display:block;margin-bottom:12px;"></i>
-    <div style="color:var(--text3);font-size:14px;">No documents found</div>
-    <a href="/documents/new" class="btn btn-primary" style="margin-top:16px;display:inline-flex;">
-      <i class="fa-solid fa-plus"></i> Upload First Document
-    </a>
-  </div>
-  {% endfor %}
 </div>
 {% endblock %}
 

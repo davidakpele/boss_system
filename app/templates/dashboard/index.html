@@ -160,6 +160,34 @@
 .section-head-title {
   font-size: 12.5px; font-weight: 600; color: var(--text); letter-spacing: -0.1px;
 }
+.activity-list {
+  height: 300px;
+  overflow-y: auto;
+  flex: 1;
+  scroll-behavior: smooth;
+
+  /* Firefox support */
+  scrollbar-width: thin;
+  scrollbar-color: #888 transparent;
+}
+
+/* Chrome, Edge, Safari */
+.activity-list::-webkit-scrollbar {
+  width: 4px; /* 2px is too tiny → 4px is the sweet spot */
+}
+
+.activity-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.activity-list::-webkit-scrollbar-thumb {
+  background-color: rgba(136, 136, 136, 0.6);
+  border-radius: 10px;
+}
+
+.activity-list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(136, 136, 136, 1);
+}
 
 @media (max-width: 1100px) {
   .stats-grid     { grid-template-columns: repeat(2, 1fr); }
@@ -241,20 +269,23 @@
       <div class="section-head-title">Recent Activity</div>
       <a href="/audit-logs" class="btn-link">View all &rarr;</a>
     </div>
+    <div class="activity-list">
+
     {% if recent_logs %}
       {% for log, uname in recent_logs %}
       <div class="activity-item">
         <div class="activity-dot" style="background:{% if 'login' in log.action %}var(--green){% elif 'create' in log.action %}var(--blue){% elif 'approve' in log.action %}var(--purple){% else %}var(--border2){% endif %};"></div>
-        <div style="flex:1">
-          <div class="activity-text">
-            <strong style="color:var(--text);font-weight:600;">{{ uname }}</strong>
-            {{ log.action.replace('_', ' ') }}
-            {% if log.resource_type %}<span style="color:var(--text3)"> &middot; {{ log.resource_type }}</span>{% endif %}
+          <div style="flex:1">
+            <div class="activity-text">
+              <strong style="color:var(--text);font-weight:600;">{{ uname }}</strong>
+              {{ log.action.replace('_', ' ') }}
+              {% if log.resource_type %}<span style="color:var(--text3)"> &middot; {{ log.resource_type }}</span>{% endif %}
+            </div>
+            <div class="activity-time">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '' }}</div>
           </div>
-          <div class="activity-time">{{ log.created_at.strftime('%d %b %Y, %H:%M') if log.created_at else '' }}</div>
         </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     {% else %}
       <div class="empty-state"><i class="fa-regular fa-clock"></i><span>No activity recorded yet</span></div>
     {% endif %}
