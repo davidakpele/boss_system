@@ -1,129 +1,89 @@
 # BOSS System — Business Operating System
 ### Developed by MindSync AI Consults
 
-> **The intelligent backbone of your organization.** BOSS is a full-stack, AI-powered corporate operating platform that unifies communication, knowledge management, compliance, risk, and onboarding — all in one dark-themed, real-time web application.
+> **The intelligent backbone of your organization.** BOSS is a full-stack, AI-powered corporate operating platform that unifies communication, knowledge management, compliance, risk, HR, accounting, inventory, and business operations — all in one dark-themed, real-time progressive web application.
 
 ---
 
-## System Architecture Diagram
+## System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          BOSS SYSTEM OVERVIEW                               │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                              BOSS SYSTEM OVERVIEW                                │
+└──────────────────────────────────────────────────────────────────────────────────┘
 
-  Browser (Users)
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │  Dashboard │ Messages │ Ask BOSS │ Docs │ Knowledge │ Compliance... │
-  └────────────────────────┬────────────────────────────────────────────┘
-                           │  HTTP / WebSocket
-                           ▼
-  ┌─────────────────────────────────────────────────────────────────────┐
-  │                     FastAPI Application                             │
-  │                                                                     │
-  │  ┌──────────┐  ┌──────────┐  ┌───────────┐  ┌──────────────────┐  │
-  │  │  Auth    │  │ Messages │  │ Ask BOSS  │  │    Documents     │  │
-  │  │ (JWT +   │  │ Router   │  │  Router   │  │    Router        │  │
-  │  │  Cookie) │  │ + WS     │  │  SSE Stream│  │  (Upload+Approve)│  │
-  │  └──────────┘  └────┬─────┘  └─────┬─────┘  └────────┬─────────┘  │
-  │                     │              │                  │            │
-  │  ┌──────────┐  ┌────▼─────┐  ┌─────▼─────┐  ┌────────▼─────────┐  │
-  │  │ Dashboard│  │ WebSocket│  │   Ollama  │  │  File Parser     │  │
-  │  │  Router  │  │ Manager  │  │  Service  │  │ PDF/DOCX/CSV/TXT │  │
-  │  └──────────┘  └────┬─────┘  └─────┬─────┘  └────────┬─────────┘  │
-  │                     │              │                  │            │
-  │             ┌───────▼──────────────▼──────────────────▼──────────┐ │
-  │             │               AI Service Layer                     │ │
-  │             │  • RAG Retrieval (keyword search on knowledge base) │ │
-  │             │  • Knowledge extraction from chat messages          │ │
-  │             │  • Compliance detection from documents              │ │
-  │             │  • Document summarization                           │ │
-  │             └───────────────────────┬──────────────────────────┬─┘ │
-  └─────────────────────────────────────┼──────────────────────────┼───┘
-                                        │                          │
-                  ┌─────────────────────▼──────┐    ┌─────────────▼───────┐
-                  │      PostgreSQL Database    │    │    Ollama LLM       │
-                  │                            │    │  (Local, Offline)   │
-                  │  users, channels, messages │    │                     │
-                  │  documents, knowledge_chunks│    │ codellama:7b-instruct│
-                  │  compliance_records        │    │  -q4_K_M            │
-                  │  risk_items, audit_logs    │    │                     │
-                  │  ai_conversations, ...     │    │  Runs on your       │
-                  └────────────────────────────┘    │  own machine        │
-                                                    └─────────────────────┘
-```
-
----
-
-## Knowledge Flow Diagram
-
-```
-  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐
-  │   Upload     │    │   Chat       │    │   Manual     │
-  │   Document   │    │   Messages   │    │   Entry      │
-  │ PDF/DOCX/CSV │    │ (Messages tab│    │  (Documents  │
-  └──────┬───────┘    └──────┬───────┘    │   form)      │
-         │                  │            └──────┬───────┘
-         ▼                  ▼                   ▼
-  ┌──────────────────────────────────────────────────────┐
-  │                  AI Processing Layer                 │
-  │                                                      │
-  │  • Text extraction (PDF → text, DOCX → paragraphs)   │
-  │  • Chunking (500-word overlapping segments)          │
-  │  • Summarization (Ollama generates summaries)        │
-  │  • Compliance detection (regulatory requirements)    │
-  │  • Knowledge scoring from chat messages              │
-  └──────────────────────────┬───────────────────────────┘
-                             │
-                             ▼
-  ┌──────────────────────────────────────────────────────┐
-  │               knowledge_chunks table                 │
-  │                                                      │
-  │  source_type: "document" | "message" | "manual"      │
-  │  content: raw text chunk                             │
-  │  summary: AI-generated summary                       │
-  │  department: HR | Sales | Technology | ...           │
-  └──────────────────────────┬───────────────────────────┘
-                             │
-                             ▼ (on Ask BOSS query)
-  ┌──────────────────────────────────────────────────────┐
-  │                  RAG Retrieval                       │
-  │                                                      │
-  │  1. User asks question                               │
-  │  2. Keywords extracted from question                 │
-  │  3. Matching chunks retrieved from DB                │
-  │  4. Top 5 chunks sent as context to Ollama           │
-  │  5. Ollama generates answer grounded in company data │
-  │  6. Response streamed back to user (SSE)             │
-  └──────────────────────────────────────────────────────┘
+  Browser / Mobile (PWA)
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │  Dashboard │ Messages │ Ask BOSS │ Docs │ BCC │ HR │ Accounting │ Inventory  │
+  └──────────────────────────────┬───────────────────────────────────────────────┘
+                                 │  HTTPS / WSS / SSE
+                                 ▼
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │                        FastAPI Application                                   │
+  │                                                                              │
+  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │
+  │  │  Auth +  │ │ Messages │ │ Ask BOSS │ │   BCC    │ │   Business Ops   │  │
+  │  │  SSO     │ │  + WS    │ │ SSE/RAG  │ │ Router   │ │ Tasks/Meetings   │  │
+  │  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────────────┘  │
+  │  ┌──────────┐ ┌────▼─────┐ ┌────▼─────┐ ┌────▼─────┐ ┌──────────────────┐  │
+  │  │  Push    │ │ WebSocket│ │  Ollama  │ │Accounting│ │   IP Allowlist   │  │
+  │  │  Notifs  │ │ Manager  │ │ Service  │ │Inventory │ │   Middleware     │  │
+  │  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────────────┘  │
+  │                    │            │             │                              │
+  │            ┌───────▼────────────▼─────────────▼──────────────────────────┐  │
+  │            │                   AI Service Layer                          │  │
+  │            │  • Vector RAG (sentence-transformers embeddings)            │  │
+  │            │  • Knowledge extraction from chat messages                  │  │
+  │            │  • Compliance detection · Risk detection                    │  │
+  │            │  • CV screening · AI priority scoring                       │  │
+  │            │  • Meeting summary · Onboarding assistant                   │  │
+  │            │  • Natural language transaction parsing                     │  │
+  │            └──────────────────────┬──────────────────────────────────┬──┘  │
+  └─────────────────────────────────  │  ─────────────────────────────── │ ────┘
+                                      │                                  │
+               ┌──────────────────────▼──────────┐     ┌────────────────▼──────┐
+               │        PostgreSQL Database       │     │     Ollama LLM        │
+               │  35+ tables across all modules   │     │   (Local, Offline)    │
+               │  users · channels · messages     │     │  codellama:7b /       │
+               │  documents · knowledge_chunks    │     │  mistral:7b /         │
+               │  accounting · inventory          │     │  llama3.2:3b          │
+               │  job_postings · applications     │     │  Runs on your machine │
+               │  tasks · meetings · leave        │     └───────────────────────┘
+               │  push_subscriptions · ip_allow  │
+               └──────────────────────────────────┘
 ```
 
 ---
 
-## WebSocket Communication Diagram
+## Knowledge Flow
 
 ```
-  User A (Browser)          BOSS Server           User B (Browser)
-        │                        │                       │
-        │── WS Connect (/ws/42) ─▶│                       │
-        │                        │◀─ WS Connect (/ws/42) ─│
-        │                        │                       │
-        │── {type:"message",     │                       │
-        │    content:"Hello"} ──▶│── {type:"message",   ─▶│
-        │                        │    sender:"User A",   │
-        │◀─ {type:"message",...} ─│    content:"Hello"}   │
-        │  (own echo back for    │                       │
-        │   confirmation)        │── [AI extraction runs │
-        │                        │   in background]      │
-        │                        │                       │
-        │── {type:"typing"} ────▶│── {type:"typing",    ─▶│
-        │                        │    user:"User A"}     │
-        │                        │                       │
-        │── {type:"ping"} ──────▶│──▶{type:"pong"}       │
-        │   (every 25s)          │                       │
-        │                        │                       │
-        │── DELETE /message/5 ──▶│── {type:"msg_deleted"─▶│
-        │                        │    id: 5}             │
+  ┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────────┐
+  │  Upload    │   │   Chat     │   │  Approved  │   │  Manual Entry  │
+  │  CV/Doc    │   │  Messages  │   │  Document  │   │  (Direct text) │
+  └─────┬──────┘   └─────┬──────┘   └─────┬──────┘   └───────┬────────┘
+        └──────────────── ▼ ───────────────┘                  │
+                   ┌──────▼──────────────────────────────────▼──┐
+                   │              AI Processing Layer            │
+                   │  PDF/DOCX/CSV extraction · Chunking         │
+                   │  Summarization · Compliance detection        │
+                   │  Risk detection · Embedding (384-dim)        │
+                   └──────────────────────┬──────────────────────┘
+                                          ▼
+                   ┌──────────────────────────────────────────────┐
+                   │             knowledge_chunks table            │
+                   │  content · summary · embedding (vector)      │
+                   │  source_type · department · document_id      │
+                   └──────────────────────┬──────────────────────┘
+                                          ▼  (Ask BOSS query)
+                   ┌──────────────────────────────────────────────┐
+                   │              Vector RAG Pipeline             │
+                   │  1. Embed query (all-MiniLM-L6-v2)           │
+                   │  2. Cosine similarity search                 │
+                   │  3. Top 5 chunks → context window            │
+                   │  4. Ollama generates cited answer            │
+                   │  5. Stream via SSE + citation chips          │
+                   └──────────────────────────────────────────────┘
 ```
 
 ---
@@ -131,173 +91,252 @@
 ## Module Deep-Dive
 
 ### 1. Dashboard
-The command center showing a real-time overview of the entire organization:
+The command center with a real-time overview of the entire organization:
 
-- **Document count** — total files in the knowledge base
-- **User count** — all registered staff
-- **Active users** — currently online (tracked via `is_online` flag updated on login/logout)
-- **Pending approvals** — documents submitted but not yet reviewed by admin
-- **Compliance score** — percentage of compliance records marked as compliant, rendered as an animated SVG ring
-- **Recent activity feed** — live audit log showing last 8 actions (logins, uploads, approvals)
-- **Quick action buttons** — shortcuts to upload, chat, add users
-- **Recent documents list** — last 5 uploads with status badges
+- Document count, user count, active users (online indicator), pending approvals
+- Compliance score rendered as an animated SVG ring (green/amber/red by threshold)
+- Recent activity feed — last 8 audit log events with color-coded action badges
+- Quick action buttons — upload document, open AI chat, manage users
+- Recent documents list with status badges
+- Unread announcement badge and notification bell in topbar
 
 ---
 
-### 2. Messages (Real-Time Internal Communication)
+### 2. Messages (Real-Time Communication)
 A full-featured internal communication system modelled after WhatsApp/Slack:
 
-**Direct Messages (DM)**
-- Every employee appears in the People list with their department, role, and online indicator
-- Clicking any user opens a private 1-on-1 conversation
-- A dedicated DM channel (`dm_{userA_id}_{userB_id}`) is silently created per pair
-- Messages are private — only the two participants can read them
+**Direct Messages** — private 1-on-1 conversations with online presence indicators.
 
-**Channels (Group Chat)**
-- Channels tab shows channels you belong to and channels you can browse and join
-- When creating a channel, select one or more departments — all users in those departments are auto-added
-- Channel creator and admins can edit the channel name, description, and departments at any time
-- Changing departments automatically updates membership
+**Department Channels** — select departments on creation; all members auto-added. Edit membership at any time.
 
-**Message Features**
-- **File sharing** — share PDF, DOCX, XLSX, CSV, TXT, PNG, JPG, GIF, WebP, MP4, ZIP
-- Images render as inline thumbnails with click-to-enlarge lightbox
-- Non-image files show as download cards with filetype icons
-- **Reply to message** — hover any message and click reply; a quote preview is embedded in your response
-- **Delete message** — hover and delete your own messages (admins can delete any)
-- **Typing indicators** — animated dots appear when someone is typing
-- **Auto-reconnect** — if the WebSocket drops, it reconnects automatically after 3 seconds with keep-alive pings every 25 seconds
-- **WS status indicator** — Connected / Connecting / Disconnected badge in the chat header
+**Message Features:**
+- File sharing: PDF, DOCX, XLSX, CSV, TXT, PNG, JPG, GIF, WebP, MP4, ZIP
+- Image inline preview with lightbox; file cards for non-images
+- Reply-to with quoted preview; delete own messages (admins delete any)
+- Typing indicators, auto-reconnect (3 s), keep-alive ping (25 s)
+- WS status badge: Connected / Connecting / Disconnected
+- Speech bubble tails, 68% max-width bubbles, date separators, avatar grouping
+- Hover-reveal action buttons (reply, delete)
 
-**AI Knowledge Extraction**
-- Every message sent in any channel is silently analysed by the AI
-- If the message contains valuable business knowledge (sales experiences, customer insights, processes), it is extracted and stored in the knowledge base
-- This happens asynchronously — users never notice any delay
+**AI Knowledge Extraction** — every message silently analysed; business knowledge auto-stored in the knowledge base asynchronously.
 
 ---
 
-### 3. Ask BOSS (AI Chat Assistant)
-A Retrieval-Augmented Generation (RAG) chat interface connected to your entire company knowledge base:
+### 3. Ask BOSS (AI Assistant)
+RAG-powered AI chat connected to your entire company knowledge base:
 
-- **RAG pipeline** — before answering, the AI retrieves the most relevant knowledge chunks from the database and uses them as context
-- **Streaming responses** — answers are streamed token-by-token using Server-Sent Events (SSE) for a real-time typing effect
-- **Persistent history** — all conversations are saved; previous sessions are listed in the sidebar and can be resumed at any time
-- **Role-aware access** — super admins see all knowledge; staff only see `all_staff` level content; confidential documents are only surfaced for executives
-- **Offline capable** — the AI runs entirely on your machine via Ollama (no internet required)
-- **Suggestion chips** — quick-start prompts help new users explore common questions
-- **AI status indicator** — shows Online/Offline based on Ollama availability
+- **Vector semantic search** — `all-MiniLM-L6-v2` embeddings, cosine similarity, keyword fallback
+- **Streaming SSE responses** — token-by-token typing effect
+- **Citation chips** — every response shows which document/chunk it used, with relevance score
+- **Persistent sessions** — full history saved, resumable from sidebar
+- **Role-aware access** — confidential docs only surfaced for admins/executives
+- **Onboarding Assistant** — warm dedicated AI chat for new employees at `/ask-boss/onboarding-assistant` with quick-start chips and department-aware context
+- **Meeting Summary** — `POST /ask-boss/meeting-summary/{channel_id}` generates structured summaries (topics, decisions, action items, next steps) from channel history
+- **Fully offline** — runs on your machine via Ollama
 
 ---
 
 ### 4. Knowledge Base
-The organisation's accumulated intelligence, automatically built over time:
+The organisation's accumulated intelligence:
 
-- **Auto-populated** — chunks are created whenever a document is approved or the AI extracts knowledge from a chat message
-- **Three source types:** `document`, `message`, `manual`
-- **Searchable** — full-text search across all knowledge chunks
-- **Department filter** — filter knowledge by department
-- **AI summaries** — each chunk shows an AI-generated 1-2 sentence summary
-- **Statistics panel** — total chunks, from documents, from messages, active departments
+- Auto-populated from approved documents, chat messages, and manual entries
+- Three source types: `document`, `message`, `manual`
+- Full-text search + department filter
+- AI-generated 1–2 sentence summary per chunk
+- Embedding stored per chunk for vector retrieval
 
 ---
 
 ### 5. Documents
-The company document repository with a structured approval workflow:
+Structured document repository with approval workflow:
 
-**Upload flow:**
-1. Staff member fills in title, description, department, access level and optionally attaches a file
-2. Document enters `pending` status
-3. Admin/super_admin approves or rejects
-4. On approval, text is extracted, chunked and added to the knowledge base
-5. Compliance requirements are auto-detected and added to the compliance register
-
-**File type support:** PDF, DOCX, DOC, CSV, TXT
-
-**Access levels:**
-- `all_staff` — visible to all employees
-- `restricted` — visible to staff level and above
-- `confidential` — visible to admins and executives only
-
-**Document statuses:** Draft → Pending → Approved / Rejected
+- Upload PDF, DOCX, DOC, CSV, TXT
+- Status pipeline: Draft → Pending → Approved / Rejected
+- Access levels: `all_staff` · `restricted` · `confidential`
+- On approval: text extracted → chunked → embedded → knowledge base
+- Background AI tasks: compliance extraction + risk detection
 
 ---
 
-### 6. Users
-Team member management for administrators:
-
-- Add new users with name, email, department, role, and temporary password
-- View all users with their role, department, onboarding status, and online presence
-- Activate / deactivate accounts
-- First registered user is automatically assigned Super Admin role
-- New employees are automatically enrolled in the onboarding flow on creation
-
-**Role hierarchy:**
+### 6. Users & Roles
 
 | Role | Key Permissions |
 |---|---|
-| `super_admin` | Full system access, all documents, all users, all settings |
-| `admin` | Approve/reject documents, manage users, view all content |
-| `manager` | View restricted docs, oversee team onboarding progress |
-| `staff` | Chat, ask BOSS, view all_staff documents, upload docs |
-| `new_employee` | Onboarding steps only, limited system access |
+| `super_admin` | Full system access, all features, IP allowlist, SSO settings |
+| `admin` | Approve documents, manage users, view all content |
+| `manager` | View restricted docs, approve leave, oversee onboarding |
+| `staff` | Chat, ask BOSS, upload docs, view all_staff content |
+| `new_employee` | Onboarding steps only, limited access |
+
+First registered account automatically becomes Super Admin.
 
 ---
 
-### 7. Onboarding Setup
-Structured guided onboarding for new employees:
+### 7. Onboarding
+Guided step-by-step onboarding for new employees:
 
-- **Admin creates steps** — title, description, order, required/optional flag
-- **Progress tracking** — admins see each new employee's progress as a percentage bar
-- **Self-service completion** — employees mark steps complete themselves as they go
-- **Auto-graduation** — once all required steps are completed, `onboarding_complete` is set to `true` and the user's role access expands
-- Steps can be linked to specific documents (e.g. "Read the company policy" links directly to the policy document)
+- Admin creates steps (title, description, order, required/optional, linked document)
+- Progress bar per employee visible to managers/admins
+- Employees self-mark steps complete; auto-graduation when all required steps done
+- Onboarding AI Assistant available at any time for questions
 
 ---
 
 ### 8. Compliance
-Automated regulatory monitoring powered by AI:
+Automated regulatory monitoring:
 
-- **Auto-extraction** — whenever a document is approved, the AI scans it for regulatory and compliance requirements
-- **Compliance register** — each extracted requirement is logged with regulation type, risk level (low/medium/high/critical), and current status
-- **Status tracking** — each record can be marked as: `identified`, `compliant`, `non_compliant`, or `pending`
-- **Compliance score** — the overall score (shown on dashboard) is the percentage of records marked compliant
-- **Risk distribution chart** — breakdown of critical/high/medium/low items
-- **Manual updates** — managers and admins can update status and add notes to any compliance record
+- AI scans every approved document for compliance requirements
+- Register with regulation type, risk level, and status tracking
+- Status flow: `identified` → `compliant` / `non_compliant` / `pending`
+- Compliance score (%) on dashboard and compliance page
+- Manual notes and status updates by managers/admins
 
 ---
 
 ### 9. Risk Management
-A structured risk register for identifying and tracking business risks:
+Structured risk register:
 
-- **Risk matrix scoring** — each risk is scored by `likelihood (1–5) × impact (1–5)` giving a score of 1–25
-- **Automatic risk classification:**
-  - Score ≥ 15 → Critical (red)
-  - Score 8–14 → High (yellow)
-  - Score 4–7 → Medium (blue)
-  - Score < 4 → Low (green)
-- **Risk fields:** title, description, category, likelihood, impact, mitigation plan, owner, status
-- **Status tracking:** open → mitigated → closed
-- **Visual likelihood/impact dots** — 5-dot indicators for quick visual scanning
+- Likelihood × Impact scoring (1–5 each, score 1–25)
+- Auto-classification: Critical (≥15) · High (8–14) · Medium (4–7) · Low (<4)
+- **AI auto-detection** — risks auto-created from approved documents via background task
+- `auto_detected` flag distinguishes AI risks from manually entered ones
+- Status lifecycle: open → mitigated → closed
 
 ---
 
 ### 10. Audit Logs
-A tamper-visible system-wide activity trail:
+System-wide tamper-visible activity trail:
 
-- Every significant action is logged: logins, document creation, approvals, rejections, user creation, setting changes
-- Each log entry records: timestamp, user, action, resource type, resource ID, details, and IP address
-- Visible only to super_admin and admin roles
-- Last 100 events displayed in reverse-chronological order
-- Color-coded action badges (green for logins, blue for creates, purple for approvals, red for deletes)
+- Every action logged: logins (including SSO), document events, approvals, user changes
+- Records: timestamp, user, action, resource type, resource ID, details JSON, IP address
+- Visible to super_admin and admin only
+- Color-coded action badges
 
 ---
 
-### 11. Settings
-Profile and system preferences per user:
+### 11. Business Operations
 
-- **Profile update** — change name and department
-- **Password change** — current password required; new password updated with bcrypt
-- **System info panel** — version, AI model, backend stack, developer info
+**Task Board** (Kanban)
+- Three columns: To Do / In Progress / Done
+- Drag-and-drop between columns (drag-and-drop via native HTML5 DnD)
+- Priority levels: low · medium · high · urgent with color-coded dots
+- Due date badges: green (>2 days) · amber (≤2 days) · red (overdue)
+- **AI Priority Suggestion** — click robot icon to get AI-suggested priority with reason
+- Assign to any team member; filter by department
+
+**Meeting Scheduler**
+- Book meetings with start/end time, location, description
+- Invite multiple attendees; RSVP (Accept / Decline) per attendee
+- **AI Agenda Generation** — pulls last 30 messages from linked channel, generates structured time-boxed agenda
+- Meeting summaries stored per channel per day
+
+**Announcement Board**
+- Admins post company-wide notices with priority: Normal · Important · Urgent
+- Color-coded cards with unread badge on topbar
+- Read confirmation per user; read count visible to admins
+- Optional expiry date; archive to remove
+
+**Employee Directory**
+- Searchable by name, email, department
+- Grouped by department with headcount
+- Online/offline indicator per employee
+- Reporting lines — super_admin can assign manager to any employee
+- Displayed on each employee card
+
+**Leave / Absence Tracker**
+- Employees submit requests: Annual · Sick · Maternity · Paternity · Unpaid · Other
+- Managers/admins approve or reject with optional note
+- Weekly absence calendar sidebar showing who's off
+- Cancel pending requests
+
+---
+
+### 12. Business Command Centre (BCC)
+
+**BCC Dashboard** — unified KPI view: total income, total expenses, net P&L, low-stock alerts, open jobs, pending HR applications, recent transactions.
+
+#### Accounting
+- Record income and expenses manually or via **natural language AI entry**
+- Type _"I paid $15,000 for transportation today"_ → AI parses type, amount, category, description → confirm and save
+- Full transaction history with filters (type, month)
+- Export all records to CSV
+- Color-coded income (green) / expense (red) rows
+
+#### Inventory Management
+- Card-based stock board with progress bar per item showing stock health
+- Color-coded alerts: red (out of stock) · amber (at or below reorder level) · green (healthy)
+- Stock movements: Stock In · Stock Out · Return In · Adjustment
+- Full movement history per item
+- Auto-generates SKU if not provided
+- Total portfolio value calculation
+- Supplier and storage location tracking
+
+#### AI Recruitment (HR)
+Full 7-stage hiring pipeline — the system does the heavy lifting:
+
+**Stage flow:** Received → Screening → Shortlisted → Interview → Offer → Hired → Rejected
+
+**What the AI does automatically:**
+1. **CV Screening** — upload PDF/DOCX; AI extracts text, scores candidate 0–100 against job requirements, identifies strengths and gaps, gives recommendation: `shortlist` / `consider` / `reject`
+2. **Bulk screening** — queue all unscreened CVs for a job at once
+3. **Email generation** — one-click AI writes professional emails for every pipeline stage:
+   - Screening acknowledgement
+   - Interview invitation (includes scheduled date)
+   - Job offer letter
+   - Rejection email (warm, encouraging)
+4. **Status management** — drag each candidate through the pipeline; all changes logged
+
+**What you control:**
+- You always see AI recommendations before acting
+- You approve every status change
+- You decide who gets the offer
+
+---
+
+### 13. Security
+
+**SSO (Single Sign-On)**
+- Google Workspace OAuth2 — `/auth/sso/google`
+- Microsoft 365 OAuth2 — `/auth/sso/microsoft`
+- Auto-creates user account on first SSO login; links to existing account by email
+- Buttons appear on login page only when credentials are configured in `.env`
+
+**IP Allowlist**
+- Middleware enforces IP-based access control when `IP_ALLOWLIST_ENABLED=true`
+- Super admin manages rules at `/settings/ip-allowlist`
+- Supports single IPs and CIDR ranges (e.g. `192.168.1.0/24`)
+- Always exempts SSO callbacks, static files, and health endpoints
+- 60-second DB cache to avoid per-request overhead
+- "Detect my IP" button auto-fills your current IP
+
+---
+
+### 14. Progressive Web App (PWA)
+- `manifest.json` with full icon set, shortcuts, and theme colors
+- Service worker with network-first for pages, cache-first for static assets
+- Offline fallback page when network unavailable
+- Install prompt via `beforeinstallprompt` — **Install App** button in Settings
+- Runs in standalone mode (no browser chrome) once installed on phone/desktop
+
+---
+
+### 15. Push Notifications
+- Web Push API with VAPID keys — no third-party service required
+- Notifications delivered even when the tab is closed
+- Per-device subscription — one user can have multiple devices subscribed
+- Notification includes title, body, icon, click-through URL, and vibrate pattern
+- **Enable Notifications** button in Settings; test via **Send Test**
+- Used internally by the messages router for new message notifications
+
+---
+
+### 16. Internal Notifications (In-App)
+- Bell icon in topbar with real-time unread badge
+- Dropdown panel with click-to-navigate, mark-as-read per item
+- Mark all read button
+- Polls every 30 seconds; also triggered immediately by server events
+- Types: `info` · `success` · `warning` · `error` · `message` · `hr`
+- Fires web push simultaneously when a notification is created
 
 ---
 
@@ -309,76 +348,53 @@ Profile and system preferences per user:
 | **Web Framework** | FastAPI |
 | **ORM** | SQLAlchemy 2.0 (async) |
 | **Database** | PostgreSQL (via asyncpg) |
-| **Real-time** | WebSockets (native FastAPI) |
-| **AI Engine** | Ollama (local LLM, no internet required) |
-| **AI Model** | codellama:7b-instruct-q4_K_M |
+| **Real-time** | WebSockets (native FastAPI) + SSE |
+| **Session Middleware** | Starlette SessionMiddleware (for SSO state) |
+| **AI Engine** | Ollama (local LLM, fully offline) |
+| **AI Model** | codellama:7b-instruct-q4_K_M (default) |
+| **Embeddings** | sentence-transformers `all-MiniLM-L6-v2` (384-dim) |
 | **File Parsing** | PyPDF2 · python-docx · pandas |
 | **Templates** | Jinja2 |
-| **Frontend** | Vanilla JS · CSS variables · SSE |
+| **Frontend** | Vanilla JS · CSS variables · SSE · HTML5 DnD |
 | **Auth** | JWT (python-jose) · bcrypt · httpOnly cookies |
+| **SSO** | Google OAuth2 · Microsoft OAuth2 (via httpx) |
+| **Push Notifications** | Web Push API · pywebpush · VAPID keys |
+| **PWA** | Service Worker · Web App Manifest |
 | **Fonts** | Syne · DM Sans · JetBrains Mono |
 
 ---
 
-## Database Schema (15 Tables)
+## Database Schema (35+ Tables)
 
 ```
-users                    channels              messages
-──────────────────       ─────────────────     ─────────────────────
-id                       id                    id
-full_name                name                  channel_id → channels
-email (unique)           description           sender_id → users
-hashed_password          channel_type          content
-department               department            message_type
-role (enum)              created_by → users    file_url
-is_active                created_at            reply_to_id → messages
-is_online                                      is_ai_extracted
-avatar_color             channel_members       created_at
-onboarding_complete      ───────────────
-created_at               id
-                         channel_id → channels
-documents                user_id → users
-──────────────────────
-id                       knowledge_chunks
-title                    ────────────────────
-content                  id
-description              document_id → documents
-department               source_type
-access_level (enum)      content
-status (enum)            summary
-author_id → users        keywords (JSON)
-approved_by → users      department
-file_path                created_at
-file_type
-is_compliance            ai_conversations      ai_messages
-compliance_score         ────────────────      ───────────────
-tags (JSON)              id                    id
-created_at               user_id → users       conversation_id
-                         session_id            role
-compliance_records       created_at            content
-──────────────────────                         sources (JSON)
-id                       onboarding_steps      created_at
-document_id → documents  ─────────────────
-regulation_type          id                    onboarding_progress
-requirement              title                 ────────────────────
-status                   description           id
-risk_level               document_id           user_id → users
-notes                    step_order            step_id → onboarding_steps
-created_at               is_required           completed
-                         created_at            completed_at
-risk_items
-──────────────────────   audit_logs            app_settings
-id                       ──────────────────    ──────────────────
-title                    id                    id
-description              user_id → users       key (unique)
-category                 action                value
-likelihood               resource_type         description
-impact                   resource_id           updated_at
-risk_score               details (JSON)
-status                   ip_address
-owner_id → users         created_at
-mitigation_plan
-created_at
+CORE
+────────────────────────────────────────────────────────────────────
+users                   channels              messages
+oauth_accounts          channel_members       knowledge_chunks
+push_subscriptions      ip_allowlist          audit_logs
+app_settings            internal_notifications
+
+DOCUMENTS & AI
+────────────────────────────────────────────────────────────────────
+documents               ai_conversations      ai_messages
+compliance_records      risk_items            meeting_summaries
+onboarding_conversations
+
+ONBOARDING
+────────────────────────────────────────────────────────────────────
+onboarding_steps        onboarding_progress
+
+BUSINESS OPERATIONS
+────────────────────────────────────────────────────────────────────
+tasks                   meeting_rooms         meeting_attendees
+announcements           announcement_reads    leave_requests
+reporting_lines
+
+BUSINESS COMMAND CENTRE
+────────────────────────────────────────────────────────────────────
+accounting_records      accounting_categories
+inventory_items         inventory_movements
+job_postings            job_applications      hr_notifications
 ```
 
 ---
@@ -392,18 +408,16 @@ created_at
 python --version
 
 # PostgreSQL
-# Windows: download from https://postgresql.org/download/windows
+# Windows: https://postgresql.org/download/windows
 # Ubuntu:  sudo apt install postgresql
 # macOS:   brew install postgresql
 
-# Ollama (local AI — runs offline)
+# Ollama (local AI — runs fully offline)
 # Windows/macOS: https://ollama.ai/download
 # Linux: curl -fsSL https://ollama.ai/install.sh | sh
 ```
 
-### 1. Database Setup
-
-Open pgAdmin or psql and run:
+### 1. Database
 
 ```sql
 CREATE DATABASE boss_system;
@@ -415,28 +429,46 @@ CREATE DATABASE boss_system;
 cp .env.example .env
 ```
 
-Edit `.env`:
+Key settings in `.env`:
+
 ```env
-DATABASE_URL=
-SECRET_KEY=your-minimum-32-character-secret-key-here
-ALGORITHM=HS256
+# Core
+DATABASE_URL=postgresql+asyncpg://postgres:YOUR_PASSWORD@localhost:5432/boss_system
+SECRET_KEY=your-minimum-32-character-random-string
 ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# AI
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL=codellama:7b-instruct-q4_K_M
+
+# Files
 UPLOAD_DIR=uploads
 MAX_FILE_SIZE_MB=50
+
+# SSO (leave blank to hide buttons)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=http://localhost:8000/auth/sso/google/callback
+MICROSOFT_CLIENT_ID=
+MICROSOFT_CLIENT_SECRET=
+MICROSOFT_TENANT_ID=common
+MICROSOFT_REDIRECT_URI=http://localhost:8000/auth/sso/microsoft/callback
+
+# Security
+IP_ALLOWLIST_ENABLED=false
+
+# Push Notifications (generate keys — see below)
+VAPID_PUBLIC_KEY=
+VAPID_PRIVATE_KEY=
+VAPID_CLAIMS_EMAIL=admin@yourcompany.com
 ```
 
-### 3. Install Python Dependencies
+### 3. Install Dependencies
 
 ```bash
 python -m venv venv
-
-# Windows
-venv\Scripts\activate
-
-# macOS / Linux
-source venv/bin/activate
+source venv/bin/activate        # Linux/macOS
+# venv\Scripts\activate         # Windows
 
 pip install -r requirements.txt
 ```
@@ -447,37 +479,128 @@ pip install -r requirements.txt
 ollama pull codellama:7b-instruct-q4_K_M
 ```
 
-> ~4GB download. Lighter alternatives:
-> - `ollama pull llama3.2:3b` (~2GB, faster)
-> - `ollama pull mistral:7b-instruct-q4_K_M` (~4GB, excellent quality)
+Lighter alternatives:
+- `ollama pull llama3.2:3b` (~2 GB, fastest)
+- `ollama pull mistral:7b-instruct-q4_K_M` (~4 GB, excellent quality)
 
-### 5. Start the Server
+### 5. Generate VAPID Keys (Push Notifications)
+
+```bash
+python -c "
+from py_vapid import Vapid
+v = Vapid()
+v.generate_keys()
+print('VAPID_PUBLIC_KEY=' + v.public_key_urlsafe)
+print('VAPID_PRIVATE_KEY=' + v.private_key_urlsafe)
+"
+```
+
+Paste both values into `.env`.
+
+### 6. Start
 
 ```bash
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-Open **http://localhost:8000** in your browser.
+Open **http://localhost:8000**
 
-### 6. First Login
+### 7. First Login
 
 1. Go to **http://localhost:8000/auth/register**
-2. Register your first account — it automatically becomes **Super Admin**
-3. Log in and start configuring your organisation
+2. Register — the **first account automatically becomes Super Admin**
+3. Log in and begin configuring your organization
 
 ---
 
 ## File Upload Limits & Supported Types
 
-| Category | Formats | Feature |
+| Category | Formats | Where Used |
 |---|---|---|
-| Documents | PDF, DOCX, DOC, CSV, TXT | Knowledge base extraction, compliance detection |
-| Images | PNG, JPG, JPEG, GIF, WebP | Inline preview + lightbox in messages |
-| Office | XLSX | Shareable in messages (download card) |
-| Video | MP4 | Shareable in messages (download card) |
-| Archives | ZIP | Shareable in messages (download card) |
+| Documents | PDF, DOCX, DOC, CSV, TXT | Knowledge base, compliance, BCC HR CVs |
+| Images | PNG, JPG, JPEG, GIF, WebP | Messages inline preview + lightbox |
+| Office | XLSX | Messages download card |
+| Video | MP4 | Messages download card |
+| Archives | ZIP | Messages download card |
+| CVs | PDF, DOCX | HR recruitment pipeline |
 
-Max file size: configurable via `MAX_FILE_SIZE_MB` in `.env` (default: 50MB)
+Max file size: `MAX_FILE_SIZE_MB` in `.env` (default: 50 MB)
+
+---
+
+## Project Structure
+
+```
+boss_system/
+├── main.py                              # FastAPI app, middleware, all routers
+├── requirements.txt
+├── .env.example
+├── uploads/
+│   ├── documents/
+│   ├── messages/
+│   └── cvs/                             # HR applicant CVs
+└── app/
+    ├── config.py                        # Pydantic settings from .env
+    ├── database.py                      # Async SQLAlchemy engine + session
+    ├── models.py                        # All 35+ ORM models
+    ├── auth.py                          # JWT + bcrypt + cookie dependencies
+    ├── middleware/
+    │   └── ip_allowlist.py              # IP range enforcement middleware
+    ├── routers/
+    │   ├── auth.py                      # /auth/* — login, register, logout, ws-token
+    │   ├── sso.py                       # /auth/sso/* — Google + Microsoft OAuth2
+    │   ├── push.py                      # /push/* — VAPID Web Push notifications
+    │   ├── bcc.py                       # /bcc/* — Accounting, Inventory, HR, Notifications
+    │   ├── dashboard.py                 # /dashboard
+    │   ├── messages.py                  # /messages/* — WebSocket chat
+    │   ├── ask_boss.py                  # /ask-boss/* — RAG AI, SSE, onboarding, meeting summary
+    │   ├── documents.py                 # /documents/* + /knowledge-base
+    │   ├── admin.py                     # /users, /onboarding, /compliance, /risk, /settings, /ip-allowlist
+    │   └── business_ops.py             # /tasks, /meetings, /announcements, /directory, /leave
+    ├── services/
+    │   ├── ai_service.py               # Ollama · Vector RAG · CV screening · NL accounting · Risk detection
+    │   ├── document_service.py         # PDF/DOCX/CSV extraction + chunking
+    │   └── websocket_manager.py        # Multi-channel WS manager
+    ├── templates/
+    │   ├── base.html                   # Sidebar layout · topbar · notifications bell · PWA JS
+    │   ├── auth/
+    │   │   ├── login.html              # Email/password + Google + Microsoft SSO buttons
+    │   │   └── register.html
+    │   ├── dashboard/index.html
+    │   ├── messages/index.html
+    │   ├── ask_boss/
+    │   │   ├── index.html              # RAG chat with citation chips
+    │   │   └── onboarding_assistant.html
+    │   ├── bcc/
+    │   │   ├── dashboard.html          # BCC command centre overview
+    │   │   ├── accounting.html         # AI natural-language transaction entry
+    │   │   ├── inventory.html          # Stock cards, movements, alerts
+    │   │   ├── hr_jobs.html            # Job postings, pipeline stats
+    │   │   └── hr_applications.html    # CV upload, AI screening, email generation
+    │   ├── business/
+    │   │   ├── tasks.html              # Kanban board
+    │   │   ├── meetings.html           # Meeting scheduler + AI agenda
+    │   │   ├── announcements.html      # Company notices
+    │   │   ├── directory.html          # Org chart + reporting lines
+    │   │   └── leave.html              # Leave requests + absence calendar
+    │   ├── knowledge/index.html
+    │   ├── documents/{index,new}.html
+    │   ├── users/index.html
+    │   ├── onboarding/index.html
+    │   ├── compliance/index.html
+    │   ├── risk/index.html
+    │   ├── audit/index.html
+    │   ├── settings/
+    │   │   ├── index.html              # Profile, password, notifications, PWA install
+    │   │   └── ip_allowlist.html       # IP range management (super_admin)
+    │   └── errors/{403,404}.html
+    └── static/
+        ├── manifest.json               # PWA manifest
+        ├── sw.js                       # Service worker
+        ├── img/                        # PWA icons (72–512 px)
+        ├── css/custom.css
+        └── js/app.js
+```
 
 ---
 
@@ -493,12 +616,15 @@ gunicorn main:app \
   --timeout 120
 ```
 
-**Nginx reverse proxy (required for WebSockets):**
+**Nginx (required for WebSockets + PWA):**
 
 ```nginx
 server {
-    listen 80;
+    listen 443 ssl;
     server_name yourdomain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -507,98 +633,65 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
     location /uploads/ {
         alias /path/to/boss_system/uploads/;
+        add_header X-Content-Type-Options nosniff;
+    }
+
+    location /sw.js {
+        proxy_pass http://127.0.0.1:8000/sw.js;
+        add_header Service-Worker-Allowed /;
+        add_header Cache-Control "no-cache";
     }
 }
 ```
 
 **Production checklist:**
-- [ ] Change `SECRET_KEY` to a cryptographically random string
+- [ ] Set `SECRET_KEY` to a 64-character random string
 - [ ] Change PostgreSQL password
-- [ ] Enable HTTPS (Let's Encrypt / Certbot)
-- [ ] Set `httponly=True` and `secure=True` on cookies in `auth.py`
-- [ ] Configure firewall — expose only ports 80 and 443
-- [ ] Set up PostgreSQL backups (daily minimum)
-- [ ] Use environment variables, not `.env` file in production
+- [ ] Enable HTTPS — required for PWA install + push notifications
+- [ ] Set `cookie.secure=True` and `httponly=True` in `auth.py`
+- [ ] Configure firewall — expose only 80 and 443
+- [ ] Set up daily PostgreSQL backups (`pg_dump`)
+- [ ] Use environment variables directly, not `.env` file
+- [ ] Configure `IP_ALLOWLIST_ENABLED=true` and add office IP ranges
+- [ ] Set VAPID keys for push notifications
+- [ ] Configure Google/Microsoft SSO credentials if using SSO
 
 ---
 
-## Project Structure
+## Optional SSO Setup
 
-```
-boss_system/
-├── main.py                         # FastAPI app — routes, lifespan, static files
-├── requirements.txt                # Python dependencies (no version pins)
-├── .env.example                    # Environment variable template
-├── setup_db.sql                    # PostgreSQL database creation script
-├── start.sh                        # One-click startup script
-├── README.md                       # This file
-├── uploads/                        # Auto-created — stores all uploaded files
-│   ├── documents/                  # Document uploads (PDF, DOCX, CSV)
-│   └── messages/                   # File attachments shared in chat
-└── app/
-    ├── __init__.py
-    ├── config.py                   # Pydantic settings loaded from .env
-    ├── database.py                 # Async SQLAlchemy engine + session factory
-    ├── models.py                   # All 15 SQLAlchemy ORM models
-    ├── auth.py                     # bcrypt hashing, JWT creation, dependencies
-    ├── routers/
-    │   ├── __init__.py
-    │   ├── auth.py                 # /auth/* — login, register, logout, ws-token
-    │   ├── business_ops.py         # /Tasks/ -Meetings schedules
-    │   ├── dashboard.py            # /dashboard — stats, activity feed
-    │   ├── messages.py             # /messages/* — chat, WebSocket, file upload, delete
-    │   ├── ask_boss.py             # /ask-boss/* — AI chat, SSE streaming, sessions
-    │   ├── documents.py            # /documents/* — CRUD, upload, approve/reject
-    │   └── admin.py                # /users, /onboarding, /compliance, /risk, /settings
-    ├── services/
-    │   ├── __init__.py
-    │   ├── ai_service.py           # Ollama client, RAG, knowledge/compliance extraction
-    │   ├── document_service.py     # PDF/DOCX/CSV text extraction + text chunking
-    │   └── websocket_manager.py    # Multi-channel WebSocket connection manager
-    ├── templates/
-    │   ├── base.html               # Master layout — sidebar, topbar, toast, modals
-    │   ├── auth/
-    │   │   ├── login.html
-    │   │   └── register.html
-    │   ├── dashboard/index.html
-    │   ├── messages/index.html     # Full-featured chat UI
-    │   ├── ask_boss/index.html     # Streaming AI chat
-    │   ├── knowledge/index.html
-    │   ├── documents/
-    │   │   ├── index.html
-    │   │   └── new.html
-    │   ├── users/index.html
-    │   ├── onboarding/index.html
-    │   ├── compliance/index.html
-    │   ├── risk/index.html
-    │   ├── audit/index.html
-    │   ├── settings/index.html
-    │   └── errors/
-    │       ├── 403.html
-    │       └── 404.html
-    └── static/
-        ├── css/custom.css
-        └── js/app.js
-```
+**Google Workspace:**
+1. [console.cloud.google.com](https://console.cloud.google.com) → APIs & Services → Credentials → Create OAuth 2.0 Client
+2. Authorized redirect URI: `https://yourdomain.com/auth/sso/google/callback`
+3. Add `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` to `.env`
+
+**Microsoft 365:**
+1. [portal.azure.com](https://portal.azure.com) → App registrations → New registration
+2. Redirect URI: `https://yourdomain.com/auth/sso/microsoft/callback`
+3. Create client secret under "Certificates & secrets"
+4. Add `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET`, `MICROSOFT_TENANT_ID` to `.env`
 
 ---
 
 ## Customization
 
-| What | Where |
+| What to change | Where |
 |---|---|
-| Change AI model | `OLLAMA_MODEL` in `.env` |
-| Add departments | Department lists in `messages.py` and templates |
-| Brand name / colors | CSS variables in `base.html` (`:root` block) |
-| Max upload size | `MAX_FILE_SIZE_MB` in `.env` |
+| AI model | `OLLAMA_MODEL` in `.env` |
+| Brand name / accent color | `:root` CSS variables in `base.html` |
+| Departments list | Department arrays in router files and templates |
+| Max file upload size | `MAX_FILE_SIZE_MB` in `.env` |
 | Session duration | `ACCESS_TOKEN_EXPIRE_MINUTES` in `.env` |
-| Add knowledge manually | Knowledge Base page → or directly via the Documents upload |
-| Allowed file types in chat | `ALLOWED_EXTENSIONS` set in `messages.py` |
+| Push notification icon | `app/static/img/icon-192.png` |
+| Allowed chat file types | `ALLOWED_EXTENSIONS` in `messages.py` |
+| Accounting currency | `currency` default in `AccountingRecord` model |
+| Notification poll interval | `setInterval(loadNotifications, 30000)` in `base.html` |
 
 ---
 
-*Built with ❤️ by **MindSync AI Consults** · BOSS System v1.0*
+*Built with ❤️ by **MindSync AI Consults** · BOSS System v2.0*
