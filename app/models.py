@@ -9,7 +9,10 @@ import enum
 
 Base = declarative_base()
 
-
+class TransactionType(str, enum.Enum):
+    income  = "income"
+    expense = "expense"
+    
 class UserRole(str, enum.Enum):
     super_admin = "super_admin"
     admin = "admin"
@@ -414,4 +417,171 @@ class PushSubscription(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
  
     user = relationship("User")
+
+
+class AccountingRecord(Base):
+    __tablename__ = "accounting_records"
+    id            = Column(Integer, primary_key=True, index=True)
+    type          = Column(SAEnum(TransactionType, name="transactiontype"), nullable=False)
+    amount        = Column(Float, nullable=False)
+    currency      = Column(String(10), default="USD")
+    category      = Column(String(100))           # e.g. "Transportation", "Salaries", "Sales"
+    description   = Column(Text, nullable=False)
+    reference     = Column(String(200))           # invoice / receipt number
+    recorded_by   = Column(Integer, ForeignKey("users.id"))
+    ai_parsed     = Column(Boolean, default=False)   # True if created via natural-language
+    date          = Column(DateTime(timezone=True), server_default=func.now())
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
  
+    recorder = relationship("User", foreign_keys=[recorded_by])
+ 
+ 
+class AccountingCategory(Base):
+    __tablename__ = "accounting_categories"
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String(100), unique=True, nullable=False)
+    type       = Column(String(20))   # income | expense
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  INVENTORY
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+class InventoryItem(Base):
+    __tablename__ = "inventory_items"
+    id              = Column(Integer, primary_key=True, index=True)
+    name            = Column(String(300), nullable=False)
+    sku             = Column(String(100), unique=True, index=True)
+    category        = Column(String(100))
+    description     = Column(Text)
+    unit            = Column(String(50), default="unit")   # unit, kg, litre, box …
+    quantity        = Column(Float, default=0)
+    reorder_level   = Column(Float, default=0)             # alert when qty ≤ this
+    cost_price      = Column(Float, default=0)
+    selling_price   = Column(Float, default=0)
+    supplier        = Column(String(200))
+    location        = Column(String(200))                  # shelf / warehouse
+    is_active       = Column(Boolean, default=True)
+    created_by      = Column(Integer, ForeignKey("users.id"))
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+ 
+    creator    = relationship("User", foreign_keys=[created_by])
+    movements  = relationship("InventoryMovement", back_populates="item")
+ 
+ 
+class MovementType(str, enum.Enum):
+    stock_in  = "stock_in"
+    stock_out = "stock_out"
+    adjustment = "adjustment"
+    return_in  = "return_in"
+ 
+ 
+class InventoryMovement(Base):
+    __tablename__ = "inventory_movements"
+    id          = Column(Integer, primary_key=True, index=True)
+    item_id     = Column(Integer, ForeignKey("inventory_items.id"))
+    type        = Column(SAEnum(MovementType, name="movementtype"), nullable=False)
+    quantity    = Column(Float, nullable=False)
+    unit_cost   = Column(Float, nullable=True)
+    reference   = Column(String(200))
+    notes       = Column(Text)
+    recorded_by = Column(Integer, ForeignKey("users.id"))
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    item     = relationship("InventoryItem", back_populates="movements")
+    recorder = relationship("User", foreign_keys=[recorded_by])
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  HR — RECRUITMENT PIPELINE
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+class JobStatus(str, enum.Enum):
+    open   = "open"
+    paused = "paused"
+    closed = "closed"
+ 
+class JobPosting(Base):
+    __tablename__ = "job_postings"
+    id              = Column(Integer, primary_key=True, index=True)
+    title           = Column(String(300), nullable=False)
+    department      = Column(String(100))
+    description     = Column(Text, nullable=False)
+    requirements    = Column(Text)                # bullet list of requirements
+    salary_range    = Column(String(100))
+    location        = Column(String(200), default="On-site")
+    employment_type = Column(String(50), default="Full-time")
+    status          = Column(SAEnum(JobStatus, name="jobstatus"), default=JobStatus.open)
+    created_by      = Column(Integer, ForeignKey("users.id"))
+    deadline        = Column(DateTime(timezone=True), nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    creator      = relationship("User")
+    applications = relationship("JobApplication", back_populates="job")
+ 
+ 
+class ApplicationStatus(str, enum.Enum):
+    received   = "received"
+    screening  = "screening"
+    shortlisted= "shortlisted"
+    interview  = "interview"
+    offer      = "offer"
+    hired      = "hired"
+    rejected   = "rejected"
+ 
+class JobApplication(Base):
+    __tablename__ = "job_applications"
+    id              = Column(Integer, primary_key=True, index=True)
+    job_id          = Column(Integer, ForeignKey("job_postings.id"))
+    applicant_name  = Column(String(300), nullable=False)
+    applicant_email = Column(String(255))
+    applicant_phone = Column(String(50))
+    cv_path         = Column(String(500))           # uploaded CV file path
+    cv_text         = Column(Text)                  # extracted text from CV
+    cover_letter    = Column(Text)
+    status          = Column(SAEnum(ApplicationStatus, name="applicationstatus"),
+                             default=ApplicationStatus.received)
+    ai_score        = Column(Float, nullable=True)       # 0-100 AI match score
+    ai_summary      = Column(Text, nullable=True)        # AI-generated candidate summary
+    ai_recommendation = Column(Text, nullable=True)      # AI recommendation paragraph
+    interview_date  = Column(DateTime(timezone=True), nullable=True)
+    interview_notes = Column(Text)
+    offer_sent      = Column(Boolean, default=False)
+    rejection_sent  = Column(Boolean, default=False)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at      = Column(DateTime(timezone=True), onupdate=func.now())
+ 
+    job = relationship("JobPosting", back_populates="applications")
+ 
+ 
+class HRNotification(Base):
+    """System-generated HR messages sent to applicants (stored for audit)."""
+    __tablename__ = "hr_notifications"
+    id              = Column(Integer, primary_key=True, index=True)
+    application_id  = Column(Integer, ForeignKey("job_applications.id"))
+    type            = Column(String(50))    # screening | interview | offer | rejection
+    subject         = Column(String(500))
+    body            = Column(Text)
+    sent_at         = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    application = relationship("JobApplication")
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  INTERNAL NOTIFICATIONS  (in-app)
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+class InternalNotification(Base):
+    __tablename__ = "internal_notifications"
+    id          = Column(Integer, primary_key=True, index=True)
+    user_id     = Column(Integer, ForeignKey("users.id"))
+    title       = Column(String(300), nullable=False)
+    body        = Column(Text)
+    type        = Column(String(50), default="info")  # info|success|warning|error|message|hr
+    link        = Column(String(500))                  # click-through URL
+    is_read     = Column(Boolean, default=False)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")

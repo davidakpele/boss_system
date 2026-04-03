@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+{% block title %}Accounting — BOSS BCC{% endblock %}
+{% block page_title %}Accounting{% endblock %}
+{% block page_sub %}Income · Expenses · P&L · AI Transaction Entry{% endblock %}
+{% block extra_css %}
+.acc-summary { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
+.acc-kpi { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; }
+.acc-kpi-val { font-family:'Syne',sans-serif; font-weight:800; font-size:24px; margin-top:4px; }
+.txn-table { width:100%; border-collapse:collapse; }
+.txn-table th { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); font-weight:600; padding:10px 14px; border-bottom:1px solid var(--border); text-align:left; }
+.txn-table td { padding:11px 14px; border-bottom:1px solid rgba(31,45,66,0.4); font-size:13.5px; }
+.txn-table tr:last-child td { border-bottom:none; }
+.txn-table tr:hover td { background:rgba(255,255,255,.015); }
+.ai-chat-bar {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px; margin-bottom:20px;
+}
+.ai-input-row { display:flex; gap:10px; align-items:flex-end; }
+.ai-textarea { flex:1; background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:10px 14px; color:var(--text); font-size:13.5px; font-family:'DM Sans',sans-serif; resize:none; outline:none; transition:border-color .15s; }
+.ai-textarea:focus { border-color:var(--accent); }
+.ai-textarea::placeholder { color:var(--text3); }
+.ai-result { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:14px; margin-top:12px; display:none; }
+.type-badge { padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; }
+.income-badge  { background:rgba(16,185,129,.1);  color:#34d399; }
+.expense-badge { background:rgba(239,68,68,.1);   color:#f87171; }
+@media(max-width:700px){ .acc-summary{grid-template-columns:1fr 1fr;} }
+{% endblock %}
+{% block content %}
+
+{# ── KPI ── #}
+<div class="acc-summary">
+  <div class="acc-kpi">
+    <div class="stat-label">Total Income</div>
+    <div class="acc-kpi-val" style="color:#34d399;">${{ "{:,.2f}".format(total_income) }}</div>
+  </div>
+  <div class="acc-kpi">
+    <div class="stat-label">Total Expenses</div>
+    <div class="acc-kpi-val" style="color:#f87171;">${{ "{:,.2f}".format(total_expense) }}</div>
+  </div>
+  <div class="acc-kpi">
+    <div class="stat-label">Net {{ 'Profit' if net >= 0 else 'Loss' }}</div>
+    <div class="acc-kpi-val" style="color:{% if net >= 0 %}#34d399{% else %}#f87171{% endif %};">${{ "{:,.2f}".format(net|abs) }}</div>
+  </div>
+</div>
+
+{# ── AI Transaction Entry ── #}
+<div class="ai-chat-bar">
+  <div class="card-title mb-2"><i class="fa-solid fa-robot" style="color:var(--accent)"></i> Record Transaction with AI</div>
+  <div style="font-size:12.5px;color:var(--text3);margin-bottom:10px;">
+    Type naturally — e.g. <em>"I paid $15,000 for office supplies"</em> or <em>"Received $200,000 from client payment"</em>
+  </div>
+  <div class="ai-input-row">
+    <textarea class="ai-textarea" id="aiInput" rows="2" placeholder="Describe your transaction in plain English..."></textarea>
+    <button class="btn btn-primary" onclick="aiParse()"><i class="fa-solid fa-robot"></i> Parse</button>
+  </div>
+  <div class="ai-result" id="aiResult">
+    <div class="flex items-center gap-2 mb-3">
+      <span id="aiTypeBadge" class="type-badge"></span>
+      <span style="font-size:13px;color:var(--text3);">AI parsed your transaction — review and confirm</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px;">
+      <div><div class="form-label">Amount</div><input id="cfAmount" type="number" class="form-control" style="padding-left:12px"/></div>
+      <div><div class="form-label">Category</div><input id="cfCategory" type="text" class="form-control" style="padding-left:12px"/></div>
+      <div><div class="form-label">Date</div><input id="cfDate" type="datetime-local" class="form-control" style="padding-left:12px"/></div>
+    </div>
+    <div class="form-group"><div class="form-label">Description</div><input id="cfDesc" type="text" class="form-control" style="padding-left:12px"/></div>
+    <input type="hidden" id="cfType"/>
+    <div class="flex gap-2 mt-3">
+      <button class="btn btn-primary" onclick="confirmRecord()"><i class="fa-solid fa-check"></i> Confirm & Record</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('aiResult').style.display='none'">Discard</button>
+    </div>
+  </div>
+</div>
+
+{# ── Filters + Manual Entry ── #}
+<div class="flex gap-3 mb-4" style="flex-wrap:wrap;align-items:center;">
+  <form method="GET" action="/bcc/accounting" style="display:flex;gap:10px;flex-wrap:wrap;">
+    <select name="type_filter" class="form-control" style="width:140px;padding-left:12px;" onchange="this.form.submit()">
+      <option value="">All Types</option>
+      <option value="income"  {% if filters.type=='income'  %}selected{% endif %}>Income</option>
+      <option value="expense" {% if filters.type=='expense' %}selected{% endif %}>Expense</option>
+    </select>
+    <input type="month" name="month" value="{{ filters.month or '' }}" class="form-control" style="width:160px;padding-left:12px;" onchange="this.form.submit()"/>
+    {% if filters.type or filters.month %}<a href="/bcc/accounting" class="btn btn-ghost btn-sm"><i class="fa-solid fa-times"></i></a>{% endif %}
+  </form>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <a href="/bcc/accounting/export/csv" class="btn btn-ghost btn-sm"><i class="fa-solid fa-download"></i> Export CSV</a>
+    <button class="btn btn-primary btn-sm" onclick="openModal('manualModal')"><i class="fa-solid fa-plus"></i> Manual Entry</button>
+  </div>
+</div>
+
+{# ── Table ── #}
+<div class="card" style="overflow-x:auto;">
+  {% if records %}
+  <table class="txn-table">
+    <thead><tr>
+      <th>Date</th><th>Type</th><th>Amount</th><th>Category</th><th>Description</th><th>Ref</th><th></th>
+    </tr></thead>
+    <tbody>
+    {% for r in records %}
+    <tr>
+      <td class="text-xs text-muted font-mono">{{ r.date.strftime('%b %d, %Y') if r.date else '—' }}</td>
+      <td><span class="type-badge {% if r.type.value=='income' %}income-badge{% else %}expense-badge{% endif %}">{{ r.type.value.title() }}</span></td>
+      <td style="font-weight:700;color:{% if r.type.value=='income' %}#34d399{% else %}#f87171{% endif %};">
+        {% if r.type.value=='income' %}+{% else %}-{% endif %}${{ "{:,.2f}".format(r.amount) }}
+        {% if r.ai_parsed %}<i class="fa-solid fa-robot" style="font-size:9px;color:var(--accent);margin-left:4px;" title="AI parsed"></i>{% endif %}
+      </td>
+      <td class="text-muted">{{ r.category }}</td>
+      <td style="max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.description }}</td>
+      <td class="text-xs text-muted font-mono">{{ r.reference or '—' }}</td>
+      <td><button class="btn btn-danger btn-xs" onclick="deleteRecord({{ r.id }})"><i class="fa-solid fa-trash"></i></button></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div style="text-align:center;padding:60px 20px;color:var(--text3);">
+    <i class="fa-solid fa-receipt" style="font-size:36px;opacity:.15;display:block;margin-bottom:10px;"></i>
+    No transactions yet. Use AI entry above or Manual Entry to get started.
+  </div>
+  {% endif %}
+</div>
+
+{# ── Manual Modal ── #}
+<div class="modal-overlay" id="manualModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-plus-circle" style="color:var(--accent)"></i> Manual Entry</span>
+      <span class="modal-close" onclick="closeModal('manualModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Type *</label>
+        <select id="m-type" class="form-control" style="padding-left:12px">
+          <option value="income">Income</option><option value="expense">Expense</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Amount *</label>
+        <input type="number" id="m-amount" class="form-control" placeholder="0.00" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Description *</label>
+      <input type="text" id="m-desc" class="form-control" placeholder="What is this for?" style="padding-left:12px"/>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Category</label>
+        <input type="text" id="m-cat" class="form-control" placeholder="e.g. Salaries" style="padding-left:12px"/>
+      </div>
+      <div class="form-group"><label class="form-label">Reference</label>
+        <input type="text" id="m-ref" class="form-control" placeholder="Invoice / Receipt #" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Date</label>
+      <input type="datetime-local" id="m-date" class="form-control" style="padding-left:12px"/>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('manualModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveManual()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block extra_js %}
+<script>
+async function aiParse() {
+  const text = document.getElementById('aiInput').value.trim();
+  if (!text) { toast('Enter a transaction description', 'error'); return; }
+  const r = await fetch('/bcc/accounting/ai-parse', {
+    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text})
+  });
+  const d = await r.json();
+  if (!r.ok) { toast(d.error || 'Could not parse', 'error'); return; }
+  document.getElementById('cfType').value = d.type;
+  document.getElementById('cfAmount').value = d.amount;
+  document.getElementById('cfCategory').value = d.category || '';
+  document.getElementById('cfDesc').value = d.description || text;
+  document.getElementById('cfDate').value = new Date().toISOString().slice(0,16);
+  const badge = document.getElementById('aiTypeBadge');
+  badge.className = 'type-badge ' + (d.type === 'income' ? 'income-badge' : 'expense-badge');
+  badge.textContent = d.type.toUpperCase();
+  document.getElementById('aiResult').style.display = 'block';
+}
+
+async function confirmRecord() {
+  const fd = new FormData();
+  fd.append('type',        document.getElementById('cfType').value);
+  fd.append('amount',      document.getElementById('cfAmount').value);
+  fd.append('category',    document.getElementById('cfCategory').value);
+  fd.append('description', document.getElementById('cfDesc').value);
+  fd.append('date_str',    document.getElementById('cfDate').value);
+  const r = await fetch('/bcc/accounting/record', {method:'POST', body:fd});
+  if (r.ok) { toast('Recorded!', 'success'); setTimeout(()=>location.reload(), 600); }
+  else toast('Error', 'error');
+}
+
+async function saveManual() {
+  const fd = new FormData();
+  fd.append('type',        document.getElementById('m-type').value);
+  fd.append('amount',      document.getElementById('m-amount').value);
+  fd.append('description', document.getElementById('m-desc').value);
+  fd.append('category',    document.getElementById('m-cat').value);
+  fd.append('reference',   document.getElementById('m-ref').value);
+  fd.append('date_str',    document.getElementById('m-date').value);
+  if (!fd.get('amount') || !fd.get('description')) { toast('Amount and description required', 'error'); return; }
+  const r = await fetch('/bcc/accounting/record', {method:'POST', body:fd});
+  if (r.ok) { toast('Saved!', 'success'); closeModal('manualModal'); setTimeout(()=>location.reload(), 600); }
+  else toast('Error', 'error');
+}
+
+async function deleteRecord(id) {
+  if (!confirm('Delete this record?')) return;
+  const r = await fetch(`/bcc/accounting/${id}`, {method:'DELETE'});
+  if (r.ok) { toast('Deleted', 'info'); setTimeout(()=>location.reload(), 400); }
+}
+</script>
+{% endblock %}

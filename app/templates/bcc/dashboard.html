@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Command Centre — BOSS{% endblock %}
+{% block page_title %}Business Command Centre{% endblock %}
+{% block page_sub %}Sales · Accounting · Inventory · HR — all in one place{% endblock %}
+{% block extra_css %}
+.bcc-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+.bcc-module-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
+.module-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:24px 20px; text-align:center; text-decoration:none; color:var(--text);
+  transition:all 0.2s; display:flex; flex-direction:column; align-items:center; gap:12px;
+}
+.module-card:hover { border-color:var(--accent); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,0,0,0.2); }
+.module-icon {
+  width:56px; height:56px; border-radius:16px;
+  display:flex; align-items:center; justify-content:center; font-size:24px;
+}
+.module-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; }
+.module-desc { font-size:12px; color:var(--text3); line-height:1.5; }
+.txn-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(31,45,66,0.4); }
+.txn-row:last-child { border-bottom:none; }
+.txn-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+@media(max-width:900px){ .bcc-grid{grid-template-columns:repeat(2,1fr);} .bcc-module-grid{grid-template-columns:1fr 1fr;} }
+@media(max-width:600px){ .bcc-grid{grid-template-columns:1fr 1fr;} .bcc-module-grid{grid-template-columns:1fr;} }
+{% endblock %}
+{% block content %}
+
+{# ── KPI Strip ── #}
+<div class="bcc-grid">
+  <div class="stat-card card">
+    <div class="glow" style="background:#10b981"></div>
+    <div class="stat-icon" style="color:#10b981;font-size:20px;margin-bottom:6px;"><i class="fa-solid fa-arrow-trend-up"></i></div>
+    <div class="stat-label">Total Income</div>
+    <div class="stat-value" style="color:#34d399;font-size:22px;font-weight:800;">${{ "{:,.2f}".format(total_income) }}</div>
+  </div>
+  <div class="stat-card card">
+    <div class="glow" style="background:#ef4444"></div>
+    <div class="stat-icon" style="color:#ef4444;font-size:20px;margin-bottom:6px;"><i class="fa-solid fa-arrow-trend-down"></i></div>
+    <div class="stat-label">Total Expenses</div>
+    <div class="stat-value" style="color:#f87171;font-size:22px;font-weight:800;">${{ "{:,.2f}".format(total_expense) }}</div>
+  </div>
+  <div class="stat-card card">
+    <div class="glow" style="background:{% if net >= 0 %}#10b981{% else %}#ef4444{% endif %}"></div>
+    <div class="stat-icon" style="color:{% if net >= 0 %}#10b981{% else %}#ef4444{% endif %};font-size:20px;margin-bottom:6px;"><i class="fa-solid fa-scale-balanced"></i></div>
+    <div class="stat-label">Net Profit/Loss</div>
+    <div class="stat-value" style="color:{% if net >= 0 %}#34d399{% else %}#f87171{% endif %};font-size:22px;font-weight:800;">${{ "{:,.2f}".format(net) }}</div>
+  </div>
+  <div class="stat-card card">
+    <div class="glow" style="background:#f59e0b"></div>
+    <div class="stat-icon" style="color:#f59e0b;font-size:20px;margin-bottom:6px;"><i class="fa-solid fa-triangle-exclamation"></i></div>
+    <div class="stat-label">Low Stock Alerts</div>
+    <div class="stat-value" style="color:#fbbf24;font-size:22px;font-weight:800;">{{ low_stock|length }}</div>
+  </div>
+</div>
+
+{# ── Module Cards ── #}
+<div class="bcc-module-grid">
+  <a href="/bcc/accounting" class="module-card">
+    <div class="module-icon" style="background:rgba(16,185,129,0.1);color:#34d399;">💰</div>
+    <div class="module-title">Accounting</div>
+    <div class="module-desc">Income, expenses, P&L reports. Chat to record transactions in plain English.</div>
+    <span class="badge badge-green">{{ recent_txns|length }} recent records</span>
+  </a>
+  <a href="/bcc/inventory" class="module-card">
+    <div class="module-icon" style="background:rgba(59,130,246,0.1);color:#60a5fa;">📦</div>
+    <div class="module-title">Inventory</div>
+    <div class="module-desc">Track stock levels, movements, reorder alerts and supplier info.</div>
+    <span class="badge badge-{% if low_stock|length > 0 %}red{% else %}green{% endif %}">
+      {% if low_stock|length > 0 %}{{ low_stock|length }} low stock{% else %}All stocked{% endif %}
+    </span>
+  </a>
+  <a href="/bcc/hr" class="module-card">
+    <div class="module-icon" style="background:rgba(139,92,246,0.1);color:#a78bfa;">🤖</div>
+    <div class="module-title">AI Recruitment</div>
+    <div class="module-desc">Post jobs, screen CVs with AI, manage the full hiring pipeline automatically.</div>
+    <div class="flex gap-2" style="justify-content:center;">
+      <span class="badge badge-blue">{{ open_jobs }} open jobs</span>
+      <span class="badge badge-yellow">{{ pending_apps }} pending</span>
+    </div>
+  </a>
+</div>
+
+{# ── Recent Transactions + Low Stock ── #}
+<div class="grid grid-2" style="gap:16px;">
+  <div class="card">
+    <div class="card-title flex justify-between">
+      <span><i class="fa-solid fa-receipt" style="color:var(--accent)"></i> Recent Transactions</span>
+      <a href="/bcc/accounting" class="btn btn-ghost btn-xs">View All</a>
+    </div>
+    {% for r in recent_txns %}
+    <div class="txn-row">
+      <div class="txn-dot" style="background:{% if r.type.value == 'income' %}var(--green){% else %}var(--red){% endif %}"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.description }}</div>
+        <div style="font-size:11px;color:var(--text3);">{{ r.category }} · {{ r.date.strftime('%b %d') if r.date else '' }}</div>
+      </div>
+      <div style="font-weight:700;font-size:13px;color:{% if r.type.value == 'income' %}#34d399{% else %}#f87171{% endif %};flex-shrink:0;">
+        {% if r.type.value == 'income' %}+{% else %}-{% endif %}${{ "{:,.2f}".format(r.amount) }}
+      </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:30px;color:var(--text3);font-size:12.5px;">No transactions yet.</div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <div class="card-title flex justify-between">
+      <span><i class="fa-solid fa-triangle-exclamation" style="color:var(--yellow)"></i> Low Stock Alerts</span>
+      <a href="/bcc/inventory" class="btn btn-ghost btn-xs">View All</a>
+    </div>
+    {% for item in low_stock %}
+    <div class="txn-row">
+      <div class="txn-dot" style="background:{% if item.quantity == 0 %}var(--red){% else %}var(--yellow){% endif %}"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:500;">{{ item.name }}</div>
+        <div style="font-size:11px;color:var(--text3);">{{ item.category }} · SKU: {{ item.sku }}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div style="font-weight:700;font-size:13px;color:{% if item.quantity == 0 %}#f87171{% else %}#fbbf24{% endif %};">{{ item.quantity }} {{ item.unit }}</div>
+        <div style="font-size:10px;color:var(--text3);">Reorder: {{ item.reorder_level }}</div>
+      </div>
+    </div>
+    {% else %}
+    <div style="text-align:center;padding:30px;color:var(--green);font-size:12.5px;">
+      <i class="fa-solid fa-check-circle" style="display:block;font-size:24px;margin-bottom:8px;"></i>
+      All items are well stocked!
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
