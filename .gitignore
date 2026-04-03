@@ -2,6 +2,7 @@
 venv/
 env/
 .env
+.env.example
 *.env
 *.env.local
 *.env.example
