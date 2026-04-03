@@ -22,8 +22,9 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["bcc"])
-templates = Jinja2Templates(directory="app/templates")
 
+templates = Jinja2Templates(directory="app/templates")
+templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else {}
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  BCC DASHBOARD
@@ -344,8 +345,7 @@ async def hr_page(
     jobs = (await db.execute(
         select(JobPosting).order_by(JobPosting.created_at.desc())
     )).scalars().all()
-
-    # App counts per job
+ 
     job_stats = {}
     for job in jobs:
         counts = {}
@@ -356,7 +356,7 @@ async def hr_page(
             )).scalar()
             counts[status.value] = c
         job_stats[job.id] = counts
-
+ 
     return templates.TemplateResponse(request=request, name="bcc/hr_jobs.html", context={
         "user": current_user, "page": "bcc", "jobs": jobs, "job_stats": job_stats,
     })
@@ -383,10 +383,58 @@ async def create_job(
     await db.commit()
     return JSONResponse({"status": "created"})
 
+@router.post("/bcc/hr/jobs/{job_id}/update")
+async def update_job(
+    job_id: int,
+    title: str = Form(...), department: str = Form(""),
+    description: str = Form(...), requirements: str = Form(""),
+    salary_range: str = Form(""), location: str = Form("On-site"),
+    employment_type: str = Form("Full-time"), deadline: str = Form(None),
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    job = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
+    if not job: raise HTTPException(404)
+    job.title = title; job.department = department
+    job.description = description; job.requirements = requirements
+    job.salary_range = salary_range; job.location = location
+    job.employment_type = employment_type
+    if deadline:
+        try: job.deadline = datetime.fromisoformat(deadline)
+        except: pass
+    else:
+        job.deadline = None
+    await db.commit()
+    return JSONResponse({"status": "updated"})
+
+
+@router.post("/bcc/hr/jobs/{job_id}/clone")
+async def clone_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    original = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
+    if not original: raise HTTPException(404)
+    clone = JobPosting(
+        title=f"[Copy] {original.title}",
+        department=original.department,
+        description=original.description,
+        requirements=original.requirements,
+        salary_range=original.salary_range,
+        location=original.location,
+        employment_type=original.employment_type,
+        status=JobStatus.open,
+        created_by=current_user.id,
+    )
+    db.add(clone)
+    await db.commit()
+    await db.refresh(clone)
+    return JSONResponse({"status": "cloned", "id": clone.id})
 
 @router.post("/bcc/hr/jobs/{job_id}/toggle")
-async def toggle_job(job_id: int, db: AsyncSession = Depends(get_db),
-                     current_user: User = Depends(require_user)):
+async def toggle_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
     job = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
     if not job: raise HTTPException(404)
     job.status = JobStatus.closed if job.status == JobStatus.open else JobStatus.open
@@ -394,27 +442,62 @@ async def toggle_job(job_id: int, db: AsyncSession = Depends(get_db),
     return JSONResponse({"status": job.status.value})
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  HR — APPLICATIONS
-# ═══════════════════════════════════════════════════════════════════════════════
+@router.delete("/bcc/hr/jobs/{job_id}")
+async def delete_job(
+    job_id: int,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    if current_user.role not in ("super_admin", "admin"):
+        raise HTTPException(status_code=403)
+    job = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
+    if not job: raise HTTPException(404)
+    # cascade-delete applications first
+    apps = (await db.execute(
+        select(JobApplication).where(JobApplication.job_id == job_id)
+    )).scalars().all()
+    for a in apps:
+        await db.delete(a)
+    await db.delete(job)
+    await db.commit()
+    return JSONResponse({"status": "deleted"})
+
 
 @router.get("/bcc/hr/jobs/{job_id}/applications", response_class=HTMLResponse)
-async def applications_page(
-    job_id: int, request: Request, db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_user), status_filter: str = None,
+async def job_detail(
+    job_id: int, request: Request,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
 ):
     job = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
     if not job: raise HTTPException(404)
+ 
+    # Stage filter from query param
+    stage_filter = request.query_params.get("stage")
+ 
     stmt = select(JobApplication).where(JobApplication.job_id == job_id)
-    if status_filter:
-        stmt = stmt.where(JobApplication.status == status_filter)
+    if stage_filter:
+        stmt = stmt.where(JobApplication.status == stage_filter)
     stmt = stmt.order_by(JobApplication.ai_score.desc().nullslast(), JobApplication.created_at.desc())
     apps = (await db.execute(stmt)).scalars().all()
+ 
+    # Count per stage for the tabs
+    counts = {}
+    for status in ApplicationStatus:
+        c = (await db.execute(
+            select(func.count(JobApplication.id))
+            .where(JobApplication.job_id == job_id, JobApplication.status == status)
+        )).scalar()
+        counts[status.value] = c
+ 
     return templates.TemplateResponse(request=request, name="bcc/hr_applications.html", context={
-        "user": current_user, "page": "bcc", "job": job, "applications": apps,
-        "status_filter": status_filter, "statuses": [s.value for s in ApplicationStatus],
+        "user": current_user, "page": "bcc",
+        "job": job, "applications": apps,
+        "counts": counts,
+        "statuses": [s.value for s in ApplicationStatus],
     })
-
+    
+# ═══════════════════════════════════════════════════════════════════════════════
+#  HR — APPLICATIONS
+# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/bcc/hr/jobs/{job_id}/apply")
 async def submit_application(
@@ -426,22 +509,26 @@ async def submit_application(
 ):
     job = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
     if not job: raise HTTPException(404)
-
+ 
     cv_path = None; cv_text = ""
     if cv_file and cv_file.filename:
         upload_dir = Path(settings.UPLOAD_DIR) / "cvs"
         upload_dir.mkdir(parents=True, exist_ok=True)
-        fname = f"{uuid.uuid4()}_{cv_file.filename}"
+        # keep original extension
+        ext = Path(cv_file.filename).suffix.lower()
+        fname = f"{uuid.uuid4()}{ext}"
         save_path = upload_dir / fname
         with open(save_path, "wb") as f:
             shutil.copyfileobj(cv_file.file, f)
         cv_path = str(save_path)
-        # Extract text
         from app.services.document_service import extract_text_from_file, get_file_type
         ftype = get_file_type(cv_file.filename)
         if ftype != "unknown":
-            cv_text = await extract_text_from_file(cv_path, ftype)
-
+            try:
+                cv_text = await extract_text_from_file(cv_path, ftype)
+            except Exception as e:
+                logger.warning(f"CV text extraction failed: {e}")
+ 
     app = JobApplication(
         job_id=job_id, applicant_name=applicant_name,
         applicant_email=applicant_email, applicant_phone=applicant_phone,
@@ -452,6 +539,52 @@ async def submit_application(
     await db.refresh(app)
     return JSONResponse({"status": "submitted", "id": app.id})
 
+@router.delete("/bcc/hr/applications/{app_id}")
+async def delete_application(
+    app_id: int,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    app = (await db.execute(select(JobApplication).where(JobApplication.id == app_id))).scalar_one_or_none()
+    if not app: raise HTTPException(404)
+    # remove CV file from disk
+    if app.cv_path:
+        try:
+            Path(app.cv_path).unlink(missing_ok=True)
+        except Exception:
+            pass
+    # delete related HR notifications first to avoid FK violation
+    notifs = (await db.execute(
+        select(HRNotification).where(HRNotification.application_id == app_id)
+    )).scalars().all()
+    for n in notifs:
+        await db.delete(n)
+    await db.delete(app)
+    await db.commit()
+    return JSONResponse({"status": "deleted"})
+ 
+@router.get("/bcc/hr/applications/{app_id}/cv")
+async def download_cv(
+    app_id: int,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    from fastapi.responses import FileResponse
+    app = (await db.execute(select(JobApplication).where(JobApplication.id == app_id))).scalar_one_or_none()
+    if not app or not app.cv_path:
+        raise HTTPException(status_code=404, detail="CV not found")
+    path = Path(app.cv_path)
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="CV file missing from disk")
+    suffix = path.suffix.lower()
+    media_types = {
+        ".pdf":  "application/pdf",
+        ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".doc":  "application/msword",
+    }
+    media_type = media_types.get(suffix, "application/octet-stream")
+    filename = f"CV_{app.applicant_name.replace(' ','_')}{suffix}"
+    return FileResponse(str(path), media_type=media_type,
+                        filename=filename,
+                        headers={"Content-Disposition": f"inline; filename={filename}"})
 
 @router.post("/bcc/hr/applications/{app_id}/screen")
 async def ai_screen_application(
@@ -503,7 +636,10 @@ async def ai_screen_application(
                 "- Do not use newlines inside string values.\n"
                 "- Evaluate based on skills, experience, and relevance regardless of how the CV is formatted.\n"
                 "- A candidate with an unusual CV layout but good skills should NOT be penalised.\n"
-                "- If CV text is sparse or poorly extracted, base score on what IS available and note it in summary."
+                "- If CV text is sparse or poorly extracted, base score on what IS available and note it in summary.\n"
+                "- Always provide 1-2 specific gaps or areas for improvement. If the CV looks strong, mention things like "
+                "'No mention of certifications', 'Years of experience not specified', or 'No portfolio/GitHub links provided' "
+                "rather than leaving gaps vague or empty.\n"
             ),
         },
         {

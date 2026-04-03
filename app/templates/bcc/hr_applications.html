@@ -1,115 +1,323 @@
 {% extends "base.html" %}
-{% block title %}Applications — {{ job.title }}{% endblock %}
+{% block title %}Applicants — {{ job.title }}{% endblock %}
 {% block page_title %}{{ job.title }}{% endblock %}
-{% block page_sub %}AI-powered applicant screening & pipeline management{% endblock %}
+{% block page_sub %}Applicant pipeline · AI screening · Email generation{% endblock %}
+
 {% block extra_css %}
-.app-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:16px 18px; margin-bottom:10px; }
-.app-card.top { border-left:3px solid var(--green); }
-.score-ring { width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-weight:800; font-size:13px; flex-shrink:0; }
-.status-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:20px; }
-.status-tab { padding:5px 14px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--text2); font-size:12px; font-weight:600; cursor:pointer; text-decoration:none; transition:all .15s; }
-.status-tab.active, .status-tab:hover { background:var(--accent-glow); color:var(--accent2); border-color:rgba(59,130,246,.3); }
-.ai-rec { margin-bottom:12px; font-size:12px; color:var(--text2); background:var(--bg3); border-radius:8px; padding:8px 12px; margin-top:8px; border-left:3px solid var(--accent); }
-.generated-msg { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:16px; margin-top:10px; white-space:pre-wrap; font-size:13px; line-height:1.7; color:var(--text2); display:none; }
+/* ── Pipeline stage tabs ── */
+.stage-tabs {
+  display:flex; gap:0; flex-wrap:wrap;
+  background:var(--bg2); border:1px solid var(--border);
+  border-radius:var(--radius); padding:4px; margin-bottom:20px;
+}
+.stage-tab {
+  flex:1; min-width:90px; padding:8px 10px; border-radius:8px;
+  text-align:center; cursor:pointer; text-decoration:none;
+  font-size:11.5px; font-weight:600; color:var(--text3);
+  transition:all .15s; border:1px solid transparent;
+  white-space:nowrap;
+}
+.stage-tab:hover  { background:var(--surface); color:var(--text2); }
+.stage-tab.active { background:var(--accent-glow); color:var(--accent2); border-color:rgba(59,130,246,.25); }
+.stage-tab .count { font-size:10px; opacity:.7; margin-left:3px; }
+
+/* ── Applicant card ── */
+.app-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:18px 20px; margin-bottom:12px;
+  transition:border-color .15s;
+}
+.app-card:hover { border-color:var(--border2); }
+.app-card.top-match { border-left:3px solid var(--green); }
+.app-card.rejected  { opacity:.65; }
+
+/* ── Score ring ── */
+.score-ring {
+  width:52px; height:52px; border-radius:50%; flex-shrink:0;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  font-family:'Syne',sans-serif; font-weight:800; font-size:14px; line-height:1;
+}
+.score-sub { font-size:8px; font-weight:500; opacity:.7; margin-top:1px; }
+
+/* ── AI result accordion ── */
+.ai-detail {
+  display:none; background:var(--bg3); border:1px solid var(--border);
+  border-radius:10px; padding:14px 16px; margin-top:10px;
+}
+.ai-detail.open { display:block; }
+.ai-tag { display:inline-flex; align-items:center; gap:4px; padding:3px 8px; border-radius:10px; font-size:11px; font-weight:600; margin:2px; }
+
+/* ── Generated email box ── */
+.email-box {
+  display:none; background:var(--bg2); border:1px solid var(--border);
+  border-radius:10px; padding:16px; margin-top:12px;
+}
+.email-box.open { display:block; }
+.email-pre { white-space:pre-wrap; font-size:13px; line-height:1.75; color:var(--text2); }
+
+/* ── Upload area ── */
+.upload-zone {
+  background:var(--bg2); border:1px dashed var(--border);
+  border-radius:var(--radius); padding:24px; margin-bottom:20px;
+}
 {% endblock %}
+
 {% block content %}
-<div class="flex items-center gap-3 mb-4">
+
+{# ── Back + job meta ── #}
+<div class="flex items-center gap-3 mb-4" style="flex-wrap:wrap;">
   <a href="/bcc/hr" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> All Jobs</a>
-  <span class="badge badge-{% if job.status.value=='open' %}green{% else %}gray{% endif %}">{{ job.status.value.title() }}</span>
+  <span class="badge badge-{% if job.status.value=='open' %}green{% elif job.status.value=='paused' %}yellow{% else %}gray{% endif %}">
+    {{ job.status.value.title() }}
+  </span>
+  <span class="text-xs text-muted">{{ job.employment_type }} · {{ job.location }}</span>
+  {% if job.salary_range %}<span class="badge badge-blue">{{ job.salary_range }}</span>{% endif %}
 </div>
 
-{# Status pipeline tabs #}
-<div class="status-tabs">
-  <a href="/bcc/hr/jobs/{{ job.id }}/applications" class="status-tab {% if not status_filter %}active{% endif %}">All ({{ applications|length }})</a>
+{# ── Stage tabs ── #}
+<div class="stage-tabs">
+  <a href="/bcc/hr/jobs/{{ job.id }}/applications" class="stage-tab {% if not request.query_params.get('stage') %}active{% endif %}">
+    All <span class="count">({{ applications|length }})</span>
+  </a>
   {% for s in statuses %}
-  <a href="/bcc/hr/jobs/{{ job.id }}/applications?status_filter={{ s }}" class="status-tab {% if status_filter == s %}active{% endif %}">
+  {% set cnt = counts.get(s, 0) %}
+  <a href="/bcc/hr/jobs/{{ job.id }}/applications?stage={{ s }}"
+     class="stage-tab {% if request.query_params.get('stage') == s %}active{% endif %}">
     {{ s.replace('_',' ').title() }}
+    {% if cnt > 0 %}<span class="count">({{ cnt }})</span>{% endif %}
   </a>
   {% endfor %}
 </div>
 
-{# Upload new CV #}
-<div class="card mb-6">
-  <div class="card-title"><i class="fa-solid fa-file-arrow-up" style="color:var(--accent)"></i> Add Application / Upload CV</div>
-  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;align-items:end;">
-    <div class="form-group" style="margin:0;"><label class="form-label">Name *</label><input type="text" id="app-name" class="form-control" style="padding-left:12px"/></div>
-    <div class="form-group" style="margin:0;"><label class="form-label">Email</label><input type="email" id="app-email" class="form-control" style="padding-left:12px"/></div>
-    <div class="form-group" style="margin:0;"><label class="form-label">Phone</label><input type="text" id="app-phone" class="form-control" style="padding-left:12px"/></div>
+{# ── Add applicant panel ── #}
+<div class="upload-zone">
+  <div class="card-title mb-3">
+    <i class="fa-solid fa-file-arrow-up" style="color:var(--accent)"></i> Add Applicant & Upload CV
   </div>
-  <div class="form-group mt-3"><label class="form-label">CV File (PDF, DOCX)</label>
-    <input type="file" id="app-cv" accept=".pdf,.docx,.doc" class="form-control" style="padding-left:12px"/>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Full Name *</label>
+      <input type="text" id="app-name" class="form-control" style="padding-left:12px"/>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Email Address</label>
+      <input type="email" id="app-email" class="form-control" style="padding-left:12px"/>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Phone</label>
+      <input type="text" id="app-phone" class="form-control" style="padding-left:12px"/>
+    </div>
   </div>
-  <div class="form-group"><label class="form-label">Cover Letter / Notes (optional)</label>
-    <textarea id="app-cover" class="form-control" rows="2" style="padding-left:12px"></textarea>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:12px;">
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">CV File (PDF or DOCX)</label>
+      <input type="file" id="app-cv" accept=".pdf,.docx,.doc" class="form-control" style="padding-left:12px"/>
+      <div style="font-size:10.5px;color:var(--text3);margin-top:4px;">AI will extract text and score the candidate automatically.</div>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Cover Letter / Notes (optional)</label>
+      <textarea id="app-cover" class="form-control" rows="2" style="padding-left:12px"></textarea>
+    </div>
   </div>
-  <button class="btn btn-primary mt-2" onclick="submitApp()"><i class="fa-solid fa-plus"></i> Add Application</button>
+  <div class="flex gap-2 mt-3">
+    <button class="btn btn-primary" onclick="submitApp()">
+      <i class="fa-solid fa-plus"></i> Add Applicant
+    </button>
+    <button class="btn btn-ghost" onclick="submitAndScreen()">
+      <i class="fa-solid fa-robot"></i> Add & AI Screen
+    </button>
+  </div>
 </div>
 
-{% if applications %}
-{% for app in applications %}
-{% set score = app.ai_score or 0 %}
-{% set score_color = '#34d399' if score >= 70 else ('#fbbf24' if score >= 40 else '#f87171') %}
-{% set rec_data = {} %}
-{% if app.ai_recommendation %}
-{% set rec_data = app.ai_recommendation|tojson|safe %}
-{% endif %}
-<div class="app-card {% if score >= 70 %}top{% endif %}">
-  <div class="flex items-center gap-3">
-    {# Score ring #}
-    {% if app.ai_score %}
-    <div class="score-ring" style="background:{{ score_color }}22;border:2px solid {{ score_color }};color:{{ score_color }};">{{ score|int }}%</div>
-    {% else %}
-    <div class="score-ring" style="background:var(--surface2);border:2px solid var(--border);color:var(--text3);">?</div>
-    {% endif %}
-    <div style="flex:1;min-width:0;">
-      <div style="font-weight:700;font-size:14px;">{{ app.applicant_name }}</div>
-      <div style="font-size:12px;color:var(--text3);">
-        {{ app.applicant_email }} {% if app.applicant_phone %}· {{ app.applicant_phone }}{% endif %}
-        · Applied {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}
+{# ── Applicant cards ── #}
+{% set stage_filter = request.query_params.get('stage') %}
+{% set visible_apps = applications if not stage_filter else applications|selectattr('status.value','eq',stage_filter)|list %}
+
+{% if visible_apps %}
+  {# Sort indicator #}
+  <div style="font-size:12px;color:var(--text3);margin-bottom:10px;">
+    Showing {{ visible_apps|length }} applicant{{ 's' if visible_apps|length != 1 else '' }}
+    {% if visible_apps|selectattr('ai_score')|list|length > 0 %} · sorted by AI match score{% endif %}
+  </div>
+
+  {% for app in visible_apps %}
+  {% set score = app.ai_score or 0 %}
+  {% if score >= 70 %}{% set sc = '#34d399' %}{% elif score >= 40 %}{% set sc = '#fbbf24' %}{% else %}{% set sc = '#f87171' %}{% endif %}
+  {% set is_top = (score >= 70 and app.ai_score is not none) %}
+  {% set is_rejected = (app.status.value == 'rejected') %}
+
+  <div class="app-card {% if is_top %}top-match{% endif %} {% if is_rejected %}rejected{% endif %}" id="appcard-{{ app.id }}">
+    <div class="flex items-start gap-3">
+
+      {# Score ring #}
+      {% if app.ai_score is not none %}
+      <div class="score-ring" style="background:{{ sc }}18;border:2px solid {{ sc }};color:{{ sc }};">
+        {{ score|int }}
+        <div class="score-sub">/ 100</div>
+      </div>
+      {% else %}
+      <div class="score-ring" style="background:var(--surface2);border:2px solid var(--border);color:var(--text3);">
+        <i class="fa-solid fa-question" style="font-size:18px;"></i>
+      </div>
+      {% endif %}
+
+      <div style="flex:1;min-width:0;">
+        {# Name + meta row #}
+        <div class="flex items-center gap-2" style="flex-wrap:wrap;margin-bottom:4px;">
+          <span style="font-weight:700;font-size:14.5px;">{{ app.applicant_name }}</span>
+          {% if is_top %}<span class="badge badge-green" style="font-size:10px;">⭐ Top Match</span>{% endif %}
+          {% if app.offer_sent %}<span class="badge badge-green" style="font-size:10px;">Offer Sent</span>{% endif %}
+          {% if app.rejection_sent %}<span class="badge badge-red" style="font-size:10px;">Rejected</span>{% endif %}
+        </div>
+        <div style="font-size:12px;color:var(--text3);display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+          {% if app.applicant_email %}<span><i class="fa-solid fa-envelope" style="font-size:10px;"></i> {{ app.applicant_email }}</span>{% endif %}
+          {% if app.applicant_phone %}<span><i class="fa-solid fa-phone" style="font-size:10px;"></i> {{ app.applicant_phone }}</span>{% endif %}
+          <span><i class="fa-regular fa-calendar" style="font-size:10px;"></i> {{ app.created_at.strftime('%b %d, %Y') if app.created_at else '' }}</span>
+        </div>
+
+        {# AI summary #}
+        {% if app.ai_summary %}
+        <div style="font-size:12.5px;color:var(--text2);background:var(--accent-glow);border-left:3px solid var(--accent);
+                    border-radius:0 8px 8px 0;padding:7px 12px;margin-bottom:8px;line-height:1.55;">
+          <i class="fa-solid fa-robot" style="color:var(--accent);font-size:10px;margin-right:4px;"></i>
+          {{ app.ai_summary }}
+        </div>
+        {% endif %}
+
+        {# Status selector #}
+        <div class="flex items-center gap-2" style="flex-wrap:wrap;">
+          <label style="font-size:11px;color:var(--text3);font-weight:600;">STAGE:</label>
+          <select class="form-control" style="width:160px;padding-left:8px;font-size:12px;height:32px; margin-bottom:5px"
+                  onchange="updateStatus({{ app.id }}, this.value)">
+            {% for s in statuses %}
+            <option value="{{ s }}" {% if app.status.value == s %}selected{% endif %}>
+              {{ s.replace('_',' ').title() }}
+            </option>
+            {% endfor %}
+          </select>
+          {% if app.interview_date %}
+          <span class="badge badge-purple" style="font-size:10px;">
+            <i class="fa-solid fa-calendar-check"></i>
+            Interview: {{ app.interview_date.strftime('%b %d at %H:%M') }}
+          </span>
+          {% endif %}
+        </div>
       </div>
     </div>
-    <select class="form-control" style="width:140px;padding-left:8px;font-size:12px;" onchange="updateStatus({{ app.id }}, this.value)">
-      {% for s in statuses %}<option value="{{ s }}" {% if app.status.value == s %}selected{% endif %}>{{ s.replace('_',' ').title() }}</option>{% endfor %}
-    </select>
-  </div>
 
-  {% if app.ai_summary %}
-  <div class="ai-rec"><i class="fa-solid fa-robot" style="color:var(--accent);font-size:10px;margin-right:4px;"></i>{{ app.ai_summary }}</div>
-  {% endif %}
+    {# ── Action buttons ── #}
+    <div class="flex gap-2 mt-3" style="flex-wrap:wrap;padding-top:12px;border-top:1px solid var(--border);">
 
-  <div class="flex gap-2 mt-3" style="flex-wrap:wrap;">
-    {% if not app.ai_score %}
-    <button class="btn btn-ghost btn-xs" onclick="screenApp({{ app.id }}, this)"><i class="fa-solid fa-robot"></i> AI Screen</button>
-    {% else %}
-    <button class="btn btn-ghost btn-xs" onclick="screenApp({{ app.id }}, this)"><i class="fa-solid fa-rotate"></i> Re-Screen</button>
+      {# CV View/Download #}
+      {% if app.cv_path %}
+      <a href="/bcc/hr/applications/{{ app.id }}/cv" target="_blank"
+         class="btn btn-ghost btn-xs">
+        <i class="fa-solid fa-file-pdf"></i> View CV
+      </a>
+      {% endif %}
+
+      {# AI Screen #}
+      <button class="btn btn-ghost btn-xs" id="screen-btn-{{ app.id }}"
+              onclick="screenApp({{ app.id }})">
+        <i class="fa-solid fa-{% if app.ai_score is not none %}rotate{% else %}robot{% endif %}"></i>
+        {% if app.ai_score is not none %}Re-Screen{% else %}AI Screen{% endif %}
+      </button>
+
+      {# Show AI Detail #}
+      {% if app.ai_recommendation %}
+      <button class="btn btn-ghost btn-xs" onclick="toggleDetail({{ app.id }})">
+        <i class="fa-solid fa-chart-bar"></i> AI Detail
+      </button>
+      {% endif %}
+
+      {# Email generators #}
+      <button class="btn btn-ghost btn-xs" onclick="genEmail({{ app.id }}, 'screening', {{ loop.index }})">
+        <i class="fa-solid fa-envelope"></i> Screening
+      </button>
+      <button class="btn btn-ghost btn-xs" onclick="genEmail({{ app.id }}, 'interview', {{ loop.index }})">
+        <i class="fa-regular fa-calendar"></i> Interview
+      </button>
+      <button class="btn btn-success btn-xs" onclick="genEmail({{ app.id }}, 'offer', {{ loop.index }})">
+        <i class="fa-solid fa-star"></i> Offer
+      </button>
+      <button class="btn btn-danger btn-xs" onclick="genEmail({{ app.id }}, 'rejection', {{ loop.index }})">
+        <i class="fa-solid fa-times"></i> Reject
+      </button>
+
+      {# Delete #}
+      <button class="btn btn-ghost btn-xs" style="margin-left:auto;color:var(--text3);"
+              onclick="deleteApp({{ app.id }}, '{{ app.applicant_name|e }}')">
+        <i class="fa-solid fa-trash"></i>
+      </button>
+    </div>
+
+    {# ── AI Detail Accordion ── #}
+    {% if app.ai_recommendation %}
+    <div class="ai-detail" id="detail-{{ app.id }}">
+      {% set rec = app.ai_recommendation|fromjson %}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Strengths</div>
+          {% for s in rec.get('strengths', []) %}
+          <div class="ai-tag" style="background:rgba(16,185,129,.1);color:#34d399;margin-bottom:4px;display:flex;">✓ {{ s }}</div>
+          {% endfor %}
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Gaps / Concerns</div>
+          {% for g in rec.get('gaps', []) %}
+          <div class="ai-tag" style="background:rgba(239,68,68,.1);color:#f87171;margin-bottom:4px;display:flex;">✗ {{ g }}</div>
+          {% endfor %}
+        </div>
+      </div>
+      <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);">
+        <span style="font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;">AI Recommendation: </span>
+        <span class="badge badge-{% if rec.get('recommendation')=='shortlist' %}green{% elif rec.get('recommendation')=='consider' %}yellow{% else %}red{% endif %}">
+          {{ rec.get('recommendation','—') }}
+        </span>
+        <div style="font-size:12.5px;color:var(--text2);margin-top:6px;line-height:1.6;">{{ rec.get('reason','') }}</div>
+      </div>
+    </div>
     {% endif %}
-    {% if app.cv_path %}
-    <a href="/uploads/cvs/{{ app.cv_path.split('/')[-1] }}" target="_blank" class="btn btn-ghost btn-xs"><i class="fa-solid fa-file-pdf"></i> View CV</a>
-    {% endif %}
-    <button class="btn btn-ghost btn-xs" onclick="genMsg({{ app.id }}, 'screening', {{ loop.index }})"><i class="fa-solid fa-envelope"></i> Screening Email</button>
-    <button class="btn btn-ghost btn-xs" onclick="genMsg({{ app.id }}, 'interview', {{ loop.index }})"><i class="fa-solid fa-calendar"></i> Interview Email</button>
-    <button class="btn btn-success btn-xs"  onclick="genMsg({{ app.id }}, 'offer', {{ loop.index }})"><i class="fa-solid fa-star"></i> Offer Letter</button>
-    <button class="btn btn-danger btn-xs"   onclick="genMsg({{ app.id }}, 'rejection', {{ loop.index }})"><i class="fa-solid fa-times"></i> Rejection</button>
-  </div>
 
-  <div class="generated-msg" id="msg-{{ loop.index }}"></div>
-</div>
-{% endfor %}
+    {# ── Generated Email Box ── #}
+    <div class="email-box" id="email-{{ loop.index }}">
+      <div class="flex justify-between items-center mb-2">
+        <span style="font-size:12px;font-weight:700;color:var(--accent2);" id="email-label-{{ loop.index }}"></span>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-xs"
+                  onclick="copyEmail({{ loop.index }})">
+            <i class="fa-solid fa-copy"></i> Copy
+          </button>
+          <button class="btn btn-ghost btn-xs"
+                  onclick="document.getElementById('email-{{ loop.index }}').classList.remove('open')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+      </div>
+      <pre class="email-pre" id="email-text-{{ loop.index }}"></pre>
+    </div>
+
+  </div>
+  {% endfor %}
+
 {% else %}
 <div class="card" style="text-align:center;padding:60px 20px;color:var(--text3);">
   <i class="fa-solid fa-user-clock" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
-  No applications {% if status_filter %}in this stage{% endif %} yet.
+  <div style="font-size:15px;font-weight:600;color:var(--text2);margin-bottom:6px;">No applicants{% if stage_filter %} in this stage{% endif %}</div>
+  <div style="font-size:13px;">Use the form above to add the first applicant.</div>
 </div>
 {% endif %}
 
 {% endblock %}
+
 {% block extra_js %}
 <script>
 const JOB_ID = {{ job.id }};
 
-async function submitApp() {
+// ── Submit applicant ──────────────────────────────────────────────────────────
+async function submitApp(autoScreen = false) {
   const name = document.getElementById('app-name').value.trim();
-  if (!name) { toast('Applicant name required', 'error'); return; }
+  if (!name) { toast('Applicant name is required', 'error'); return; }
   const fd = new FormData();
   fd.append('applicant_name',  name);
   fd.append('applicant_email', document.getElementById('app-email').value);
@@ -117,49 +325,83 @@ async function submitApp() {
   fd.append('cover_letter',    document.getElementById('app-cover').value);
   const cvFile = document.getElementById('app-cv').files[0];
   if (cvFile) fd.append('cv_file', cvFile);
-  const r = await fetch(`/bcc/hr/jobs/${JOB_ID}/apply`, {method:'POST', body:fd});
-  if (r.ok) { toast('Application added!', 'success'); setTimeout(()=>location.reload(), 600); }
-  else toast('Error', 'error');
+  const r = await fetch(`/bcc/hr/jobs/${JOB_ID}/apply`, { method:'POST', body:fd });
+  if (!r.ok) { toast('Error adding applicant', 'error'); return; }
+  const d = await r.json();
+  toast('Applicant added!', 'success');
+  if (autoScreen && d.id) {
+    toast('Running AI screening…', 'info');
+    await fetch(`/bcc/hr/applications/${d.id}/screen`, { method:'POST' });
+  }
+  setTimeout(() => location.reload(), 800);
 }
 
-async function screenApp(appId, btn) {
-  btn.disabled = true;
-  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Screening…';
-  const r = await fetch(`/bcc/hr/applications/${appId}/screen`, {method:'POST'});
+async function submitAndScreen() { await submitApp(true); }
+
+// ── AI Screen ─────────────────────────────────────────────────────────────────
+async function screenApp(appId) {
+  const btn = document.getElementById('screen-btn-' + appId);
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Screening…'; }
+  const r = await fetch(`/bcc/hr/applications/${appId}/screen`, { method:'POST' });
   const d = await r.json();
   if (r.ok) {
-    toast(`AI Score: ${d.data.score}% — ${d.data.recommendation}`, 'success');
-    setTimeout(()=>location.reload(), 1200);
+    toast(`✓ ${d.data.score}% match — ${d.data.recommendation}`, 'success');
+    setTimeout(() => location.reload(), 1200);
   } else {
     toast(d.error || 'Screening failed', 'error');
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fa-solid fa-robot"></i> AI Screen';
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-robot"></i> AI Screen'; }
   }
 }
 
-async function updateStatus(appId, status) {
-  const fd = new FormData(); fd.append('status', status);
-  await fetch(`/bcc/hr/applications/${appId}/update-status`, {method:'POST', body:fd});
-  toast('Status updated', 'success');
+// ── Toggle AI detail accordion ────────────────────────────────────────────────
+function toggleDetail(appId) {
+  document.getElementById('detail-' + appId)?.classList.toggle('open');
 }
 
-async function genMsg(appId, type, idx) {
-  const box = document.getElementById('msg-' + idx);
-  box.style.display = 'block';
-  box.textContent = '🤖 Generating message…';
+// ── Update stage ──────────────────────────────────────────────────────────────
+async function updateStatus(appId, status) {
+  const fd = new FormData();
+  fd.append('status', status);
+  const r = await fetch(`/bcc/hr/applications/${appId}/update-status`, { method:'POST', body:fd });
+  if (r.ok) toast('Stage updated', 'success');
+  else toast('Error updating stage', 'error');
+}
+
+// ── Generate email ────────────────────────────────────────────────────────────
+async function genEmail(appId, type, idx) {
+  const box   = document.getElementById('email-' + idx);
+  const pre   = document.getElementById('email-text-' + idx);
+  const label = document.getElementById('email-label-' + idx);
+  box.classList.add('open');
+  pre.textContent = '🤖 Generating email…';
+  label.textContent = '';
   const r = await fetch(`/bcc/hr/applications/${appId}/generate-message`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({type})
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type }),
   });
   const d = await r.json();
   if (r.ok) {
-    box.innerHTML = `<div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-      <strong style="color:var(--accent2);font-size:12px;">✉️ Generated ${type} message:</strong>
-      <button onclick="navigator.clipboard.writeText(document.getElementById('msg-${idx}-text').textContent);toast('Copied!','success')" class="btn btn-ghost btn-xs"><i class="fa-solid fa-copy"></i> Copy</button>
-    </div><pre id="msg-${idx}-text" style="white-space:pre-wrap;font-size:13px;color:var(--text2);line-height:1.7;">${d.message}</pre>`;
+    label.textContent = `✉️ ${type.charAt(0).toUpperCase() + type.slice(1)} email — ready to send`;
+    pre.textContent = d.message;
   } else {
-    box.textContent = '⚠️ ' + (d.error || 'Could not generate message');
+    pre.textContent = '⚠️ ' + (d.error || 'Could not generate email');
   }
+}
+
+function copyEmail(idx) {
+  const text = document.getElementById('email-text-' + idx)?.textContent || '';
+  navigator.clipboard.writeText(text).then(() => toast('Email copied to clipboard!', 'success'));
+}
+
+// ── Delete applicant ──────────────────────────────────────────────────────────
+async function deleteApp(appId, name) {
+  if (!confirm(`Remove "${name}" from this job? Their CV will also be deleted.`)) return;
+  const r = await fetch(`/bcc/hr/applications/${appId}`, { method:'DELETE' });
+  if (r.ok) {
+    document.getElementById('appcard-' + appId)?.remove();
+    toast('Applicant removed', 'info');
+  } else toast('Error removing applicant', 'error');
 }
 </script>
 {% endblock %}

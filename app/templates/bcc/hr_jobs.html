@@ -1,137 +1,339 @@
 {% extends "base.html" %}
-{% block title %}HR — BOSS BCC{% endblock %}
+{% block title %}HR — Job Postings — BOSS{% endblock %}
 {% block page_title %}AI Recruitment{% endblock %}
-{% block page_sub %}Post jobs · AI CV screening · Full hiring pipeline{% endblock %}
+{% block page_sub %}Create and manage job postings · AI-powered hiring pipeline{% endblock %}
+
 {% block extra_css %}
-.pipeline-dots { display:flex; gap:4px; flex-wrap:wrap; }
-.p-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
-.job-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; margin-bottom:12px; }
-.job-card.open { border-left:3px solid var(--green); }
-.job-card.closed { border-left:3px solid var(--text3); opacity:.7; }
-.pipeline-bar { display:flex; gap:6px; align-items:center; margin-top:10px; flex-wrap:wrap; }
-.pb-step { padding:3px 10px; border-radius:12px; font-size:10.5px; font-weight:600; }
-.pb-received   { background:rgba(100,116,139,.15); color:#94a3b8; }
-.pb-screening  { background:rgba(245,158,11,.1);  color:#fbbf24; }
-.pb-shortlisted{ background:rgba(59,130,246,.1);  color:#60a5fa; }
-.pb-interview  { background:rgba(139,92,246,.1);  color:#a78bfa; }
-.pb-offer      { background:rgba(16,185,129,.1);  color:#34d399; }
-.pb-hired      { background:rgba(16,185,129,.15); color:#10b981; }
-.pb-rejected   { background:rgba(239,68,68,.1);   color:#f87171; }
+.job-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--radius); padding:20px 22px; margin-bottom:14px;
+  transition:border-color 0.15s, box-shadow 0.15s;
+}
+.job-card:hover { border-color:var(--border2); box-shadow:0 4px 16px rgba(0,0,0,0.12); }
+.job-card.open   { border-left:3px solid var(--green); }
+.job-card.closed { border-left:3px solid var(--text3); }
+.job-card.paused { border-left:3px solid var(--yellow); }
+
+.pipeline-bar { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+.pb-step { padding:3px 10px; border-radius:12px; font-size:10.5px; font-weight:600; text-decoration:none; cursor:pointer; transition:opacity 0.12s; }
+.pb-step:hover { opacity:0.8; }
+.pb-received    { background:rgba(100,116,139,.15); color:#94a3b8; }
+.pb-screening   { background:rgba(245,158,11,.1);  color:#fbbf24; }
+.pb-shortlisted { background:rgba(59,130,246,.1);  color:#60a5fa; }
+.pb-interview   { background:rgba(139,92,246,.1);  color:#a78bfa; }
+.pb-offer       { background:rgba(16,185,129,.1);  color:#34d399; }
+.pb-hired       { background:rgba(16,185,129,.2);  color:#10b981; }
+.pb-rejected    { background:rgba(239,68,68,.1);   color:#f87171; }
+
+.job-actions { display:flex; gap:6px; flex-wrap:wrap; margin-top:14px; padding-top:12px; border-top:1px solid var(--border); }
 {% endblock %}
+
 {% block content %}
 <div class="flex justify-between items-center mb-6">
-  <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;">Job Postings</div>
-  <button class="btn btn-primary" onclick="openModal('newJobModal')"><i class="fa-solid fa-plus"></i> Post New Job</button>
+  <div>
+    <span class="badge badge-green" style="margin-right:6px;">
+      {{ jobs|selectattr('status.value','eq','open')|list|length }} open
+    </span>
+    <span class="badge badge-gray">
+      {{ jobs|length }} total
+    </span>
+  </div>
+  <button class="btn btn-primary" onclick="openModal('newJobModal')">
+    <i class="fa-solid fa-plus"></i> Post New Job
+  </button>
 </div>
 
 {% if jobs %}
   {% for job in jobs %}
   {% set stats = job_stats.get(job.id, {}) %}
-  <div class="job-card {{ job.status.value }}">
-    <div class="flex items-center gap-3" style="flex-wrap:wrap;">
+  {% set total_apps = stats.values()|sum %}
+  <div class="job-card {{ job.status.value }}" id="job-{{ job.id }}">
+
+    {# ── Header ── #}
+    <div class="flex items-start gap-3" style="flex-wrap:wrap;">
       <div style="flex:1;min-width:0;">
-        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;">{{ job.title }}</div>
-        <div style="font-size:12px;color:var(--text3);margin-top:3px;">
-          {{ job.department or 'All departments' }} · {{ job.employment_type }} · {{ job.location }}
-          {% if job.salary_range %} · {{ job.salary_range }}{% endif %}
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px;">
+          <span style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;">{{ job.title }}</span>
+          <span class="badge badge-{% if job.status.value=='open' %}green{% elif job.status.value=='paused' %}yellow{% else %}gray{% endif %}">
+            {{ job.status.value.title() }}
+          </span>
+        </div>
+        <div style="font-size:12.5px;color:var(--text3);display:flex;gap:12px;flex-wrap:wrap;">
+          {% if job.department %}<span><i class="fa-solid fa-building" style="font-size:10px;"></i> {{ job.department }}</span>{% endif %}
+          <span><i class="fa-solid fa-briefcase" style="font-size:10px;"></i> {{ job.employment_type }}</span>
+          <span><i class="fa-solid fa-location-dot" style="font-size:10px;"></i> {{ job.location }}</span>
+          {% if job.salary_range %}<span><i class="fa-solid fa-coins" style="font-size:10px;"></i> {{ job.salary_range }}</span>{% endif %}
+          {% if job.deadline %}<span><i class="fa-regular fa-calendar" style="font-size:10px;"></i> Deadline: {{ job.deadline.strftime('%b %d, %Y') }}</span>{% endif %}
+          <span class="text-xs text-muted">Posted {{ job.created_at.strftime('%b %d, %Y') if job.created_at else '' }}</span>
         </div>
       </div>
-      <span class="badge badge-{% if job.status.value=='open' %}green{% else %}gray{% endif %}">
-        {{ job.status.value.title() }}
-      </span>
-      {% if job.deadline %}
-      <span class="text-xs text-muted"><i class="fa-regular fa-calendar"></i> Deadline: {{ job.deadline.strftime('%b %d, %Y') }}</span>
-      {% endif %}
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:{% if total_apps > 0 %}var(--accent2){% else %}var(--text3){% endif %};flex-shrink:0;text-align:right;">
+        {{ total_apps }}
+        <div style="font-size:11px;color:var(--text3);font-weight:400;">applicant{{ 's' if total_apps != 1 else '' }}</div>
+      </div>
     </div>
 
-    {# Pipeline stats bar #}
+    {# ── Description preview ── #}
+    {% if job.description %}
+    <div style="font-size:13px;color:var(--text2);margin-top:10px;line-height:1.6;
+                display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">
+      {{ job.description }}
+    </div>
+    {% endif %}
+
+    {# ── Pipeline bar ── #}
+    {% if total_apps > 0 %}
     <div class="pipeline-bar">
       {% for s, count in stats.items() %}
       {% if count > 0 %}
-      <a href="/bcc/hr/jobs/{{ job.id }}/applications?status_filter={{ s }}" class="pb-step pb-{{ s }}">
+      <a href="/bcc/hr/jobs/{{ job.id }}/applications?stage={{ s }}" class="pb-step pb-{{ s }}">
         {{ count }} {{ s.replace('_',' ').title() }}
       </a>
       {% endif %}
       {% endfor %}
-      {% set total = stats.values()|sum %}
-      {% if total == 0 %}<span class="text-xs text-muted">No applications yet</span>{% endif %}
     </div>
+    {% endif %}
 
-    <div class="flex gap-2 mt-3" style="flex-wrap:wrap;">
-      <a href="/bcc/hr/jobs/{{ job.id }}/applications" class="btn btn-ghost btn-xs">
-        <i class="fa-solid fa-users"></i> View Applications ({{ stats.values()|sum }})
+    {# ── Actions ── #}
+    <div class="job-actions">
+      <a href="/bcc/hr/jobs/{{ job.id }}/applications" class="btn btn-primary btn-sm">
+        <i class="fa-solid fa-users"></i> View Applicants ({{ total_apps }})
       </a>
-      <button class="btn btn-ghost btn-xs" onclick="toggleJob({{ job.id }})">
+      <button class="btn btn-ghost btn-sm"
+        data-job='{{ {"id": job.id, "title": job.title, "department": job.department,
+                      "description": job.description, "requirements": job.requirements,
+                      "salary_range": job.salary_range, "location": job.location,
+                      "employment_type": job.employment_type,
+                      "deadline": job.deadline.strftime('%Y-%m-%dT%H:%M') if job.deadline else ""}|tojson }}'
+        onclick="openEditJob(this)">
+        <i class="fa-solid fa-pen"></i> Edit
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="cloneJob({{ job.id }})">
+        <i class="fa-solid fa-clone"></i> Clone
+      </button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleJob({{ job.id }}, '{{ job.status.value }}')">
         {% if job.status.value == 'open' %}
         <i class="fa-solid fa-pause"></i> Pause
         {% else %}
         <i class="fa-solid fa-play"></i> Reopen
         {% endif %}
       </button>
+      {% if user.role.value in ('super_admin', 'admin') %}
+      <button class="btn btn-danger btn-sm" onclick="deleteJob({{ job.id }}, '{{ job.title|e }}')">
+        <i class="fa-solid fa-trash"></i> Delete
+      </button>
+      {% endif %}
     </div>
   </div>
   {% endfor %}
+
 {% else %}
-<div class="card" style="text-align:center;padding:60px 20px;color:var(--text3);">
-  <i class="fa-solid fa-briefcase" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
-  No job postings yet. Click "Post New Job" to get started.
+<div class="card" style="text-align:center;padding:70px 20px;color:var(--text3);">
+  <i class="fa-solid fa-briefcase" style="font-size:48px;opacity:.12;display:block;margin-bottom:16px;"></i>
+  <div style="font-size:16px;font-weight:600;color:var(--text2);margin-bottom:6px;">No job postings yet</div>
+  <div style="font-size:13px;margin-bottom:20px;">Create your first job posting to start receiving applications.</div>
+  <button class="btn btn-primary" onclick="openModal('newJobModal')"><i class="fa-solid fa-plus"></i> Post First Job</button>
 </div>
 {% endif %}
 
-{# ── New Job Modal ── #}
+
+{# ══════════════════════════ CREATE MODAL ══════════════════════════ #}
 <div class="modal-overlay" id="newJobModal">
-  <div class="modal" style="max-width:580px;">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto;">
     <div class="modal-title">
       <span><i class="fa-solid fa-briefcase" style="color:var(--accent)"></i> Post New Job</span>
       <span class="modal-close" onclick="closeModal('newJobModal')"><i class="fa-solid fa-xmark"></i></span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group" style="grid-column:1/-1;"><label class="form-label">Job Title *</label><input type="text" id="nj-title" class="form-control" placeholder="e.g. Senior Sales Executive" style="padding-left:12px"/></div>
-      <div class="form-group"><label class="form-label">Department</label><input type="text" id="nj-dept" class="form-control" style="padding-left:12px"/></div>
-      <div class="form-group"><label class="form-label">Employment Type</label>
-        <select id="nj-type" class="form-control" style="padding-left:12px">
-          <option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option>
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Job Title *</label>
+        <input type="text" id="nj-title" class="form-control" placeholder="e.g. Senior Sales Executive" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Department</label>
+        <input type="text" id="nj-dept" class="form-control" placeholder="e.g. Sales" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Employment Type</label>
+        <select id="nj-emptype" class="form-control" style="padding-left:12px">
+          <option>Full-time</option><option>Part-time</option>
+          <option>Contract</option><option>Internship</option><option>Remote</option>
         </select>
       </div>
-      <div class="form-group"><label class="form-label">Location</label><input type="text" id="nj-loc" class="form-control" value="On-site" style="padding-left:12px"/></div>
-      <div class="form-group"><label class="form-label">Salary Range</label><input type="text" id="nj-salary" class="form-control" placeholder="e.g. $50,000 - $70,000" style="padding-left:12px"/></div>
+      <div class="form-group">
+        <label class="form-label">Location</label>
+        <input type="text" id="nj-loc" class="form-control" value="On-site" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Salary Range</label>
+        <input type="text" id="nj-salary" class="form-control" placeholder="e.g. $40,000 – $60,000" style="padding-left:12px"/>
+      </div>
     </div>
-    <div class="form-group"><label class="form-label">Job Description *</label>
-      <textarea id="nj-desc" class="form-control" rows="3" style="padding-left:12px" placeholder="Describe the role, responsibilities, and what success looks like..."></textarea>
+    <div class="form-group">
+      <label class="form-label">Job Description *</label>
+      <textarea id="nj-desc" class="form-control" rows="4" style="padding-left:12px"
+        placeholder="Describe the role, key responsibilities, and what success looks like…"></textarea>
     </div>
-    <div class="form-group"><label class="form-label">Requirements</label>
-      <textarea id="nj-reqs" class="form-control" rows="3" style="padding-left:12px" placeholder="List the key requirements, one per line..."></textarea>
+    <div class="form-group">
+      <label class="form-label">Requirements</label>
+      <textarea id="nj-reqs" class="form-control" rows="4" style="padding-left:12px"
+        placeholder="• 3+ years experience in…&#10;• Proficiency in…&#10;• Strong communication skills"></textarea>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">The AI uses this to score applicant CVs.</div>
     </div>
-    <div class="form-group"><label class="form-label">Application Deadline (optional)</label>
+    <div class="form-group">
+      <label class="form-label">Application Deadline (optional)</label>
       <input type="datetime-local" id="nj-deadline" class="form-control" style="padding-left:12px"/>
     </div>
     <div class="flex gap-2 justify-between mt-4">
       <button class="btn btn-ghost" onclick="closeModal('newJobModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="createJob()"><i class="fa-solid fa-paper-plane"></i> Post Job</button>
+      <button class="btn btn-primary" onclick="createJob()">
+        <i class="fa-solid fa-paper-plane"></i> Post Job
+      </button>
     </div>
   </div>
 </div>
+
+
+{# ══════════════════════════ EDIT MODAL ══════════════════════════ #}
+<div class="modal-overlay" id="editJobModal">
+  <div class="modal" style="max-width:620px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-pen" style="color:var(--accent)"></i> Edit Job Posting</span>
+      <span class="modal-close" onclick="closeModal('editJobModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <input type="hidden" id="ej-id"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="grid-column:1/-1;">
+        <label class="form-label">Job Title *</label>
+        <input type="text" id="ej-title" class="form-control" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Department</label>
+        <input type="text" id="ej-dept" class="form-control" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Employment Type</label>
+        <select id="ej-emptype" class="form-control" style="padding-left:12px">
+          <option>Full-time</option><option>Part-time</option>
+          <option>Contract</option><option>Internship</option><option>Remote</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Location</label>
+        <input type="text" id="ej-loc" class="form-control" style="padding-left:12px"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Salary Range</label>
+        <input type="text" id="ej-salary" class="form-control" style="padding-left:12px"/>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Job Description *</label>
+      <textarea id="ej-desc" class="form-control" rows="4" style="padding-left:12px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Requirements</label>
+      <textarea id="ej-reqs" class="form-control" rows="4" style="padding-left:12px"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Application Deadline</label>
+      <input type="datetime-local" id="ej-deadline" class="form-control" style="padding-left:12px"/>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('editJobModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEditJob()">
+        <i class="fa-solid fa-floppy-disk"></i> Save Changes
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
+
 {% block extra_js %}
 <script>
+// ── Create ──────────────────────────────────────────────────────────────────
 async function createJob() {
+  const title = document.getElementById('nj-title').value.trim();
+  const desc  = document.getElementById('nj-desc').value.trim();
+  if (!title || !desc) { toast('Title and description are required', 'error'); return; }
   const fd = new FormData();
-  fd.append('title',           document.getElementById('nj-title').value.trim());
+  fd.append('title',           title);
   fd.append('department',      document.getElementById('nj-dept').value);
-  fd.append('description',     document.getElementById('nj-desc').value.trim());
+  fd.append('description',     desc);
   fd.append('requirements',    document.getElementById('nj-reqs').value);
-  fd.append('employment_type', document.getElementById('nj-type').value);
+  fd.append('employment_type', document.getElementById('nj-emptype').value);
   fd.append('location',        document.getElementById('nj-loc').value);
   fd.append('salary_range',    document.getElementById('nj-salary').value);
   fd.append('deadline',        document.getElementById('nj-deadline').value);
-  if (!fd.get('title') || !fd.get('description')) { toast('Title and description required', 'error'); return; }
-  const r = await fetch('/bcc/hr/jobs/create', {method:'POST', body:fd});
-  if (r.ok) { toast('Job posted!', 'success'); closeModal('newJobModal'); setTimeout(()=>location.reload(), 600); }
-  else toast('Error', 'error');
+  const r = await fetch('/bcc/hr/jobs/create', { method:'POST', body:fd });
+  if (r.ok) { toast('Job posted!', 'success'); closeModal('newJobModal'); setTimeout(()=>location.reload(), 700); }
+  else toast('Error posting job', 'error');
 }
-async function toggleJob(id) {
-  const r = await fetch(`/bcc/hr/jobs/${id}/toggle`, {method:'POST'});
-  if (r.ok) { setTimeout(()=>location.reload(), 400); }
+
+// ── Open Edit ───────────────────────────────────────────────────────────────
+function openEditJob(btn) {
+  const j = JSON.parse(btn.dataset.job);
+  document.getElementById('ej-id').value       = j.id;
+  document.getElementById('ej-title').value    = j.title        || '';
+  document.getElementById('ej-dept').value     = j.department   || '';
+  document.getElementById('ej-desc').value     = j.description  || '';
+  document.getElementById('ej-reqs').value     = j.requirements || '';
+  document.getElementById('ej-salary').value   = j.salary_range || '';
+  document.getElementById('ej-loc').value      = j.location     || '';
+  document.getElementById('ej-deadline').value = j.deadline     || '';
+  const sel = document.getElementById('ej-emptype');
+  for (let i = 0; i < sel.options.length; i++) {
+    if (sel.options[i].text === j.employment_type) { sel.selectedIndex = i; break; }
+  }
+  openModal('editJobModal');
+}
+
+// ── Save Edit ───────────────────────────────────────────────────────────────
+async function saveEditJob() {
+  const id    = document.getElementById('ej-id').value;
+  const title = document.getElementById('ej-title').value.trim();
+  const desc  = document.getElementById('ej-desc').value.trim();
+  if (!title || !desc) { toast('Title and description are required', 'error'); return; }
+  const fd = new FormData();
+  fd.append('title',           title);
+  fd.append('department',      document.getElementById('ej-dept').value);
+  fd.append('description',     desc);
+  fd.append('requirements',    document.getElementById('ej-reqs').value);
+  fd.append('employment_type', document.getElementById('ej-emptype').value);
+  fd.append('location',        document.getElementById('ej-loc').value);
+  fd.append('salary_range',    document.getElementById('ej-salary').value);
+  fd.append('deadline',        document.getElementById('ej-deadline').value);
+  const r = await fetch(`/bcc/hr/jobs/${id}/update`, { method:'POST', body:fd });
+  if (r.ok) { toast('Job updated!', 'success'); closeModal('editJobModal'); setTimeout(()=>location.reload(), 700); }
+  else toast('Error updating job', 'error');
+}
+
+// ── Clone ────────────────────────────────────────────────────────────────────
+async function cloneJob(id) {
+  const r = await fetch(`/bcc/hr/jobs/${id}/clone`, { method:'POST' });
+  if (r.ok) { toast('Job cloned!', 'success'); setTimeout(()=>location.reload(), 700); }
+  else toast('Error cloning job', 'error');
+}
+
+// ── Toggle open/closed ───────────────────────────────────────────────────────
+async function toggleJob(id, currentStatus) {
+  const r = await fetch(`/bcc/hr/jobs/${id}/toggle`, { method:'POST' });
+  if (r.ok) {
+    const d = await r.json();
+    toast(`Job is now ${d.status}`, d.status === 'open' ? 'success' : 'info');
+    setTimeout(()=>location.reload(), 600);
+  }
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+async function deleteJob(id, title) {
+  if (!confirm(`Delete "${title}" and ALL its applications? This cannot be undone.`)) return;
+  const r = await fetch(`/bcc/hr/jobs/${id}`, { method:'DELETE' });
+  if (r.ok) {
+    document.getElementById('job-' + id)?.remove();
+    toast('Job deleted', 'info');
+  } else toast('Error deleting job', 'error');
 }
 </script>
 {% endblock %}

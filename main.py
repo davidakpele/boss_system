@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-
+import json as _json
 from app.database import init_db
 from app.config import settings
 from app.routers import auth, bcc, dashboard, messages, ask_boss, documents, admin
@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="app/templates")
 
 
+
+def _fromjson(s):
+    """Jinja2 filter: parse a JSON string into a Python object."""
+    if not s:
+        return {}
+    try:
+        return _json.loads(s)
+    except Exception:
+        return {}
+    
+templates.env.filters["fromjson"] = _fromjson
+   
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
