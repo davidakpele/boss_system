@@ -256,19 +256,32 @@ async def knowledge_by_dept(
     current_user: User = Depends(require_user),
 ):
     """Knowledge chunks grouped by department (pie/donut)."""
-    rows = (await db.execute(
-        select(
-            func.coalesce(KnowledgeChunk.department, "General").label("dept"),
-            func.count(KnowledgeChunk.id).label("count"),
-        )
-        .group_by(func.coalesce(KnowledgeChunk.department, "General"))
-        .order_by(func.count(KnowledgeChunk.id).desc())
-    )).all()
-    return JSONResponse({
-        "labels": [r.dept for r in rows],
-        "values": [r.count for r in rows],
-    })
-
+    try:
+        # Use CASE WHEN instead of coalesce to avoid asyncpg type-inference issues
+        from sqlalchemy import case
+        dept_expr = case(
+            (KnowledgeChunk.department == None, "General"),
+            (KnowledgeChunk.department == "",   "General"),
+            else_=KnowledgeChunk.department
+        ).label("dept")
+ 
+        rows = (await db.execute(
+            select(dept_expr, func.count(KnowledgeChunk.id).label("count"))
+            .group_by(dept_expr)
+            .order_by(func.count(KnowledgeChunk.id).desc())
+        )).all()
+ 
+        if not rows:
+            return JSONResponse({"labels": ["No data"], "values": [1]})
+ 
+        return JSONResponse({
+            "labels": [str(r.dept) for r in rows],
+            "values": [int(r.count) for r in rows],
+        })
+ 
+    except Exception as e:
+        logger.error(f"knowledge-by-dept error: {e}")
+        return JSONResponse({"labels": ["No data"], "values": [1]})
 
 @router.get("/data/top-users")
 async def top_users(
