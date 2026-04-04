@@ -251,7 +251,51 @@ System-wide tamper-visible activity trail:
 
 ---
 
-### 12. Business Command Centre (BCC)
+### 12. Analytics & Reporting
+
+A dedicated intelligence layer that turns system data into actionable insights — no external BI tools required.
+
+#### Analytics Dashboard (`/analytics`)
+
+Five KPI cards give an at-a-glance snapshot: total documents, users, knowledge chunks, messages, and current compliance score. A **period selector** (7 / 30 / 90 days) refreshes all time-series charts live without a page reload.
+
+**Charts included:**
+- **Document uploads over time** — line chart with daily bars for the selected period
+- **Messages over time** — same period and style
+- **Compliance score trend** — always spans 12 months, showing score progression over time
+- **Knowledge base growth** — cumulative chunk count overlaid with daily additions
+- **Knowledge by department** — doughnut/pie breakdown of which teams are contributing most
+- **Login activity heatmap** — 12-week GitHub-style grid; colour intensity maps to login count per day
+- **Most active users** — horizontal bar chart of the top 10 users by message count (30-day window)
+
+All charts are powered by **Chart.js** loaded from CDN — no npm build step required.
+
+#### User Activity Report (`/analytics/user-activity`)
+
+A full tabular breakdown of every active user showing: messages sent, documents uploaded, AI queries made, login count, composite activity score, and last-seen date.
+
+- **Sortable columns** — click any header to toggle ascending/descending order
+- **Live search** — filter instantly by name, email, or department
+- **Summary cards** — aggregate totals across all users shown at the top
+- **Period selector** — 7 / 30 / 90 / 365 days
+- **CSV export** — downloads the complete dataset as a spreadsheet
+- **Online indicator** — green dot marks currently active users
+
+#### Reports (`/analytics/reports`)
+
+On-demand PDF reports generated server-side using ReportLab with an AI summary step powered by Ollama:
+
+| Report | What it contains |
+|---|---|
+| **Department Knowledge PDF** | Pick department + period (1 week → 1 quarter). AI summarises knowledge added, then PDF includes: stats table, AI bullet points, new documents list, compliance records, knowledge chunk previews |
+| **User Activity** | Links through to the interactive `/analytics/user-activity` table with CSV export |
+| **Compliance Summary PDF** | Same PDF engine scoped to compliance records for the selected period |
+
+Reports are streamed directly to the browser as a download. Generation takes 15–30 seconds due to the AI summary step — a progress message is displayed during the wait.
+
+---
+
+### 13. Business Command Centre (BCC)
 
 **BCC Dashboard** — unified KPI view: total income, total expenses, net P&L, low-stock alerts, open jobs, pending HR applications, recent transactions.
 
@@ -293,7 +337,7 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 
 ---
 
-### 13. Security
+### 14. Security
 
 **SSO (Single Sign-On)**
 - Google Workspace OAuth2 — `/auth/sso/google`
@@ -311,7 +355,7 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 
 ---
 
-### 14. Progressive Web App (PWA)
+### 15. Progressive Web App (PWA)
 - `manifest.json` with full icon set, shortcuts, and theme colors
 - Service worker with network-first for pages, cache-first for static assets
 - Offline fallback page when network unavailable
@@ -320,7 +364,7 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 
 ---
 
-### 15. Push Notifications
+### 16. Push Notifications
 - Web Push API with VAPID keys — no third-party service required
 - Notifications delivered even when the tab is closed
 - Per-device subscription — one user can have multiple devices subscribed
@@ -330,7 +374,7 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 
 ---
 
-### 16. Internal Notifications (In-App)
+### 17. Internal Notifications (In-App)
 - Bell icon in topbar with real-time unread badge
 - Dropdown panel with click-to-navigate, mark-as-read per item
 - Mark all read button
@@ -354,8 +398,10 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 | **AI Model** | codellama:7b-instruct-q4_K_M (default) |
 | **Embeddings** | sentence-transformers `all-MiniLM-L6-v2` (384-dim) |
 | **File Parsing** | PyPDF2 · python-docx · pandas |
+| **PDF Generation** | ReportLab |
 | **Templates** | Jinja2 |
 | **Frontend** | Vanilla JS · CSS variables · SSE · HTML5 DnD |
+| **Charts** | Chart.js (CDN) |
 | **Auth** | JWT (python-jose) · bcrypt · httpOnly cookies |
 | **SSO** | Google OAuth2 · Microsoft OAuth2 (via httpx) |
 | **Push Notifications** | Web Push API · pywebpush · VAPID keys |
@@ -528,9 +574,6 @@ Max file size: `MAX_FILE_SIZE_MB` in `.env` (default: 50 MB)
 
 ---
 
-
----
-
 ## Production Deployment
 
 ```bash
@@ -618,6 +661,7 @@ server {
 | Allowed chat file types | `ALLOWED_EXTENSIONS` in `messages.py` |
 | Accounting currency | `currency` default in `AccountingRecord` model |
 | Notification poll interval | `setInterval(loadNotifications, 30000)` in `base.html` |
+| Analytics chart period default | Period selector default value in `analytics.html` |
 
 ---
 
