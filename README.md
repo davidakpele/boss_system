@@ -102,6 +102,8 @@ The command center with a real-time overview of the entire organization:
 
 ---
 
+![Dashboard Preview](public/assets/images/1.png)
+
 ### 2. Messages (Real-Time Communication)
 A full-featured internal communication system modelled after WhatsApp/Slack:
 
@@ -121,6 +123,7 @@ A full-featured internal communication system modelled after WhatsApp/Slack:
 **AI Knowledge Extraction** — every message silently analysed; business knowledge auto-stored in the knowledge base asynchronously.
 
 ---
+![Message Preview](public/assets/images/2.png)
 
 ### 3. Ask BOSS (AI Assistant)
 RAG-powered AI chat connected to your entire company knowledge base:
@@ -135,7 +138,7 @@ RAG-powered AI chat connected to your entire company knowledge base:
 - **Fully offline** — runs on your machine via Ollama
 
 ---
-
+![Ask Boss Preview](public/assets/images/3.png)
 ### 4. Knowledge Base
 The organisation's accumulated intelligence:
 
