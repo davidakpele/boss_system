@@ -1,17 +1,19 @@
-# src/app/routers/messages.py
+# src/app/routers/messages.py  — FIXED VERSION
 import os
+import re
 import uuid
 import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, Form, UploadFile, File
+from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func, or_
 
 from app.database import get_db, AsyncSessionLocal
 from app.models import Channel, ChannelMember, Message, User, KnowledgeChunk
+from app.models import MessageReaction, MessageReadReceipt, Mention
 from app.auth import require_user
 from app.services.websocket_manager import manager
 from app.services.ai_service import ai_service
@@ -24,7 +26,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 DEPARTMENTS = ["HR", "Sales", "Technology", "Finance", "Operations", "Legal", "Marketing", "Management", "General"]
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB
+MAX_FILE_SIZE   = 20 * 1024 * 1024
+MAX_VOICE_SIZE  = 10 * 1024 * 1024
 
 ALLOWED_EXTENSIONS = {
     "png", "jpg", "jpeg", "gif", "webp",
@@ -32,9 +35,11 @@ ALLOWED_EXTENSIONS = {
     "py", "js", "ts", "html", "json", "md",
     "zip", "rar", "7z",
     "mp3", "wav", "mp4", "mov", "avi",
+    "webm", "ogg",
 }
 
 STATIC_UPLOAD_DIR = os.path.join("app", "static", "uploads", "messages")
+VOICE_UPLOAD_DIR  = os.path.join("app", "static", "uploads", "voice")
 
 
 # ── PAGES ──────────────────────────────────────────────────────────────────────
@@ -66,6 +71,12 @@ async def messages_page(
 
     member_channel_ids = {ch.id for ch in channels}
 
+    mention_count = (await db.execute(
+        select(func.count()).where(
+            and_(Mention.mentioned_user_id == current_user.id, Mention.is_read == False)
+        )
+    )).scalar() or 0
+
     return templates.TemplateResponse(
         request=request,
         name="messages/index.html",
@@ -78,6 +89,7 @@ async def messages_page(
             "member_channel_ids": member_channel_ids,
             "departments": DEPARTMENTS,
             "page": "messages",
+            "mention_count": mention_count,
         }
     )
 
@@ -87,20 +99,35 @@ async def messages_page(
 @router.get("/channel/{channel_id}/history")
 async def get_channel_history(
     channel_id: int,
+    thread_id: int | None = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
+    where_clauses = [Message.channel_id == channel_id]
+    if thread_id:
+        # Thread replies for a specific parent
+        where_clauses.append(Message.thread_id == thread_id)
+        where_clauses.append(Message.is_thread_reply == True)
+    else:
+        # Top-level messages only — exclude thread replies
+        # Use explicit False check + handle NULL (older rows may have NULL)
+        where_clauses.append(
+            or_(Message.is_thread_reply == False, Message.is_thread_reply == None)
+        )
+
     stmt = (
         select(Message, User.full_name, User.avatar_color)
         .join(User, Message.sender_id == User.id)
-        .where(Message.channel_id == channel_id)
+        .where(and_(*where_clauses))
         .order_by(Message.created_at.asc())
-        .limit(100)
+        .limit(200)
     )
     result = await db.execute(stmt)
     messages = []
     for msg, name, color in result.all():
-        messages.append(_serialize_message(msg, name, color))
+        m = _serialize_message(msg, name, color)
+        m["reactions"] = await _get_reactions(db, msg.id, current_user.id)
+        messages.append(m)
     return JSONResponse(messages)
 
 
@@ -115,20 +142,46 @@ async def init_dm(
     stmt = (
         select(Message, User.full_name, User.avatar_color)
         .join(User, Message.sender_id == User.id)
-        .where(Message.channel_id == channel.id)
+        .where(
+            Message.channel_id == channel.id,
+            or_(Message.is_thread_reply == False, Message.is_thread_reply == None),
+        )
         .order_by(Message.created_at.asc())
-        .limit(100)
+        .limit(200)
     )
     result = await db.execute(stmt)
     messages = []
     for msg, name, color in result.all():
-        messages.append(_serialize_message(msg, name, color))
+        m = _serialize_message(msg, name, color)
+        m["reactions"] = await _get_reactions(db, msg.id, current_user.id)
+        messages.append(m)
 
     return JSONResponse({"channel_id": channel.id, "messages": messages})
 
 
+async def _get_reactions(db: AsyncSession, message_id: int, current_user_id: int) -> list:
+    rows = (await db.execute(
+        select(MessageReaction.emoji, func.count().label("cnt"))
+        .where(MessageReaction.message_id == message_id)
+        .group_by(MessageReaction.emoji)
+    )).all()
+
+    agg: dict[str, dict] = {}
+    for emoji, cnt in rows:
+        agg[emoji] = {"emoji": emoji, "count": cnt, "reacted_by_me": False}
+
+    my_rows = (await db.execute(
+        select(MessageReaction.emoji)
+        .where(MessageReaction.message_id == message_id, MessageReaction.user_id == current_user_id)
+    )).scalars().all()
+    for emoji in my_rows:
+        if emoji in agg:
+            agg[emoji]["reacted_by_me"] = True
+
+    return list(agg.values())
+
+
 def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dict:
-    """Serialize a Message row to a dict. All fields match models.py Message columns."""
     return {
         "id": msg.id,
         "content": msg.content or "",
@@ -140,14 +193,18 @@ def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dic
         "message_type": msg.message_type or "text",
         "is_deleted": bool(msg.is_deleted),
         "is_ai_extracted": bool(msg.is_ai_extracted),
-        # Reply fields
         "reply_to_id": msg.reply_to_id,
         "reply_to_sender": msg.reply_to_sender,
         "reply_to_content": msg.reply_to_content,
-        # File fields
         "file_url": msg.file_url,
         "file_name": msg.file_name,
         "file_size": msg.file_size,
+        # FIX: include voice_duration so the player shows correct time
+        "voice_duration": getattr(msg, "voice_duration", None),
+        "thread_id": getattr(msg, "thread_id", None),
+        "thread_count": getattr(msg, "thread_count", 0) or 0,
+        "is_thread_reply": bool(getattr(msg, "is_thread_reply", False)),
+        "reactions": [],
     }
 
 
@@ -156,12 +213,8 @@ def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dic
 async def _get_or_create_dm(db: AsyncSession, user_a: int, user_b: int) -> Channel:
     dm_name = f"dm_{min(user_a, user_b)}_{max(user_a, user_b)}"
     existing = (await db.execute(
-        select(Channel).where(
-            Channel.name == dm_name,
-            Channel.channel_type == "direct"
-        )
+        select(Channel).where(Channel.name == dm_name, Channel.channel_type == "direct")
     )).scalar_one_or_none()
-
     if existing:
         return existing
 
@@ -187,11 +240,8 @@ async def create_channel(
 ):
     dept_list = [d.strip() for d in departments.split(",") if d.strip()]
     channel = Channel(
-        name=name,
-        description=description,
-        department=",".join(dept_list),
-        channel_type="department",
-        created_by=current_user.id,
+        name=name, description=description, department=",".join(dept_list),
+        channel_type="department", created_by=current_user.id,
     )
     db.add(channel)
     await db.flush()
@@ -214,8 +264,7 @@ async def join_channel(
 ):
     existing = (await db.execute(
         select(ChannelMember).where(
-            and_(ChannelMember.channel_id == channel_id,
-                 ChannelMember.user_id == current_user.id)
+            and_(ChannelMember.channel_id == channel_id, ChannelMember.user_id == current_user.id)
         )
     )).scalar_one_or_none()
     if not existing:
@@ -233,12 +282,10 @@ async def update_channel(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    channel = (await db.execute(
-        select(Channel).where(Channel.id == channel_id)
-    )).scalar_one_or_none()
+    channel = (await db.execute(select(Channel).where(Channel.id == channel_id))).scalar_one_or_none()
     if not channel:
         return JSONResponse({"error": "Not found"}, status_code=404)
-    if channel.created_by != current_user.id and current_user.role not in ("super_admin", "admin"):
+    if channel.created_by != current_user.id and current_user.role.value not in ("super_admin", "admin"):
         return JSONResponse({"error": "Not authorized"}, status_code=403)
 
     dept_list = [d.strip() for d in departments.split(",") if d.strip()]
@@ -248,8 +295,7 @@ async def update_channel(
 
     await db.execute(
         ChannelMember.__table__.delete().where(
-            and_(ChannelMember.channel_id == channel_id,
-                 ChannelMember.user_id != current_user.id)
+            and_(ChannelMember.channel_id == channel_id, ChannelMember.user_id != current_user.id)
         )
     )
     if dept_list:
@@ -271,15 +317,14 @@ async def upload_file(
     reply_to_id: int | None = Form(None),
     reply_to_sender: str | None = Form(None),
     reply_to_content: str | None = Form(None),
+    thread_id: int | None = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    # Validate extension
     ext = Path(file.filename or "").suffix.lstrip(".").lower()
     if ext not in ALLOWED_EXTENSIONS:
         return JSONResponse({"error": f"File type '.{ext}' not allowed"}, status_code=400)
 
-    # Read & size-check
     data = await file.read()
     if len(data) > MAX_FILE_SIZE:
         return JSONResponse({"error": "File too large (max 20 MB)"}, status_code=400)
@@ -288,7 +333,6 @@ async def upload_file(
     safe_stem = Path(file.filename or "file").stem[:40]
     unique_name = f"{uuid.uuid4().hex}_{safe_stem}.{ext}"
     dest = os.path.join(STATIC_UPLOAD_DIR, unique_name)
-
     with open(dest, "wb") as f:
         f.write(data)
 
@@ -298,20 +342,28 @@ async def upload_file(
         msg = Message(
             channel_id=channel_id,
             sender_id=current_user.id,
-            content=None,                       # nullable=True for file messages
+            content=None,
             message_type="file",
             file_url=file_url,
-            file_name=file.filename,            # models.py: file_name VARCHAR(255)
-            file_size=len(data),                # models.py: file_size INTEGER
+            file_name=file.filename,
+            file_size=len(data),
             reply_to_id=reply_to_id,
             reply_to_sender=reply_to_sender,
             reply_to_content=reply_to_content,
+            thread_id=thread_id,
+            is_thread_reply=thread_id is not None,
             is_deleted=False,
             is_ai_extracted=False,
         )
         sess.add(msg)
         await sess.commit()
         await sess.refresh(msg)
+
+        if thread_id:
+            parent = (await sess.execute(select(Message).where(Message.id == thread_id))).scalar_one_or_none()
+            if parent:
+                parent.thread_count = (parent.thread_count or 0) + 1
+                await sess.commit()
 
         payload = {
             "type": "message",
@@ -322,6 +374,192 @@ async def upload_file(
     return JSONResponse({"status": "ok", "file_url": file_url})
 
 
+# ── VOICE NOTE UPLOAD ──────────────────────────────────────────────────────────
+
+@router.post("/voice")
+async def upload_voice(
+    channel_id: int = Form(...),
+    file: UploadFile = File(...),
+    duration: int = Form(0),
+    thread_id: int | None = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    data = await file.read()
+    if len(data) > MAX_VOICE_SIZE:
+        return JSONResponse({"error": "Voice note too large (max 10 MB)"}, status_code=400)
+
+    os.makedirs(VOICE_UPLOAD_DIR, exist_ok=True)
+    ext = Path(file.filename or "voice.webm").suffix.lstrip(".").lower() or "webm"
+    unique_name = f"voice_{uuid.uuid4().hex}.{ext}"
+    dest = os.path.join(VOICE_UPLOAD_DIR, unique_name)
+    with open(dest, "wb") as f:
+        f.write(data)
+
+    file_url = f"/static/uploads/voice/{unique_name}"
+
+    async with AsyncSessionLocal() as sess:
+        msg = Message(
+            channel_id=channel_id,
+            sender_id=current_user.id,
+            content=f"Voice note ({duration}s)" if duration else "Voice note",
+            message_type="voice",
+            file_url=file_url,
+            file_name=unique_name,
+            file_size=len(data),
+            voice_duration=duration,   # FIX: store duration in DB
+            thread_id=thread_id,
+            is_thread_reply=thread_id is not None,
+            is_deleted=False,
+            is_ai_extracted=False,
+        )
+        sess.add(msg)
+        await sess.commit()
+        await sess.refresh(msg)
+
+        payload = {
+            "type": "message",
+            **_serialize_message(msg, current_user.full_name, current_user.avatar_color),
+            "voice_duration": duration,
+        }
+        await manager.broadcast_to_channel(channel_id, payload)
+
+    return JSONResponse({"status": "ok", "file_url": file_url})
+
+
+# ── REACTIONS ─────────────────────────────────────────────────────────────────
+
+@router.post("/{message_id}/react")
+async def toggle_reaction(
+    message_id: int,
+    emoji: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    existing = (await db.execute(
+        select(MessageReaction).where(
+            MessageReaction.message_id == message_id,
+            MessageReaction.user_id == current_user.id,
+            MessageReaction.emoji == emoji,
+        )
+    )).scalar_one_or_none()
+
+    msg = (await db.execute(select(Message).where(Message.id == message_id))).scalar_one_or_none()
+    if not msg:
+        return JSONResponse({"error": "Not found"}, status_code=404)
+
+    if existing:
+        await db.delete(existing)
+        action = "removed"
+    else:
+        db.add(MessageReaction(message_id=message_id, user_id=current_user.id, emoji=emoji))
+        action = "added"
+    await db.commit()
+
+    reactions = await _get_reactions(db, message_id, current_user.id)
+    payload = {
+        "type": "reaction",
+        "message_id": message_id,
+        "reactions": reactions,
+        "action": action,
+        "emoji": emoji,
+        "user_id": current_user.id,
+    }
+    await manager.broadcast_to_channel(msg.channel_id, payload)
+    return JSONResponse({"status": action, "reactions": reactions})
+
+
+# ── READ RECEIPTS ─────────────────────────────────────────────────────────────
+
+@router.get("/{message_id}/readers")
+async def get_readers(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    rows = (await db.execute(
+        select(User.full_name, MessageReadReceipt.read_at)
+        .join(User, MessageReadReceipt.user_id == User.id)
+        .where(MessageReadReceipt.message_id == message_id)
+        .order_by(MessageReadReceipt.read_at.asc())
+    )).all()
+    return JSONResponse([{"name": r.full_name, "read_at": r.read_at.isoformat()} for r in rows])
+
+
+# ── SEARCH ────────────────────────────────────────────────────────────────────
+
+@router.get("/search")
+async def search_messages(
+    channel_id: int = Query(...),
+    q: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    pattern = f"%{q}%"
+    stmt = (
+        select(Message, User.full_name, User.avatar_color)
+        .join(User, Message.sender_id == User.id)
+        .where(
+            Message.channel_id == channel_id,
+            Message.content.ilike(pattern),
+            Message.is_deleted == False,
+        )
+        .order_by(Message.created_at.asc())
+        .limit(50)
+    )
+    result = await db.execute(stmt)
+    messages = []
+    for msg, name, color in result.all():
+        m = _serialize_message(msg, name, color)
+        m["reactions"] = []
+        messages.append(m)
+    return JSONResponse({"results": messages, "query": q})
+
+
+# ── MENTIONS ─────────────────────────────────────────────────────────────────
+
+@router.get("/mentions")
+async def get_mentions(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    rows = (await db.execute(
+        select(Mention, Message, User.full_name.label("sender_name"))
+        .join(Message, Mention.message_id == Message.id)
+        .join(User, Mention.sender_id == User.id)
+        .where(Mention.mentioned_user_id == current_user.id)
+        .order_by(Mention.created_at.desc())
+        .limit(30)
+    )).all()
+
+    results = []
+    for mention, msg, sender_name in rows:
+        results.append({
+            "id": mention.id,
+            "message_id": mention.message_id,
+            "channel_id": mention.channel_id,
+            "sender_name": sender_name,
+            "content": msg.content or "",
+            "is_read": mention.is_read,
+            "created_at": mention.created_at.isoformat(),
+        })
+    return JSONResponse(results)
+
+
+@router.post("/mentions/read-all")
+async def mark_mentions_read(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    await db.execute(
+        Mention.__table__.update()
+        .where(Mention.mentioned_user_id == current_user.id)
+        .values(is_read=True)
+    )
+    await db.commit()
+    return JSONResponse({"status": "ok"})
+
+
 # ── DELETE MESSAGE ─────────────────────────────────────────────────────────────
 
 @router.post("/{message_id}/delete")
@@ -330,27 +568,76 @@ async def delete_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    msg = (await db.execute(
-        select(Message).where(Message.id == message_id)
-    )).scalar_one_or_none()
-
+    msg = (await db.execute(select(Message).where(Message.id == message_id))).scalar_one_or_none()
     if not msg:
         return JSONResponse({"error": "Not found"}, status_code=404)
 
-    is_admin = current_user.role in ("super_admin", "admin")
+    is_admin = current_user.role.value in ("super_admin", "admin")
     if msg.sender_id != current_user.id and not is_admin:
         return JSONResponse({"error": "Not authorized"}, status_code=403)
 
     msg.is_deleted = True
-    msg.content = None                          # nullable=True, clear content on delete
+    msg.content = None
     await db.commit()
 
     await manager.broadcast_to_channel(msg.channel_id, {
         "type": "message_deleted",
         "message_id": message_id,
     })
-
     return JSONResponse({"status": "deleted"})
+
+
+# ── MENTION HELPER ─────────────────────────────────────────────────────────────
+
+async def _process_mentions(content: str, message_id: int, sender_id: int, channel_id: int, sess: AsyncSession):
+    """Parse @name mentions, store them, push WS notifications."""
+    # Match @FirstName LastName style (up to 40 chars)
+    pattern = re.compile(r'@([A-Za-z][^\s@][^@\n]{0,38}?)(?=\s|$|[^\w])')
+    raw_names = pattern.findall(content)
+    if not raw_names:
+        return
+
+    for raw in raw_names:
+        name = raw.strip()
+        if not name:
+            continue
+
+        user = (await sess.execute(
+            select(User).where(func.lower(User.full_name) == name.lower())
+        )).scalar_one_or_none()
+
+        if not user or user.id == sender_id:
+            continue
+
+        # Avoid duplicate mentions for same message+user
+        existing_mention = (await sess.execute(
+            select(Mention).where(
+                Mention.message_id == message_id,
+                Mention.mentioned_user_id == user.id,
+            )
+        )).scalar_one_or_none()
+        if existing_mention:
+            continue
+
+        sess.add(Mention(
+            message_id=message_id,
+            sender_id=sender_id,
+            mentioned_user_id=user.id,
+            channel_id=channel_id,
+            is_read=False,
+        ))
+
+        sender = (await sess.execute(select(User).where(User.id == sender_id))).scalar_one_or_none()
+        # Send to all active connections for the mentioned user
+        await manager.send_to_user(user.id, {
+            "type": "mention",
+            "channel_id": channel_id,
+            "message_id": message_id,
+            "sender_name": sender.full_name if sender else "Someone",
+            "content": content[:120],
+        })
+
+    await sess.commit()
 
 
 # ── WEBSOCKET ──────────────────────────────────────────────────────────────────
@@ -397,6 +684,8 @@ async def websocket_endpoint(
                 if not content:
                     continue
 
+                thread_id = data.get("thread_id")
+
                 async with AsyncSessionLocal() as sess:
                     msg = Message(
                         channel_id=channel_id,
@@ -406,9 +695,10 @@ async def websocket_endpoint(
                         reply_to_id=data.get("reply_to_id"),
                         reply_to_sender=data.get("reply_to_sender"),
                         reply_to_content=data.get("reply_to_content"),
+                        thread_id=thread_id,
+                        is_thread_reply=thread_id is not None,
                         is_deleted=False,
                         is_ai_extracted=False,
-                        # file fields are NULL for text messages
                         file_url=None,
                         file_name=None,
                         file_size=None,
@@ -417,12 +707,22 @@ async def websocket_endpoint(
                     await sess.commit()
                     await sess.refresh(msg)
 
-                    payload_out = {
-                        "type": "message",
-                        **_serialize_message(msg, user.full_name, user.avatar_color),
-                    }
+                    if thread_id:
+                        parent = (await sess.execute(
+                            select(Message).where(Message.id == thread_id)
+                        )).scalar_one_or_none()
+                        if parent:
+                            parent.thread_count = (parent.thread_count or 0) + 1
+                            await sess.commit()
+
+                    serialized = _serialize_message(msg, user.full_name, user.avatar_color)
+                    payload_out = {"type": "message", **serialized}
                     await manager.broadcast_to_channel(channel_id, payload_out)
 
+                    # Process @mentions
+                    await _process_mentions(content, msg.id, user.id, channel_id, sess)
+
+                # Knowledge extraction (non-blocking, best-effort)
                 try:
                     async with AsyncSessionLocal() as ai_sess:
                         knowledge = await ai_service.extract_knowledge_from_message(content, ai_sess)
@@ -452,6 +752,28 @@ async def websocket_endpoint(
                         "message_id": message_id,
                     }, exclude_user=user.id)
 
+            elif msg_type == "read":
+                # FIX: handle read receipt entirely in WS (no HTTP route needed from frontend)
+                message_id = data.get("message_id")
+                if message_id:
+                    async with AsyncSessionLocal() as sess:
+                        existing = (await sess.execute(
+                            select(MessageReadReceipt).where(
+                                MessageReadReceipt.message_id == message_id,
+                                MessageReadReceipt.user_id == user.id,
+                            )
+                        )).scalar_one_or_none()
+                        if not existing:
+                            sess.add(MessageReadReceipt(message_id=message_id, user_id=user.id))
+                            await sess.commit()
+                    # Broadcast receipt to others in channel (sender sees it on others' screens)
+                    await manager.broadcast_to_channel(channel_id, {
+                        "type": "read_receipt",
+                        "message_id": message_id,
+                        "user_id": user.id,
+                        "user_name": user.full_name,
+                    }, exclude_user=user.id)
+
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
 
@@ -463,5 +785,5 @@ async def websocket_endpoint(
             "user_name": user.full_name,
         })
     except Exception as e:
-        logger.error(f"WS error: {e}")
+        logger.error(f"WS error for user {user.id}: {e}")
         manager.disconnect_from_channel(websocket, channel_id, user.id)

@@ -91,6 +91,7 @@ class Message(Base):
     file_url = Column(String(500))
     file_name = Column(String(255))
     file_size = Column(Integer)
+    voice_duration = Column(Integer, nullable=True)   # <-- ADD THIS
     reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
     reply_to_sender = Column(String(255), nullable=True)
     reply_to_content = Column(Text, nullable=True)
@@ -98,11 +99,41 @@ class Message(Base):
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     edited_at = Column(DateTime(timezone=True), nullable=True)
-
+    thread_id        = Column(Integer, ForeignKey("messages.id"), nullable=True)
+    thread_count     = Column(Integer, default=0)
+    is_thread_reply  = Column(Boolean, default=False)
     channel = relationship("Channel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
-    reply_to = relationship("Message", remote_side="Message.id")
+    reply_to = relationship("Message", remote_side="Message.id", foreign_keys="Message.reply_to_id")
 
+class MessageReaction(Base):
+    __tablename__ = "message_reactions"
+ 
+    id         = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("users.id",    ondelete="CASCADE"), nullable=False)
+    emoji      = Column(String(16), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+class MessageReadReceipt(Base):
+    __tablename__ = "message_read_receipts"
+ 
+    id         = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    user_id    = Column(Integer, ForeignKey("users.id",    ondelete="CASCADE"), nullable=False)
+    read_at    = Column(DateTime, server_default=func.now())
+
+class Mention(Base):
+    __tablename__ = "mentions"
+ 
+    id         = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("messages.id", ondelete="CASCADE"), nullable=False)
+    sender_id  = Column(Integer, ForeignKey("users.id",    ondelete="CASCADE"), nullable=False)
+    mentioned_user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False)
+    is_read    = Column(Boolean, default=False)
+    created_at = Column(DateTime, server_default=func.now())
+    
 class Document(Base):
     __tablename__ = "documents"
     id = Column(Integer, primary_key=True, index=True)
