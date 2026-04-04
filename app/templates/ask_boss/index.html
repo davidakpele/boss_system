@@ -42,11 +42,9 @@
 .ai-thinking span { width:7px; height:7px; background:var(--text3); border-radius:50%; animation:bounce 1.2s infinite; }
 .ai-thinking span:nth-child(2){animation-delay:0.2s} .ai-thinking span:nth-child(3){animation-delay:0.4s}
 @keyframes bounce{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-5px)}}
-/* Citations */
 .citation-bar { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
 .cite-chip { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; background:var(--accent-glow); color:var(--accent2); border:1px solid rgba(59,130,246,0.2); cursor:pointer; transition:all 0.15s; text-decoration:none; }
 .cite-chip:hover { background:rgba(59,130,246,0.2); }
-/* Input */
 .boss-input-area { padding:16px 20px; border-top:1px solid var(--border); background:var(--bg2); flex-shrink:0; }
 .boss-input-row { display:flex; align-items:flex-end; gap:10px; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:6px 8px 6px 16px; transition:border-color 0.15s; }
 .boss-input-row:focus-within { border-color:#3f3f46; box-shadow:0 0 0 3px var(--accent-glow); }
@@ -74,8 +72,24 @@
     </div>
     <div class="session-list" id="sessionList">
       {% for sess in sessions %}
-      <div class="session-item {% if loop.first %}active{% endif %}" data-session-id="{{ sess.session_id }}" onclick="loadSession('{{ sess.session_id }}', this)">
-        <div style="font-weight:500">Chat Session</div>
+        <div class="session-item {% if loop.first %}active{% endif %}"
+          data-session-id="{{ sess.session_id }}"
+          onclick="loadSession('{{ sess.session_id }}', this)">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+          <span class="session-title" style="font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+            {{ sess.title or 'Chat Session' }}
+          </span>
+          <div class="session-actions" style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation()">
+            <button class="icon-btn" style="width:22px;height:22px;font-size:11px;" title="Rename"
+                    onclick="startRename(this.closest('.session-item'))">
+              <i class="fa-solid fa-pen"></i>
+            </button>
+            <button class="icon-btn" style="width:22px;height:22px;font-size:11px;color:var(--red);" title="Delete"
+                    onclick="deleteSession(this.closest('.session-item'))">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+        </div>
         <div class="session-date">{{ sess.created_at.strftime('%b %d · %H:%M') if sess.created_at else '' }}</div>
       </div>
       {% else %}
@@ -147,6 +161,56 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 {% endif %}
 
+// ── Rename session ────────────────────────────────────────────────────────────
+function startRename(itemEl) {
+  const titleEl = itemEl.querySelector('.session-title');
+  const current = titleEl.textContent.trim();
+  const input = document.createElement('input');
+  input.value = current;
+  input.style.cssText = 'flex:1;background:var(--bg);border:1px solid var(--accent);border-radius:4px;padding:2px 6px;font-size:13px;color:var(--text);outline:none;min-width:0;';
+  titleEl.replaceWith(input);
+  input.focus(); input.select();
+  async function commitRename() {
+    const newTitle = input.value.trim() || current;
+    const sessionId = itemEl.dataset.sessionId;
+    const span = document.createElement('span');
+    span.className = 'session-title';
+    span.style.cssText = 'font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+    span.textContent = newTitle;
+    input.replaceWith(span);
+    await fetch(`/ask-boss/session/${sessionId}/rename`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    });
+  }
+  input.addEventListener('blur', commitRename);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = current; input.blur(); }
+  });
+}
+
+// ── Delete session ────────────────────────────────────────────────────────────
+async function deleteSession(itemEl) {
+  if (!confirm('Delete this chat session and all its messages?')) return;
+  const sessionId = itemEl.dataset.sessionId;
+  const r = await fetch(`/ask-boss/session/${sessionId}`, { method: 'DELETE' });
+  if (!r.ok) { toast('Error deleting session', 'error'); return; }
+  const wasActive = itemEl.classList.contains('active');
+  itemEl.remove();
+  if (wasActive) {
+    currentSessionId = null;
+    clearMessages();
+    // activate the next available session if any
+    const next = document.querySelector('.session-item');
+    if (next) {
+      loadSession(next.dataset.sessionId, next);
+    }
+  }
+  toast('Session deleted', 'info');
+}
+
 async function newSession() {
   const resp = await fetch('/ask-boss/session/new', { method:'POST' });
   const data = await resp.json();
@@ -156,7 +220,17 @@ async function newSession() {
   item.className = 'session-item active';
   item.dataset.sessionId = data.session_id;
   item.onclick = () => loadSession(data.session_id, item);
-  item.innerHTML = `<div style="font-weight:500">New Chat</div><div class="session-date">Just now</div>`;
+  item.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+      <span class="session-title" style="font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">New Chat</span>
+      <div class="session-actions" style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation()">
+        <button class="icon-btn" style="width:22px;height:22px;font-size:11px;" title="Rename"
+                onclick="startRename(this.closest('.session-item'))"><i class="fa-solid fa-pen"></i></button>
+        <button class="icon-btn" style="width:22px;height:22px;font-size:11px;color:var(--red);" title="Delete"
+                onclick="deleteSession(this.closest('.session-item'))"><i class="fa-solid fa-trash"></i></button>
+      </div>
+    </div>
+    <div class="session-date">Just now</div>`;
   list.querySelectorAll('.session-item').forEach(el => el.classList.remove('active'));
   list.prepend(item);
   clearMessages();
@@ -187,7 +261,8 @@ function clearMessages() {
   container.innerHTML = '';
   msgCounter = 0;
   const ws = document.createElement('div');
-  ws.id = 'welcomeState'; ws.className = 'welcome-state';
+  ws.id = 'welcomeState'; 
+  ws.className = 'welcome-state';
   ws.innerHTML = `<div class="boss-logo-big">AI</div>
     <div class="welcome-title">Ask BOSS Anything</div>
     <div class="welcome-sub">I use your company's knowledge base to answer questions. I'll show you exactly which sources I used.</div>

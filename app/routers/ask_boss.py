@@ -1,4 +1,6 @@
 # app/routers/ask_boss.py
+from http.client import HTTPException
+
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, StreamingResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
@@ -181,8 +183,6 @@ async def onboarding_assistant_page(
 async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
     from jose import jwt
     from app.config import settings as cfg
-
-    # Auth
     authed_user = None
     try:
         if token:
@@ -193,21 +193,15 @@ async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
                 authed_user = res.scalar_one_or_none()
     except Exception as e:
         logger.error(f"Onboarding WS auth error: {e}")
-
     if not authed_user:
         await websocket.accept()
         await websocket.close(code=4001)
         return
-
     await websocket.accept()
     manager.user_connections[authed_user.id] = websocket
     logger.info(f"Onboarding WS connected: user {authed_user.id}")
-
-    # Push initial status
     ai_online = await ai_service.check_ollama_health()
     await websocket.send_json({"type": "status", "ai_online": ai_online, "user_online": True})
-
-    # Background: re-check AI every 30 s and push status
     async def status_loop():
         while True:
             await asyncio.sleep(30)
@@ -231,8 +225,6 @@ async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
                 user_message = (data.get("message") or "").strip()
                 if not user_message:
                     continue
-
-                # Load history and save user message
                 async with AsyncSessionLocal() as db:
                     history_rows = (await db.execute(
                         select(OnboardingConversation)
@@ -283,10 +275,6 @@ async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
             del manager.user_connections[authed_user.id]
 
 
-# ─────────────────────────────────────────────────────────────────
-#  MEETING SUMMARY
-# ─────────────────────────────────────────────────────────────────
-
 @router.post("/meeting-summary/{channel_id}")
 async def generate_channel_summary(
     channel_id: int, db: AsyncSession = Depends(get_db),
@@ -324,7 +312,6 @@ async def generate_channel_summary(
     return JSONResponse({"id": ms.id, "summary": summary_text,
                          "message_count": len(msg_list), "channel_name": channel.name})
 
-
 @router.get("/meeting-summaries/{channel_id}")
 async def get_channel_summaries(
     channel_id: int, db: AsyncSession = Depends(get_db),
@@ -340,3 +327,44 @@ async def get_channel_summaries(
          "generated_at": s.generated_at.isoformat(), "date": s.generated_for_date}
         for s in summaries
     ])
+    
+@router.patch("/session/{session_id}/rename")
+async def rename_session(
+    session_id: str, request: Request,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    body = await request.json()
+    title = (body.get("title") or "").strip()
+    if not title:
+        return JSONResponse({"error": "Title required"}, status_code=400)
+    convo = (await db.execute(
+        select(AIConversation)
+        .where(AIConversation.session_id == session_id, AIConversation.user_id == current_user.id)
+    )).scalar_one_or_none()
+    if not convo:
+        raise HTTPException(404)
+    convo.title = title
+    await db.commit()
+    return JSONResponse({"status": "renamed", "title": title})
+
+
+@router.delete("/session/{session_id}")
+async def delete_session(
+    session_id: str,
+    db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
+):
+    convo = (await db.execute(
+        select(AIConversation)
+        .where(AIConversation.session_id == session_id, AIConversation.user_id == current_user.id)
+    )).scalar_one_or_none()
+    if not convo:
+        raise HTTPException(404)
+    # delete messages first
+    msgs = (await db.execute(
+        select(AIMessage).where(AIMessage.conversation_id == convo.id)
+    )).scalars().all()
+    for m in msgs:
+        await db.delete(m)
+    await db.delete(convo)
+    await db.commit()
+    return JSONResponse({"status": "deleted"})
