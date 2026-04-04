@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Reports — BOSS Analytics{% endblock %}
+{% block page_title %}Report Generator{% endblock %}
+{% block page_sub %}AI-powered PDF reports — download anytime{% endblock %}
+
+{% block extra_css %}
+.report-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:24px; display:flex; gap:20px; align-items:flex-start; margin-bottom:14px;
+  transition:border-color .15s;
+}
+.report-card:hover { border-color:var(--border2); }
+.report-icon {
+  width:56px; height:56px; border-radius:14px;
+  display:flex; align-items:center; justify-content:center; font-size:24px; flex-shrink:0;
+}
+.report-meta { flex:1; min-width:0; }
+.report-title { font-family:'Syne',sans-serif; font-weight:700; font-size:15px; margin-bottom:4px; }
+.report-desc { font-size:13px; color:var(--text3); line-height:1.6; margin-bottom:12px; }
+.report-options { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+.report-select { background:var(--bg3); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; padding:7px 12px; outline:none; }
+{% endblock %}
+
+{% block content %}
+<div class="flex items-center gap-3 mb-6">
+  <a href="/analytics" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> Analytics</a>
+  <div style="font-size:13px;color:var(--text3);">Select a report type and configure options, then download as PDF.</div>
+</div>
+
+{# ── Report 1: Department Knowledge ── #}
+<div class="report-card">
+  <div class="report-icon" style="background:rgba(59,130,246,.1);color:#60a5fa;"><i class="fa-solid fa-book"></i></div>
+  <div class="report-meta">
+    <div class="report-title">Department Knowledge Report</div>
+    <div class="report-desc">
+      A comprehensive PDF showing all knowledge added per department over a selected period.
+      Includes AI-generated insights and summaries, new documents uploaded, knowledge chunks created,
+      and current compliance status. Ideal for weekly or monthly management reviews.
+    </div>
+    <div class="report-options">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Department</label>
+        <select id="rep1-dept" class="report-select">
+          <option value="">All Departments</option>
+          {% for dept in departments %}
+          <option value="{{ dept }}">{{ dept }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Period</label>
+        <select id="rep1-weeks" class="report-select">
+          <option value="1">Last week</option>
+          <option value="2">Last 2 weeks</option>
+          <option value="4" selected>Last month</option>
+          <option value="8">Last 2 months</option>
+          <option value="13">Last quarter</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="downloadDeptReport()">
+        <i class="fa-solid fa-file-pdf"></i> Generate & Download PDF
+      </button>
+    </div>
+    <div id="rep1-status" style="margin-top:10px;font-size:12.5px;color:var(--text3);display:none;"></div>
+  </div>
+</div>
+
+{# ── Report 2: User Activity ── #}
+<div class="report-card">
+  <div class="report-icon" style="background:rgba(139,92,246,.1);color:#a78bfa;"><i class="fa-solid fa-users"></i></div>
+  <div class="report-meta">
+    <div class="report-title">User Activity Report</div>
+    <div class="report-desc">
+      Detailed breakdown of every user's activity: messages sent, documents uploaded,
+      Ask BOSS queries, and login frequency. Sortable and exportable to CSV.
+      Perfect for performance reviews and identifying disengaged users.
+    </div>
+    <div class="report-options">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Period</label>
+        <select id="rep2-days" class="report-select">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+        </select>
+      </div>
+      <a id="rep2-link" href="/analytics/user-activity" class="btn btn-primary">
+        <i class="fa-solid fa-table-list"></i> View Interactive Report
+      </a>
+    </div>
+  </div>
+</div>
+
+{# ── Report 3: Compliance Summary ── #}
+<div class="report-card">
+  <div class="report-icon" style="background:rgba(16,185,129,.1);color:#34d399;"><i class="fa-solid fa-shield-alt"></i></div>
+  <div class="report-meta">
+    <div class="report-title">Compliance Status Overview</div>
+    <div class="report-desc">
+      An overview of all compliance records: risk levels, status distribution,
+      and which documents are driving compliance requirements.
+      Useful for management sign-off and regulatory audits.
+    </div>
+    <div class="report-options">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:4px;">Department</label>
+        <select id="rep3-dept" class="report-select">
+          <option value="">All Departments</option>
+          {% for dept in departments %}
+          <option value="{{ dept }}">{{ dept }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="downloadComplianceReport()">
+        <i class="fa-solid fa-file-pdf"></i> Generate & Download PDF
+      </button>
+    </div>
+    <div id="rep3-status" style="margin-top:10px;font-size:12.5px;color:var(--text3);display:none;"></div>
+  </div>
+</div>
+
+{# ── Tip ── #}
+<div class="card" style="background:var(--accent-glow);border-color:rgba(59,130,246,.2);margin-top:20px;">
+  <div style="display:flex;gap:12px;align-items:flex-start;">
+    <i class="fa-solid fa-lightbulb" style="color:var(--yellow);font-size:18px;margin-top:2px;flex-shrink:0;"></i>
+    <div>
+      <div style="font-weight:600;font-size:13.5px;margin-bottom:4px;">AI-Powered Reports</div>
+      <div style="font-size:13px;color:var(--text2);line-height:1.65;">
+        Each report uses your local Ollama AI to generate human-readable summaries and insights
+        from your actual data — no data ever leaves your server. Generation may take 15–30 seconds
+        depending on your hardware.
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function downloadDeptReport() {
+  const dept  = document.getElementById('rep1-dept').value;
+  const weeks = document.getElementById('rep1-weeks').value;
+  const status = document.getElementById('rep1-status');
+  status.style.display = 'block';
+  status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI is generating your report… (may take 15–30 seconds)';
+  try {
+    const url = `/analytics/reports/department-knowledge?weeks=${weeks}${dept ? '&department='+encodeURIComponent(dept) : ''}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Generation failed');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `knowledge_report_${dept || 'all'}_${new Date().toISOString().slice(0,10)}.pdf`;
+    a.click();
+    status.innerHTML = '<i class="fa-solid fa-check-circle" style="color:var(--green);"></i> Report downloaded successfully!';
+    setTimeout(() => { status.style.display = 'none'; }, 4000);
+  } catch(e) {
+    status.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:var(--red);"></i> Error generating report. Ensure Ollama is running.';
+  }
+}
+
+async function downloadComplianceReport() {
+  const dept  = document.getElementById('rep3-dept').value;
+  const status = document.getElementById('rep3-status');
+  status.style.display = 'block';
+  status.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Generating compliance report…';
+  try {
+    // Re-use the same endpoint, just with weeks=52 and dept filter — compliance records are always included
+    const url = `/analytics/reports/department-knowledge?weeks=52${dept ? '&department='+encodeURIComponent(dept) : ''}`;
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('Generation failed');
+    const blob = await r.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `compliance_report_${new Date().toISOString().slice(0,10)}.pdf`;
+    a.click();
+    status.innerHTML = '<i class="fa-solid fa-check-circle" style="color:var(--green);"></i> Downloaded!';
+    setTimeout(() => { status.style.display = 'none'; }, 4000);
+  } catch(e) {
+    status.innerHTML = '<i class="fa-solid fa-circle-exclamation" style="color:var(--red);"></i> Error generating report.';
+  }
+}
+</script>
+{% endblock %}

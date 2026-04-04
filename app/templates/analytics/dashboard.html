@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% block title %}Analytics — BOSS{% endblock %}
+{% block page_title %}Analytics & Reporting{% endblock %}
+{% block page_sub %}Documents · Messages · Compliance · Knowledge Base · Activity{% endblock %}
+
+{% block extra_css %}
+.analytics-kpi {
+  display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:24px;
+}
+.kpi-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px 18px; text-align:center;
+}
+.kpi-val {
+  font-family:'Syne',sans-serif; font-weight:800; font-size:26px; margin:4px 0;
+}
+.kpi-label { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); font-weight:600; }
+
+.chart-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px; }
+.chart-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; margin-bottom:16px; }
+.chart-card {
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px;
+}
+.chart-title {
+  font-family:'Syne',sans-serif; font-weight:700; font-size:13px;
+  margin-bottom:16px; display:flex; align-items:center; gap:8px;
+}
+
+/* Heatmap */
+.heatmap-grid { display:flex; gap:3px; flex-wrap:wrap; }
+.hm-cell {
+  width:12px; height:12px; border-radius:2px; cursor:default;
+  transition:opacity .12s;
+}
+.hm-cell:hover { opacity:.7; }
+.hm-0 { background:var(--border); }
+.hm-1 { background:rgba(59,130,246,.25); }
+.hm-2 { background:rgba(59,130,246,.5); }
+.hm-3 { background:rgba(59,130,246,.75); }
+.hm-4 { background:rgb(59,130,246); }
+
+/* Top users */
+.user-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.user-bar-bg {
+  flex:1; height:8px; background:var(--border); border-radius:10px; overflow:hidden;
+}
+.user-bar-fill { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--accent),#2563eb); transition:width .6s ease; }
+
+/* Period selector */
+.period-btn { padding:4px 12px; border-radius:20px; border:1px solid var(--border); background:transparent; color:var(--text3); font-size:12px; font-weight:600; cursor:pointer; transition:all .15s; }
+.period-btn.active { background:var(--accent-glow); color:var(--accent2); border-color:rgba(59,130,246,.3); }
+
+@media(max-width:1100px){ .chart-grid-3{ grid-template-columns:1fr 1fr; } }
+@media(max-width:900px) { .analytics-kpi{ grid-template-columns:repeat(3,1fr); } .chart-grid-2{ grid-template-columns:1fr; } .chart-grid-3{ grid-template-columns:1fr; } }
+@media(max-width:600px) { .analytics-kpi{ grid-template-columns:1fr 1fr; } }
+{% endblock %}
+
+{% block content %}
+
+{# ── KPI Strip ── #}
+<div class="analytics-kpi">
+  <div class="kpi-card">
+    <div class="kpi-label">Documents</div>
+    <div class="kpi-val" style="color:#60a5fa;">{{ total_docs }}</div>
+    <div style="font-size:11px;color:var(--text3);">Total uploaded</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Users</div>
+    <div class="kpi-val" style="color:#a78bfa;">{{ total_users }}</div>
+    <div style="font-size:11px;color:var(--text3);">Active accounts</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Knowledge</div>
+    <div class="kpi-val" style="color:#34d399;">{{ total_chunks }}</div>
+    <div style="font-size:11px;color:var(--text3);">Total chunks</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Messages</div>
+    <div class="kpi-val" style="color:#fbbf24;">{{ total_msgs }}</div>
+    <div style="font-size:11px;color:var(--text3);">Total sent</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-label">Compliance</div>
+    <div class="kpi-val" style="color:{% if compliance_pct >= 70 %}#34d399{% elif compliance_pct >= 40 %}#fbbf24{% else %}#f87171{% endif %};">
+      {{ compliance_pct }}%
+    </div>
+    <div style="font-size:11px;color:var(--text3);">Overall score</div>
+  </div>
+</div>
+
+{# ── Period selector ── #}
+<div class="flex items-center gap-2 mb-4" style="flex-wrap:wrap;">
+  <span style="font-size:12px;color:var(--text3);font-weight:600;">PERIOD:</span>
+  <button class="period-btn active" onclick="setPeriod(this, 7)">7 days</button>
+  <button class="period-btn" onclick="setPeriod(this, 30)">30 days</button>
+  <button class="period-btn" onclick="setPeriod(this, 90)">90 days</button>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <a href="/analytics/user-activity" class="btn btn-ghost btn-sm"><i class="fa-solid fa-users"></i> User Activity</a>
+    <a href="/analytics/reports" class="btn btn-primary btn-sm"><i class="fa-solid fa-file-pdf"></i> Reports</a>
+  </div>
+</div>
+
+{# ── Row 1: Uploads + Messages ── #}
+<div class="chart-grid-2">
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-file-arrow-up" style="color:var(--accent)"></i> Document Uploads Over Time</div>
+    <canvas id="uploadsChart" height="180"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-comments" style="color:var(--purple)"></i> Messages Over Time</div>
+    <canvas id="messagesChart" height="180"></canvas>
+  </div>
+</div>
+
+{# ── Row 2: Compliance + Knowledge Growth + Dept Pie ── #}
+<div class="chart-grid-3">
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-shield-halved" style="color:var(--green)"></i> Compliance Score Trend</div>
+    <canvas id="complianceChart" height="200"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-brain" style="color:#fbbf24"></i> Knowledge Base Growth</div>
+    <canvas id="knowledgeChart" height="200"></canvas>
+  </div>
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-building" style="color:var(--purple)"></i> Knowledge by Department</div>
+    <canvas id="deptChart" height="200"></canvas>
+  </div>
+</div>
+
+{# ── Row 3: Activity heatmap + Top users ── #}
+<div class="chart-grid-2">
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-calendar-days" style="color:#f59e0b"></i> Login Activity (12 Weeks)</div>
+    <div style="margin-bottom:8px;">
+      <div style="display:flex;gap:3px;margin-bottom:6px;">
+        {% for day_abbr in ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'] %}
+        <div style="width:12px;font-size:8px;color:var(--text3);text-align:center;">{{ day_abbr[0] }}</div>
+        {% endfor %}
+      </div>
+      <div class="heatmap-grid" id="heatmapGrid" style="flex-direction:column;">
+        <!-- filled by JS -->
+      </div>
+    </div>
+    <div class="flex gap-2 items-center mt-2" style="font-size:10px;color:var(--text3);">
+      <span>Less</span>
+      <div class="hm-cell hm-0"></div>
+      <div class="hm-cell hm-1"></div>
+      <div class="hm-cell hm-2"></div>
+      <div class="hm-cell hm-3"></div>
+      <div class="hm-cell hm-4"></div>
+      <span>More</span>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-title"><i class="fa-solid fa-medal" style="color:#fbbf24"></i> Most Active Users (30 days)</div>
+    <div id="topUsersContainer">
+      <div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">Loading…</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ── Global chart defaults ─────────────────────────────────────────────────────
+Chart.defaults.color = '#64748b';
+Chart.defaults.borderColor = '#1f2d42';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11;
+
+const COLORS = {
+  blue:   { line:'#3b82f6', fill:'rgba(59,130,246,0.12)' },
+  purple: { line:'#8b5cf6', fill:'rgba(139,92,246,0.12)' },
+  green:  { line:'#10b981', fill:'rgba(16,185,129,0.12)' },
+  yellow: { line:'#f59e0b', fill:'rgba(245,158,11,0.12)' },
+};
+
+const CHART_OPTIONS = (color, ylabel='') => ({
+  responsive: true,
+  animation: { duration: 600, easing: 'easeInOutQuart' },
+  plugins: { legend:{ display:false }, tooltip:{ backgroundColor:'#131d2e', borderColor:'#1f2d42', borderWidth:1, padding:10, titleFont:{weight:'bold'} } },
+  scales: {
+    x: { grid:{ color:'#1f2d42' }, ticks:{ maxTicksLimit:8, maxRotation:0 } },
+    y: { grid:{ color:'#1f2d42' }, beginAtZero:true, title: ylabel ? {display:true, text:ylabel} : {} }
+  }
+});
+
+let charts = {};
+let currentDays = 7;
+
+function makeLineChart(id, labels, values, colorKey, label='') {
+  const ctx = document.getElementById(id).getContext('2d');
+  if (charts[id]) charts[id].destroy();
+  charts[id] = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label, data: values,
+        borderColor: COLORS[colorKey].line,
+        backgroundColor: COLORS[colorKey].fill,
+        borderWidth: 2, pointRadius: 3,
+        pointBackgroundColor: COLORS[colorKey].line,
+        fill: true, tension: 0.35,
+      }]
+    },
+    options: CHART_OPTIONS(colorKey),
+  });
+}
+
+// ── Load chart data ───────────────────────────────────────────────────────────
+async function loadCharts(days) {
+  const [upData, msgData, knData] = await Promise.all([
+    fetch(`/analytics/data/uploads?days=${days}`).then(r=>r.json()),
+    fetch(`/analytics/data/messages?days=${days}`).then(r=>r.json()),
+    fetch(`/analytics/data/knowledge-growth?days=${days}`).then(r=>r.json()),
+  ]);
+
+  // Shorten labels for readability
+  const shorten = labels => labels.map(l => l.slice(5)); // strip year
+
+  makeLineChart('uploadsChart', shorten(upData.labels), upData.values, 'blue', 'Uploads');
+  makeLineChart('messagesChart', shorten(msgData.labels), msgData.values, 'purple', 'Messages');
+  makeLineChart('knowledgeChart', shorten(knData.labels), knData.cumulative, 'yellow', 'Chunks');
+}
+
+async function loadStaticCharts() {
+  // Compliance trend (always 12 months)
+  const comp = await fetch('/analytics/data/compliance-trend?months=12').then(r=>r.json());
+  const ctx3 = document.getElementById('complianceChart').getContext('2d');
+  if (charts.compliance) charts.compliance.destroy();
+  charts.compliance = new Chart(ctx3, {
+    type: 'line',
+    data: {
+      labels: comp.labels,
+      datasets: [{
+        label:'Compliance %', data: comp.values,
+        borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.12)',
+        borderWidth:2, pointRadius:3, pointBackgroundColor:'#10b981',
+        fill:true, tension:0.35,
+      }]
+    },
+    options: { ...CHART_OPTIONS('green'), scales:{ x:{grid:{color:'#1f2d42'},ticks:{maxRotation:45}}, y:{grid:{color:'#1f2d42'},min:0,max:100,title:{display:true,text:'Score %'}} } },
+  });
+
+  // Department donut
+  const dept = await fetch('/analytics/data/knowledge-by-dept').then(r=>r.json());
+  const DEPT_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#14b8a6','#ec4899','#6366f1'];
+  const ctx4 = document.getElementById('deptChart').getContext('2d');
+  if (charts.dept) charts.dept.destroy();
+  charts.dept = new Chart(ctx4, {
+    type: 'doughnut',
+    data: {
+      labels: dept.labels,
+      datasets: [{ data: dept.values, backgroundColor: DEPT_COLORS, borderColor:'#131d2e', borderWidth:2 }]
+    },
+    options: {
+      responsive:true, animation:{duration:600},
+      plugins:{
+        legend:{ position:'right', labels:{ color:'#94a3b8', padding:10, font:{size:11} } },
+        tooltip:{ backgroundColor:'#131d2e', borderColor:'#1f2d42', borderWidth:1 }
+      },
+    },
+  });
+
+  // Activity heatmap
+  const hm = await fetch('/analytics/data/activity-heatmap').then(r=>r.json());
+  buildHeatmap(hm.cells);
+
+  // Top users
+  loadTopUsers();
+}
+
+function buildHeatmap(cells) {
+  const grid = document.getElementById('heatmapGrid');
+  grid.innerHTML = '';
+  // group by day-of-week rows (0=Mon .. 6=Sun)
+  const byDay = Array.from({length:7}, () => []);
+  cells.forEach(c => byDay[c.day].push(c));
+  byDay.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.style.cssText = 'display:flex;gap:3px;margin-bottom:3px;';
+    row.forEach(c => {
+      const cell = document.createElement('div');
+      const lvl = c.count === 0 ? 0 : c.count <= 2 ? 1 : c.count <= 5 ? 2 : c.count <= 10 ? 3 : 4;
+      cell.className = `hm-cell hm-${lvl}`;
+      cell.title = `${c.date}: ${c.count} login${c.count !== 1 ? 's' : ''}`;
+      rowEl.appendChild(cell);
+    });
+    grid.appendChild(rowEl);
+  });
+}
+
+async function loadTopUsers() {
+  const data = await fetch('/analytics/data/top-users').then(r=>r.json());
+  const container = document.getElementById('topUsersContainer');
+  if (!data.length) { container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No activity data yet</div>'; return; }
+  const maxCount = data[0].count;
+  container.innerHTML = data.map((u, i) => `
+    <div class="user-bar-row">
+      <div style="width:22px;height:22px;border-radius:50%;background:${u.color};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
+      <div style="min-width:0;flex:1;">
+        <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
+        <div class="user-bar-bg">
+          <div class="user-bar-fill" style="width:${Math.round(u.count/maxCount*100)}%"></div>
+        </div>
+      </div>
+      <div style="font-size:12px;font-weight:700;color:var(--accent2);flex-shrink:0;">${u.count}</div>
+    </div>
+  `).join('');
+}
+
+function setPeriod(btn, days) {
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentDays = days;
+  loadCharts(days);
+}
+
+// Init
+loadCharts(currentDays);
+loadStaticCharts();
+</script>
+{% endblock %}

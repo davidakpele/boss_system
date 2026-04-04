@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}User Activity Report — BOSS{% endblock %}
+{% block page_title %}User Activity Report{% endblock %}
+{% block page_sub %}Messages · Documents · AI queries · Logins per user{% endblock %}
+
+{% block extra_css %}
+.ua-table { width:100%; border-collapse:collapse; }
+.ua-table th {
+  font-size:10px; text-transform:uppercase; letter-spacing:.08em;
+  color:var(--text3); font-weight:600; padding:10px 14px;
+  border-bottom:1px solid var(--border); text-align:left; cursor:pointer;
+  white-space:nowrap; user-select:none;
+}
+.ua-table th:hover { color:var(--text2); }
+.ua-table th .sort-icon { margin-left:4px; opacity:.5; font-size:9px; }
+.ua-table td { padding:11px 14px; border-bottom:1px solid rgba(31,45,66,.4); font-size:13px; }
+.ua-table tr:last-child td { border-bottom:none; }
+.ua-table tr:hover td { background:rgba(255,255,255,.015); }
+.score-bar { height:6px; background:var(--border); border-radius:10px; overflow:hidden; width:80px; display:inline-block; vertical-align:middle; margin-left:6px; }
+.score-fill { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--accent),#2563eb); }
+.activity-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; }
+.period-select { background:var(--surface); border:1px solid var(--border); border-radius:8px; color:var(--text); font-size:13px; padding:7px 12px; outline:none; cursor:pointer; }
+{% endblock %}
+
+{% block content %}
+
+<div class="flex items-center gap-3 mb-6" style="flex-wrap:wrap;">
+  <div style="flex:1;">
+    <div style="font-size:12px;color:var(--text3);">Select a time period to analyze user engagement across the platform.</div>
+  </div>
+  <div class="flex gap-2 items-center">
+    <span style="font-size:12px;color:var(--text3);font-weight:600;">PERIOD:</span>
+    <select class="period-select" id="periodSelect" onchange="loadData()">
+      <option value="7">Last 7 days</option>
+      <option value="30" selected>Last 30 days</option>
+      <option value="90">Last 90 days</option>
+      <option value="365">Last year</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="exportCSV()"><i class="fa-solid fa-download"></i> Export CSV</button>
+    <a href="/analytics" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+{# ── Summary cards ── #}
+<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px;" id="summaryCards">
+  <div class="card" style="text-align:center;">
+    <div class="stat-label">Total Users</div>
+    <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#60a5fa;" id="sumUsers">—</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div class="stat-label">Total Messages</div>
+    <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#a78bfa;" id="sumMsgs">—</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div class="stat-label">Documents Uploaded</div>
+    <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#34d399;" id="sumDocs">—</div>
+  </div>
+  <div class="card" style="text-align:center;">
+    <div class="stat-label">AI Queries</div>
+    <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#fbbf24;" id="sumAI">—</div>
+  </div>
+</div>
+
+{# ── Search ── #}
+<div class="flex gap-3 mb-4" style="flex-wrap:wrap;">
+  <div style="flex:1;min-width:200px;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 14px;">
+    <i class="fa-solid fa-magnifying-glass" style="color:var(--text3);font-size:12px;"></i>
+    <input type="text" id="searchInput" placeholder="Search by name, email or department…"
+           style="flex:1;background:none;border:none;outline:none;color:var(--text);font-size:13.5px;"
+           oninput="filterTable(this.value)"/>
+  </div>
+</div>
+
+{# ── Table ── #}
+<div class="card" style="overflow-x:auto;padding:0;">
+  <table class="ua-table">
+    <thead>
+      <tr>
+        <th onclick="sortTable('name')">User <span class="sort-icon" id="sort-name">↕</span></th>
+        <th onclick="sortTable('dept')">Dept <span class="sort-icon" id="sort-dept">↕</span></th>
+        <th onclick="sortTable('messages')" style="text-align:right;">Messages <span class="sort-icon" id="sort-messages">↕</span></th>
+        <th onclick="sortTable('documents')" style="text-align:right;">Documents <span class="sort-icon" id="sort-documents">↕</span></th>
+        <th onclick="sortTable('ai_queries')" style="text-align:right;">AI Queries <span class="sort-icon" id="sort-ai_queries">↕</span></th>
+        <th onclick="sortTable('logins')" style="text-align:right;">Logins <span class="sort-icon" id="sort-logins">↕</span></th>
+        <th onclick="sortTable('activity_score')">Activity Score <span class="sort-icon" id="sort-activity_score">↕</span></th>
+        <th onclick="sortTable('last_seen')">Last Seen <span class="sort-icon" id="sort-last_seen">↕</span></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3);">
+        <i class="fa-solid fa-spinner fa-spin" style="font-size:20px;"></i>
+        <div style="margin-top:8px;">Loading activity data…</div>
+      </td></tr>
+    </tbody>
+  </table>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allData = [];
+let sortKey = 'activity_score';
+let sortDir = -1;   // -1 = desc, 1 = asc
+
+async function loadData() {
+  const days = document.getElementById('periodSelect').value;
+  document.getElementById('tableBody').innerHTML =
+    '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin" style="font-size:20px;"></i></td></tr>';
+
+  const data = await fetch(`/analytics/user-activity/data?days=${days}`).then(r=>r.json());
+  allData = data;
+
+  // Summary
+  document.getElementById('sumUsers').textContent = data.length;
+  document.getElementById('sumMsgs').textContent  = data.reduce((a,u)=>a+u.messages,0).toLocaleString();
+  document.getElementById('sumDocs').textContent  = data.reduce((a,u)=>a+u.documents,0).toLocaleString();
+  document.getElementById('sumAI').textContent    = data.reduce((a,u)=>a+u.ai_queries,0).toLocaleString();
+
+  renderTable(data);
+}
+
+function renderTable(data) {
+  const maxScore = Math.max(1, ...data.map(u=>u.activity_score));
+  const tbody = document.getElementById('tableBody');
+  if (!data.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text3);">No activity data for this period.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(u => {
+    const initials = u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
+    const barPct = Math.round(u.activity_score / maxScore * 100);
+    const onlineDot = u.is_online
+      ? '<div class="activity-dot" style="background:var(--green);box-shadow:0 0 5px var(--green);"></div>'
+      : '<div class="activity-dot" style="background:var(--border2);"></div>';
+    const lastSeen = u.last_seen
+      ? new Date(u.last_seen).toLocaleDateString([], {month:'short', day:'numeric', year:'numeric'})
+      : '—';
+    const roleBadge = `<span class="badge badge-${u.role==='super_admin'?'red':u.role==='admin'?'purple':u.role==='manager'?'blue':'gray'}" style="font-size:9px;">${u.role.replace('_',' ')}</span>`;
+    return `<tr data-name="${u.name.toLowerCase()}" data-dept="${(u.dept||'').toLowerCase()}" data-email="${u.email.toLowerCase()}">
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          ${onlineDot}
+          <div style="width:28px;height:28px;border-radius:50%;background:${u.color};display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff;flex-shrink:0;">${initials}</div>
+          <div style="min-width:0;">
+            <div style="font-weight:600;font-size:13px;">${u.name}</div>
+            <div style="font-size:10.5px;color:var(--text3);">${u.email}</div>
+          </div>
+        </div>
+      </td>
+      <td>${u.dept} ${roleBadge}</td>
+      <td style="text-align:right;font-weight:600;color:#a78bfa;">${u.messages.toLocaleString()}</td>
+      <td style="text-align:right;font-weight:600;color:#34d399;">${u.documents.toLocaleString()}</td>
+      <td style="text-align:right;font-weight:600;color:#fbbf24;">${u.ai_queries.toLocaleString()}</td>
+      <td style="text-align:right;color:var(--text2);">${u.logins.toLocaleString()}</td>
+      <td>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-weight:700;font-size:13px;color:var(--accent2);">${u.activity_score}</span>
+          <div class="score-bar"><div class="score-fill" style="width:${barPct}%"></div></div>
+        </div>
+      </td>
+      <td class="text-xs text-muted">${lastSeen}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterTable(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('#tableBody tr').forEach(row => {
+    const text = (row.dataset.name||'') + (row.dataset.dept||'') + (row.dataset.email||'');
+    row.style.display = text.includes(q) ? '' : 'none';
+  });
+}
+
+function sortTable(key) {
+  if (sortKey === key) sortDir *= -1;
+  else { sortKey = key; sortDir = -1; }
+  document.querySelectorAll('.sort-icon').forEach(el => el.textContent = '↕');
+  const icon = document.getElementById('sort-' + key);
+  if (icon) icon.textContent = sortDir === -1 ? '↓' : '↑';
+  const sorted = [...allData].sort((a, b) => {
+    const va = a[key] ?? ''; const vb = b[key] ?? '';
+    if (typeof va === 'number') return (va - vb) * sortDir;
+    return String(va).localeCompare(String(vb)) * sortDir;
+  });
+  renderTable(sorted);
+}
+
+function exportCSV() {
+  const days = document.getElementById('periodSelect').value;
+  const rows = [['Name','Email','Department','Role','Messages','Documents','AI Queries','Logins','Activity Score','Last Seen']];
+  allData.forEach(u => rows.push([
+    u.name, u.email, u.dept, u.role,
+    u.messages, u.documents, u.ai_queries, u.logins, u.activity_score,
+    u.last_seen ? new Date(u.last_seen).toLocaleDateString() : '—'
+  ]));
+  const csv = rows.map(r => r.map(v => `"${v}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `user_activity_${days}d_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+loadData();
+</script>
+{% endblock %}

@@ -26,3 +26,4 @@ starlette
 itsdangerous
 authlib  
 py-vapid
+reportlab

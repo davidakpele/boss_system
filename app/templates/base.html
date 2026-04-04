@@ -643,6 +643,21 @@
         <a href="/bcc/hr" class="nav-item {% if request.url.path.startswith('/bcc/hr') %}active{% endif %}">
           <i class="fa-solid fa-user-tie"></i> AI Recruitment
         </a>
+       <div class="nav-section-label mt-4">Analytics</div>
+        <a href="/analytics"
+          class="nav-item {% if request.url.path == '/analytics' %}active{% endif %}">
+          <i class="fa-solid fa-chart-line"></i> Analytics
+        </a>
+
+        <a href="/analytics/user-activity"
+          class="nav-item {% if request.url.path.startswith('/analytics/user-activity') %}active{% endif %}">
+          <i class="fa-solid fa-users-viewfinder"></i> User Activity
+        </a>
+
+        <a href="/analytics/reports"
+          class="nav-item {% if request.url.path.startswith('/analytics/reports') %}active{% endif %}">
+          <i class="fa-solid fa-file-chart-column"></i> Reports
+        </a>
       <div class="nav-section-label">Knowledge</div>
       <a href="/knowledge-base" class="nav-item {% if page == 'knowledge_base' %}active{% endif %}">
         <i class="fa-regular fa-folder-open"></i> Knowledge Base
@@ -697,7 +712,7 @@
 
     <div class="sidebar-footer">
       <div class="user-card">
-        <div class="avatar" style="background:{{ user.avatar_color }}">
+        <div class="avatar" >
           {{ user.full_name[:2].upper() }}
         </div>
         <div class="user-info">
@@ -757,50 +772,50 @@
         </a>
         <div class="topbar-divider"></div>
         <div class="user-chip" id="profileChip" onclick="toggleProfileMenu()">
-  <div class="chip-avatar" style="background:{{ user.avatar_color }}">{{ user.full_name[:2].upper() }}</div>
-  <span class="chip-name">{{ user.full_name.split()[0] }}</span>
-  <i class="fa-solid fa-chevron-down" style="font-size:8px;color:var(--text3);"></i>
-</div>
-
-<!-- Profile dropdown -->
-<div id="profileMenu" style="display:none;position:absolute;top:48px;right:0;width:240px;
-     background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
-     box-shadow:var(--shadow);z-index:500;overflow:hidden;">
-
-  <!-- User info header -->
-  <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg2);">
-    <div style="display:flex;align-items:center;gap:10px;">
-      <div class="avatar lg" style="background:{{ user.avatar_color }}">{{ user.full_name[:2].upper() }}</div>
-      <div>
-        <div style="font-weight:600;font-size:13.5px;color:var(--text);">{{ user.full_name }}</div>
-        <div style="font-size:11px;color:var(--text3);">{{ user.email }}</div>
-        <div style="margin-top:3px;">
-          <span class="badge badge-gray" style="font-size:9.5px;">{{ user.role.value.replace('_',' ').title() }}</span>
-          {% if user.department %}
-          <span class="badge badge-blue" style="font-size:9.5px;">{{ user.department }}</span>
-          {% endif %}
+          <div class="chip-avatar" >{{ user.full_name[:2].upper() }}</div>
+          <span class="chip-name">{{ user.full_name.split()[0] }}</span>
+          <i class="fa-solid fa-chevron-down" style="font-size:8px;color:var(--text3);"></i>
         </div>
-      </div>
-    </div>
-  </div>
 
-  <!-- Menu items -->
-  <div style="padding:6px;">
-    <a href="/settings" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text2);text-decoration:none;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
-      <i class="fa-regular fa-user" style="width:14px;text-align:center;font-size:12px;color:var(--text3);"></i> My Profile
-    </a>
-    <a href="/settings" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text2);text-decoration:none;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
-      <i class="fa-regular fa-gear" style="width:14px;text-align:center;font-size:12px;color:var(--text3);"></i> Settings
-    </a>
-    <div onclick="typeof requestPushPermission === 'function' && requestPushPermission()" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text2);font-size:13px;cursor:pointer;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
-      <i class="fa-solid fa-bell" style="width:14px;text-align:center;font-size:12px;color:var(--text3);"></i> Notifications
-    </div>
-    <div style="height:1px;background:var(--border);margin:4px 0;"></div>
-    <a href="/auth/logout" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--red);text-decoration:none;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--red-bg)'" onmouseout="this.style.background='transparent'">
-      <i class="fa-solid fa-arrow-right-from-bracket" style="width:14px;text-align:center;font-size:12px;"></i> Sign Out
-    </a>
-  </div>
-</div>
+        <!-- Profile dropdown -->
+        <div id="profileMenu" style="display:none;position:absolute;top:48px;right:0;width:240px;
+            background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+            box-shadow:var(--shadow);z-index:500;overflow:hidden;">
+
+          <!-- User info header -->
+          <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg2);">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="avatar lg" style="background: #18181b;">{{ user.full_name[:2].upper() }}</div>
+              <div>
+                <div style="font-weight:600;font-size:13.5px;color:var(--text);">{{ user.full_name }}</div>
+                <div style="font-size:11px;color:var(--text3);">{{ user.email }}</div>
+                <div style="margin-top:3px;">
+                  <span class="badge badge-gray" style="font-size:9.5px;">{{ user.role.value.replace('_',' ').title() }}</span>
+                  {% if user.department %}
+                  <span class="badge badge-blue" style="font-size:9.5px;">{{ user.department }}</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Menu items -->
+          <div style="padding:6px;">
+            <a href="/settings" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text2);text-decoration:none;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
+              <i class="fa-regular fa-user" style="width:14px;text-align:center;font-size:12px;color:var(--text3);"></i> My Profile
+            </a>
+            <a href="/settings" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text2);text-decoration:none;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
+              <i class="fa-regular fa-gear" style="width:14px;text-align:center;font-size:12px;color:var(--text3);"></i> Settings
+            </a>
+            <div onclick="typeof requestPushPermission === 'function' && requestPushPermission()" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--text2);font-size:13px;cursor:pointer;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='transparent'">
+              <i class="fa-solid fa-bell" style="width:14px;text-align:center;font-size:12px;color:var(--text3);"></i> Notifications
+            </div>
+            <div style="height:1px;background:var(--border);margin:4px 0;"></div>
+            <a href="/auth/logout" style="display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:var(--radius-sm);color:var(--red);text-decoration:none;font-size:13px;transition:background .1s;" onmouseover="this.style.background='var(--red-bg)'" onmouseout="this.style.background='transparent'">
+              <i class="fa-solid fa-arrow-right-from-bracket" style="width:14px;text-align:center;font-size:12px;"></i> Sign Out
+            </a>
+          </div>
+        </div>
       </div>
     </header>
 
