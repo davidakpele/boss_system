@@ -102,7 +102,7 @@ The command center with a real-time overview of the entire organization:
 
 ---
 
-![Screenshot](assets/1.png)
+![Screenshot](public/assets/images/assets/1.png)
 
 ### 2. Messages (Real-Time Communication)
 A full-featured internal communication system modelled after WhatsApp/Slack:
