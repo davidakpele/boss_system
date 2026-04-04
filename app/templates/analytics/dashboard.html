@@ -1,3 +1,4 @@
+{# src/app/templates/analytics/dashboard.html #}
 {% extends "base.html" %}
 {% block title %}Analytics — BOSS{% endblock %}
 {% block page_title %}Analytics & Reporting{% endblock %}
@@ -164,7 +165,7 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+ <script src="{{ url_for('static', path='js/chart.umd.min.js') }}"></script>
 <script>
 // ── Global chart defaults ─────────────────────────────────────────────────────
 Chart.defaults.color = '#64748b';
@@ -182,7 +183,10 @@ const COLORS = {
 const CHART_OPTIONS = (color, ylabel='') => ({
   responsive: true,
   animation: { duration: 600, easing: 'easeInOutQuart' },
-  plugins: { legend:{ display:false }, tooltip:{ backgroundColor:'#131d2e', borderColor:'#1f2d42', borderWidth:1, padding:10, titleFont:{weight:'bold'} } },
+  plugins: {
+    legend: { display: false },
+    tooltip: { backgroundColor:'#131d2e', borderColor:'#1f2d42', borderWidth:1, padding:10, titleFont:{weight:'bold'} }
+  },
   scales: {
     x: { grid:{ color:'#1f2d42' }, ticks:{ maxTicksLimit:8, maxRotation:0 } },
     y: { grid:{ color:'#1f2d42' }, beginAtZero:true, title: ylabel ? {display:true, text:ylabel} : {} }
@@ -192,10 +196,25 @@ const CHART_OPTIONS = (color, ylabel='') => ({
 let charts = {};
 let currentDays = 7;
 
-function makeLineChart(id, labels, values, colorKey, label='') {
-  const ctx = document.getElementById(id).getContext('2d');
+// ── Safe fetch — never throws, always returns valid object ────────────────────
+async function safeFetch(url, fallback = {}) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) { console.warn(`${url} → HTTP ${r.status}`); return fallback; }
+    const text = await r.text();
+    return JSON.parse(text);
+  } catch(e) {
+    console.warn(`safeFetch failed for ${url}:`, e.message);
+    return fallback;
+  }
+}
+
+// ── Line chart helper ─────────────────────────────────────────────────────────
+function makeLineChart(id, labels, values, colorKey, label = '') {
+  const el = document.getElementById(id);
+  if (!el) return;
   if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(ctx, {
+  charts[id] = new Chart(el.getContext('2d'), {
     type: 'line',
     data: {
       labels,
@@ -212,75 +231,96 @@ function makeLineChart(id, labels, values, colorKey, label='') {
   });
 }
 
-// ── Load chart data ───────────────────────────────────────────────────────────
+// ── Period-sensitive charts (re-load on period change) ────────────────────────
 async function loadCharts(days) {
+  const shorten = labels => labels.map(l => l.slice(5)); // strip "YYYY-"
+
   const [upData, msgData, knData] = await Promise.all([
-    fetch(`/analytics/data/uploads?days=${days}`).then(r=>r.json()),
-    fetch(`/analytics/data/messages?days=${days}`).then(r=>r.json()),
-    fetch(`/analytics/data/knowledge-growth?days=${days}`).then(r=>r.json()),
+    safeFetch(`/analytics/data/uploads?days=${days}`,          { labels:[], values:[] }),
+    safeFetch(`/analytics/data/messages?days=${days}`,         { labels:[], values:[] }),
+    safeFetch(`/analytics/data/knowledge-growth?days=${days}`, { labels:[], cumulative:[] }),
   ]);
 
-  // Shorten labels for readability
-  const shorten = labels => labels.map(l => l.slice(5)); // strip year
-
-  makeLineChart('uploadsChart', shorten(upData.labels), upData.values, 'blue', 'Uploads');
-  makeLineChart('messagesChart', shorten(msgData.labels), msgData.values, 'purple', 'Messages');
-  makeLineChart('knowledgeChart', shorten(knData.labels), knData.cumulative, 'yellow', 'Chunks');
+  makeLineChart('uploadsChart',  shorten(upData.labels),  upData.values,       'blue',   'Uploads');
+  makeLineChart('messagesChart', shorten(msgData.labels), msgData.values,       'purple', 'Messages');
+  makeLineChart('knowledgeChart',shorten(knData.labels),  knData.cumulative,    'yellow', 'Chunks');
 }
 
-async function loadStaticCharts() {
-  // Compliance trend (always 12 months)
-  const comp = await fetch('/analytics/data/compliance-trend?months=12').then(r=>r.json());
-  const ctx3 = document.getElementById('complianceChart').getContext('2d');
+// ── Static charts (load once) — each isolated so one failure can't block others
+async function loadComplianceChart() {
+  const comp = await safeFetch('/analytics/data/compliance-trend?months=12',
+                               { labels:[], values:[] });
+  const el = document.getElementById('complianceChart');
+  if (!el) return;
   if (charts.compliance) charts.compliance.destroy();
-  charts.compliance = new Chart(ctx3, {
+  charts.compliance = new Chart(el.getContext('2d'), {
     type: 'line',
     data: {
       labels: comp.labels,
       datasets: [{
-        label:'Compliance %', data: comp.values,
-        borderColor:'#10b981', backgroundColor:'rgba(16,185,129,0.12)',
-        borderWidth:2, pointRadius:3, pointBackgroundColor:'#10b981',
-        fill:true, tension:0.35,
+        label: 'Compliance %', data: comp.values,
+        borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.12)',
+        borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#10b981',
+        fill: true, tension: 0.35,
       }]
     },
-    options: { ...CHART_OPTIONS('green'), scales:{ x:{grid:{color:'#1f2d42'},ticks:{maxRotation:45}}, y:{grid:{color:'#1f2d42'},min:0,max:100,title:{display:true,text:'Score %'}} } },
+    options: {
+      ...CHART_OPTIONS('green'),
+      scales: {
+        x: { grid:{ color:'#1f2d42' }, ticks:{ maxRotation:45 } },
+        y: { grid:{ color:'#1f2d42' }, min:0, max:100, title:{ display:true, text:'Score %' } }
+      }
+    },
   });
+}
 
-  // Department donut
-  const dept = await fetch('/analytics/data/knowledge-by-dept').then(r=>r.json());
+async function loadDeptChart() {
   const DEPT_COLORS = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#14b8a6','#ec4899','#6366f1'];
-  const ctx4 = document.getElementById('deptChart').getContext('2d');
+  const dept = await safeFetch('/analytics/data/knowledge-by-dept',
+                               { labels:['No data'], values:[1] });
+  const el = document.getElementById('deptChart');
+  if (!el) return;
   if (charts.dept) charts.dept.destroy();
-  charts.dept = new Chart(ctx4, {
+
+  // Guard: Chart.js doughnut needs at least one non-zero value
+  const hasData = dept.values && dept.values.some(v => v > 0);
+  charts.dept = new Chart(el.getContext('2d'), {
     type: 'doughnut',
     data: {
-      labels: dept.labels,
-      datasets: [{ data: dept.values, backgroundColor: DEPT_COLORS, borderColor:'#131d2e', borderWidth:2 }]
+      labels: hasData ? dept.labels : ['No knowledge yet'],
+      datasets: [{
+        data: hasData ? dept.values : [1],
+        backgroundColor: hasData ? DEPT_COLORS : ['#1f2d42'],
+        borderColor: '#131d2e', borderWidth: 2,
+      }]
     },
     options: {
-      responsive:true, animation:{duration:600},
-      plugins:{
-        legend:{ position:'right', labels:{ color:'#94a3b8', padding:10, font:{size:11} } },
-        tooltip:{ backgroundColor:'#131d2e', borderColor:'#1f2d42', borderWidth:1 }
+      responsive: true,
+      animation: { duration: 600 },
+      plugins: {
+        legend: {
+          position: 'right',
+          labels: { color:'#94a3b8', padding:10, font:{ size:11 } }
+        },
+        tooltip: { backgroundColor:'#131d2e', borderColor:'#1f2d42', borderWidth:1 }
       },
     },
   });
+}
 
-  // Activity heatmap
-  const hm = await fetch('/analytics/data/activity-heatmap').then(r=>r.json());
+async function loadHeatmap() {
+  const hm = await safeFetch('/analytics/data/activity-heatmap', { cells:[] });
+  if (!hm.cells || !hm.cells.length) return;
   buildHeatmap(hm.cells);
-
-  // Top users
-  loadTopUsers();
 }
 
 function buildHeatmap(cells) {
   const grid = document.getElementById('heatmapGrid');
+  if (!grid) return;
   grid.innerHTML = '';
-  // group by day-of-week rows (0=Mon .. 6=Sun)
-  const byDay = Array.from({length:7}, () => []);
-  cells.forEach(c => byDay[c.day].push(c));
+  // Group into 7 rows (Mon–Sun)
+  const byDay = Array.from({ length:7 }, () => []);
+  cells.forEach(c => { if (byDay[c.day]) byDay[c.day].push(c); });
   byDay.forEach(row => {
     const rowEl = document.createElement('div');
     rowEl.style.cssText = 'display:flex;gap:3px;margin-bottom:3px;';
@@ -296,22 +336,40 @@ function buildHeatmap(cells) {
 }
 
 async function loadTopUsers() {
-  const data = await fetch('/analytics/data/top-users').then(r=>r.json());
+  const data = await safeFetch('/analytics/data/top-users', []);
   const container = document.getElementById('topUsersContainer');
-  if (!data.length) { container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No activity data yet</div>'; return; }
-  const maxCount = data[0].count;
-  container.innerHTML = data.map((u, i) => `
+  if (!container) return;
+  if (!data.length) {
+    container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No message activity in the last 30 days</div>';
+    return;
+  }
+  const maxCount = Math.max(1, data[0].count);
+  container.innerHTML = data.map(u => `
     <div class="user-bar-row">
-      <div style="width:22px;height:22px;border-radius:50%;background:${u.color};display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">${u.name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()}</div>
+      <div style="width:22px;height:22px;border-radius:50%;background:${u.color};
+                  display:flex;align-items:center;justify-content:center;
+                  font-size:8px;font-weight:700;color:#fff;flex-shrink:0;">
+        ${u.name.split(' ').map(w => w[0]).join('').slice(0,2).toUpperCase()}
+      </div>
       <div style="min-width:0;flex:1;">
         <div style="font-size:12.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${u.name}</div>
         <div class="user-bar-bg">
-          <div class="user-bar-fill" style="width:${Math.round(u.count/maxCount*100)}%"></div>
+          <div class="user-bar-fill" style="width:${Math.round(u.count / maxCount * 100)}%"></div>
         </div>
       </div>
       <div style="font-size:12px;font-weight:700;color:var(--accent2);flex-shrink:0;">${u.count}</div>
     </div>
   `).join('');
+}
+
+// ── Static charts load in parallel — allSettled so one failure never blocks others
+async function loadStaticCharts() {
+  await Promise.allSettled([
+    loadComplianceChart(),
+    loadDeptChart(),
+    loadHeatmap(),
+    loadTopUsers(),
+  ]);
 }
 
 function setPeriod(btn, days) {
@@ -321,7 +379,7 @@ function setPeriod(btn, days) {
   loadCharts(days);
 }
 
-// Init
+// ── Init ──────────────────────────────────────────────────────────────────────
 loadCharts(currentDays);
 loadStaticCharts();
 </script>
