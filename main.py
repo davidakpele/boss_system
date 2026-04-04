@@ -10,7 +10,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import json as _json
 from app.database import init_db
 from app.config import settings
-from app.routers import auth, bcc, dashboard, messages, ask_boss, documents, admin
+from app.routers import analytics, auth, bcc, dashboard, messages, ask_boss, documents, admin
 from app.routers import business_ops, sso, push
 from app.middleware.ip_allowlist import IPAllowlistMiddleware
 
@@ -18,8 +18,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="app/templates")
 
-
-
+# ── Jinja2 custom filters ─────────────────────────────────────────────────────
 def _fromjson(s):
     """Jinja2 filter: parse a JSON string into a Python object."""
     if not s:
@@ -55,6 +54,7 @@ app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads"
 
 
 # ── PWA files at root ─────────────────────────────────────────────────────────
+@app.get("/manifest.json", include_in_schema=False)
 async def pwa_manifest():
     return FileResponse("app/static/manifest.json", media_type="application/manifest+json")
  
@@ -65,7 +65,7 @@ async def service_worker():
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-for r in [auth.router, sso.router, push.router, bcc.router,
+for r in [auth.router, sso.router, push.router, bcc.router, analytics.router,
           dashboard.router, messages.router, ask_boss.router,
           documents.router, admin.router, business_ops.router]:
     app.include_router(r)
