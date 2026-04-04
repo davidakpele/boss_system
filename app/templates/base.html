@@ -643,6 +643,8 @@
         <a href="/bcc/hr" class="nav-item {% if request.url.path.startswith('/bcc/hr') %}active{% endif %}">
           <i class="fa-solid fa-user-tie"></i> AI Recruitment
         </a>
+
+      {% if user.role in ('super_admin', 'admin', 'manager') %}
        <div class="nav-section-label mt-4">Analytics</div>
         <a href="/analytics"
           class="nav-item {% if request.url.path == '/analytics' %}active{% endif %}">
@@ -658,6 +660,9 @@
           class="nav-item {% if request.url.path.startswith('/analytics/reports') %}active{% endif %}">
           <i class="fa-solid fa-file-chart-column"></i> Reports
         </a>
+      {% endif %}
+
+
       <div class="nav-section-label">Knowledge</div>
       <a href="/knowledge-base" class="nav-item {% if page == 'knowledge_base' %}active{% endif %}">
         <i class="fa-regular fa-folder-open"></i> Knowledge Base
@@ -697,12 +702,12 @@
         <a href="/leave" class="nav-item {% if page == 'leave' %}active{% endif %}">
           <i class="fa-regular fa-calendar-minus"></i> Leave Tracker
         </a>
-       
-      {% if user.role in ('super_admin', 'admin') %}
-      <div class="nav-section-label">System</div>
-      <a href="/audit-logs" class="nav-item {% if page == 'audit' %}active{% endif %}">
-        <i class="fa-solid fa-list-ul"></i> Audit Logs
-      </a>
+
+       <div class="nav-section-label">Configurations</div>
+      {% if user.role in ('super_admin', 'admin', 'manager') %}
+        <a href="/audit-logs" class="nav-item {% if page == 'audit' %}active{% endif %}">
+          <i class="fa-solid fa-list-ul"></i> Audit Logs
+        </a>
       {% endif %}
       <a href="/settings" class="nav-item {% if page == 'settings' %}active{% endif %}">
         <i class="fa-regular fa-gear"></i> Settings
