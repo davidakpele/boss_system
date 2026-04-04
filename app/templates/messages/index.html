@@ -854,6 +854,61 @@
 /* Restore on messages list */
 .messages-list { scrollbar-width: thin; }
 .messages-list::-webkit-scrollbar { width: 5px; }
+.mobile-panel-toggle {
+   display: none; 
+  width: 30px; height: 30px;
+  background: var(--bg2, #f5f5f5);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: var(--radius-sm, 6px);
+  align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text2, #555);
+  font-size: 12px; flex-shrink: 0;
+  transition: background 0.12s;
+}
+.mobile-panel-toggle:hover { background: var(--bg3, #ececec); }
+ 
+.panel-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 99;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(2px);
+}
+.panel-overlay.visible { display: block; }
+
+/* After the .panel-overlay block, OUTSIDE any @media */
+.mobile-top-bar {
+  display: none;
+  align-items: center;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+  margin-top: 10px;
+}
+
+@media (max-width: 768px) {
+  .messages-layout { grid-template-columns: 1fr; }
+
+  .left-panel {
+    position: fixed;
+    top: 60px; left: 0; bottom: 0;
+    width: min(300px, 85vw);
+    z-index: 100;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+    box-shadow: none;
+  }
+
+  .left-panel.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+  }
+
+  .mobile-panel-toggle { display: flex; }
+  .mobile-top-bar { display: flex; }
+  .chat-area { min-width: 0; }
+}
+ 
 {% endblock %}
 
 {% block content %}
@@ -956,29 +1011,42 @@
   <!-- ── CHAT AREA ── -->
   <div class="chat-area">
 
-    <!-- Empty state -->
+   <!-- hamburger always visible on mobile -->
+  <div class="mobile-top-bar">
+    <button class="mobile-panel-toggle" onclick="openLeftPanel()" title="Contacts">
+      <i class="fa fa-ellipsis-h" aria-hidden="true"></i>
+    </button>
+  </div>
+
+   <!-- Empty state -->
     <div class="empty-chat" id="emptyState">
       <div class="empty-icon"><i class="fa-solid fa-message"></i></div>
       <div class="empty-title">No conversation open</div>
       <div class="empty-sub">Select someone to message or join a channel to get started</div>
     </div>
 
-    <!-- Chat header -->
-    <div class="chat-header" id="chatHeader" style="display:none;">
-      <div class="hdr-av" id="hdrAv"></div>
-      <div>
-        <div class="hdr-name" id="hdrName"></div>
-        <div class="hdr-status" id="hdrStatus"></div>
-      </div>
-      <div class="ws-status connecting" id="wsStatus">
-        <i class="fa-solid fa-circle" style="font-size:5px;"></i> Connecting
-      </div>
-      <button class="hdr-icon-btn" id="editChBtn" style="display:none;" onclick="openEditChannel()" title="Edit">
-        <i class="fa-solid fa-sliders"></i>
-      </button>
-    </div>
+     <!-- Chat header -->
+<div class="chat-header" id="chatHeader" style="display:none;">
+  <div class="hdr-av" id="hdrAv"></div>
+  <div>
+    <div class="hdr-name" id="hdrName"></div>
+    <div class="hdr-status" id="hdrStatus"></div>
+  </div>
+  <div class="ws-status connecting" id="wsStatus">
+    <i class="fa-solid fa-circle" style="font-size:5px;"></i> Connecting
+  </div>
+  <button class="hdr-icon-btn" id="editChBtn" style="display:none;" onclick="openEditChannel()" title="Edit">
+    <i class="fa-solid fa-sliders"></i>
+  </button>
+</div>
+
+   
+
+   
+ 
 
     <!-- Messages -->
+     
     <div class="messages-list" id="messagesList" style="display:none;"></div>
 
     <!-- Typing -->
@@ -1015,6 +1083,7 @@
       </div>
     </div>
   </div>
+<div class="panel-overlay" id="panelOverlay" onclick="closeLeftPanel()"></div>
 </div>
 
 <!-- ── LIGHTBOX ── -->
@@ -1097,6 +1166,17 @@
 
 {% block extra_js %}
 <script>
+
+function openLeftPanel() {
+  document.querySelector('.left-panel').classList.add('open');
+  document.getElementById('panelOverlay').classList.add('visible');
+}
+function closeLeftPanel() {
+  document.querySelector('.left-panel').classList.remove('open');
+  document.getElementById('panelOverlay').classList.remove('visible');
+}
+ 
+
 const ME = {
   id: {{ user.id }},
   name: "{{ user.full_name }}",
@@ -1149,7 +1229,7 @@ async function openDM(userId, name, color, isOnline) {
   currentChatType = 'dm';
   const initials = getInitials(name);
   const av = document.getElementById('hdrAv');
-  av.className = 'hdr-av';
+  av.className = 'hdr-av'; 
   av.style.background = color;
   av.style.borderRadius = '50%';
   av.textContent = initials;
@@ -1178,6 +1258,7 @@ async function openDM(userId, name, color, isOnline) {
 // ── OPEN CHANNEL ──
 async function openChannel(channelId, name, dept, createdBy) {
   setActive(`ch-item-${channelId}`);
+   closeLeftPanel();
   currentChatType = 'channel';
   currentChannelId = channelId;
   currentChatMeta = { id: channelId, name, dept, created_by: createdBy };
@@ -1553,6 +1634,7 @@ function showChatUI() {
   document.getElementById('chatHeader').style.display = 'flex';
   document.getElementById('messagesList').style.display = 'flex';
   document.getElementById('chatInputWrap').style.display = 'block';
+  closeLeftPanel();
 }
 function setActive(id) {
   document.querySelectorAll('.conv-item').forEach(el => el.classList.remove('active'));
