@@ -225,7 +225,10 @@
 
 /* Bubbles */
 .msg-bubble {
-  max-width: 65%; padding: 8px 13px; border-radius: 12px;
+  display: inline-block;
+  max-width: 100%;
+  padding: 8px 13px 6px; 
+  border-radius: 12px;
   font-size: 13.5px; line-height: 1.55; word-break: break-word;
   font-family: var(--msg-font); letter-spacing: -0.1px;
   animation: bubblePop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
@@ -238,6 +241,17 @@
   max-width: 320px;
 }
 .msg-row.mine .msg-bubble { transform-origin: bottom right; }
+.msg-bubble-wrap {
+  max-width: 50%;
+  display: flex;
+  flex-direction: column;
+}
+.msg-bubble-wrap.media-wrap {
+  max-width: 320px;
+}
+.msg-row.mine .msg-bubble-wrap {
+  align-items: flex-end;
+}
 @keyframes bubblePop {
   0%   { opacity: 0; transform: scale(0.88) translateY(5px); }
   100% { opacity: 1; transform: scale(1) translateY(0); }
@@ -255,13 +269,19 @@
   margin-left: 3px; letter-spacing: 0.04em; text-transform: uppercase; font-family: var(--msg-mono);
 }
 .msg-time {
-  font-size: 10px; color: rgba(255,255,255,0.55); margin: 4px 0 0;
-  font-family: var(--msg-mono); font-variant-numeric: tabular-nums;
-  text-align: right; display: block;
+  font-size: 10px;
+  color: var(--text3);
+  margin-top: 3px;
+  font-family: var(--msg-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding: 0 2px;
+  display: block;
+  text-align: right;
 }
 .msg-bubble.other .msg-time { color: var(--text3); text-align: left; }
 .msg-row.mine .msg-time { text-align: right; }
-
+.msg-bubble.mine + .msg-time { color: var(--text3); }
 /* Read receipts */
 .msg-receipts {
   display: flex; gap: 2px; margin-top: 3px; justify-content: flex-end;
@@ -1724,33 +1744,38 @@ function appendMessage(msg, scroll=true) {
   wrap.dataset.senderName = msg.sender_name || '';
   wrap.dataset.preview = msg.message_type === 'file' ? '[file]' : (msg.content || '');
   wrap.dataset.content = msg.content || '';
+// Determine if this is a media message (voice/file/image)
+  const isMedia = msg.message_type === 'voice' || msg.message_type === 'file';
+  const wrapClass = `msg-bubble-wrap${isMedia ? ' media-wrap' : ''}`;
 
   if (isMine) {
     wrap.innerHTML = `${actionsHtml}
       <div class="msg-row mine">
-        <div>
-          <div class="msg-bubble ${bubbleClass}">${bodyHtml}<span class="msg-time">${time}</span></div>
+        <div class="${wrapClass}">
+          <div class="msg-bubble ${bubbleClass}">${bodyHtml}</div>
+          <span class="msg-time">${time}</span>
         </div>
         ${showHeader
-          ? `<div class="msg-av" style="background:${ME.color}">${getInitials(ME.name)}</div>`
+          ? `<div class="msg-av" style="background:${ME.color};flex-shrink:0;">${getInitials(ME.name)}</div>`
           : `<div class="spacer-av"></div>`}
       </div>
-      <div class="reactions-bar"></div>
-      ${threadBtnHtml ? `<div style="display:flex;justify-content:flex-end;">${threadBtnHtml}</div>` : ''}`;
+      <div class="reactions-bar" style="justify-content:flex-end;"></div>
+      ${threadBtnHtml ? `<div style="display:flex;justify-content:flex-end;padding-right:34px;">${threadBtnHtml}</div>` : ''}`;
   } else {
     wrap.innerHTML = `${actionsHtml}
       <div class="msg-row">
         ${showHeader
-          ? `<div class="msg-av" style="background:${color}">${getInitials(msg.sender_name || '?')}</div>`
+          ? `<div class="msg-av" style="background:${color};flex-shrink:0;">${getInitials(msg.sender_name || '?')}</div>`
           : `<div class="spacer-av"></div>`}
-        <div>
+        <div class="${wrapClass}">
           ${showHeader && currentChatType === 'channel'
             ? `<div class="msg-sender">${escHtml(msg.sender_name)}</div>`
             : ''}
-          <div class="msg-bubble ${bubbleClass}">${bodyHtml}<span class="msg-time">${time}</span></div>
+          <div class="msg-bubble ${bubbleClass}">${bodyHtml}</div>
+          <span class="msg-time">${time}</span>
         </div>
       </div>
-      <div class="reactions-bar"></div>
+      <div class="reactions-bar" style="padding-left:34px;"></div>
       ${threadBtnHtml ? `<div style="padding-left:34px;">${threadBtnHtml}</div>` : ''}`;
   }
 
