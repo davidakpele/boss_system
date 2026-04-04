@@ -189,21 +189,66 @@
   display: flex; flex-direction: column; margin-bottom: 2px; 
   position: relative;  
 }
-.msg-row { display: flex; align-items: flex-end; gap: 8px; position: relative; }
-.msg-row.mine { flex-direction: row-reverse; }
-
-/* Hover actions — sit flush above the bubble */
-.msg-actions {
-  display: none; align-items: center; gap: 1px;
-  position: absolute; top: -36px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 8px; padding: 4px;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.12); z-index: 20;
-  right: 0;
+.msg-row { display: flex; align-items: flex-end; gap: 8px; position: relative; width: 100%; }
+.msg-row.mine {
+  flex-direction: row-reverse;
+  justify-content: flex-start;  /* ADD THIS */
 }
-.msg-row.mine ~ .msg-actions,
-.msg-group:has(.msg-row.mine) .msg-actions { right: auto; left: 0; }
-.msg-group:hover .msg-actions { display: flex; }
+
+.msg-action-trigger {
+  display: none;
+  position: absolute;
+  top: 4px;
+  right: 6px;
+  width: 22px; height: 22px;
+  border: none; border-radius: 50%;
+  font-size: 10px; cursor: pointer; z-index: 15;
+  align-items: center; justify-content: center;
+  transition: background 0.12s;
+  background: rgba(0,0,0,0.18);
+  color: #fff;
+}
+/* Recipient (other) bubbles get dark icon on light background */
+.msg-bubble-wrap:not([data-mine]) .msg-action-trigger {
+  background: rgba(0,0,0,0.08);
+  color: #333;
+}
+.msg-bubble-wrap:hover .msg-action-trigger { display: flex; }
+.msg-action-trigger:hover { background: rgba(0,0,0,0.32); }
+
+/* Dropdown menu */
+.msg-action-menu {
+  display: none;
+  position: fixed;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.14);
+  z-index: 1000;
+  min-width: 160px;
+  overflow: hidden;
+  animation: menuPop 0.15s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes menuPop {
+  from { opacity: 0; transform: scale(0.92) translateY(-6px); }
+  to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+.msg-action-menu.open { display: block; }
+.msg-action-menu-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 14px; font-size: 13px; font-weight: 500;
+  color: var(--text); cursor: pointer; transition: background 0.1s;
+  font-family: var(--msg-font); border: none; background: none; width: 100%;
+  text-align: left;
+}
+.msg-action-menu-item:hover { background: var(--bg2); }
+.msg-action-menu-item.danger { color: #dc2626; }
+.msg-action-menu-item.danger:hover { background: rgba(220,38,38,0.07); }
+.msg-action-menu-item i { width: 14px; text-align: center; font-size: 12px; color: var(--text3); }
+.msg-action-menu-item.danger i { color: #dc2626; }
+
+/* Remove old floating toolbar */
+.msg-actions { display: none !important; }
 
 .msg-action-btn {
   width: 28px; height: 28px; border-radius: 5px; border: none;
@@ -227,12 +272,16 @@
 .msg-bubble {
   display: inline-block;
   max-width: 100%;
-  padding: 8px 13px 6px; 
+  padding: 8px 13px 6px;
+  padding-right: 28px; 
   border-radius: 12px;
   font-size: 13.5px; line-height: 1.55; word-break: break-word;
   font-family: var(--msg-font); letter-spacing: -0.1px;
   animation: bubblePop 0.18s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
   transform-origin: bottom left;
+}
+.msg-bubble-wrap.media-wrap .msg-bubble {
+  padding-right: 13px;
 }
 /* Voice and file attachments need more room */
 .msg-bubble:has(.voice-player),
@@ -1466,7 +1515,7 @@ async function loadThreadReplies(threadId) {
 
 function appendThreadMessage(msg) {
   const container = document.getElementById('threadMessages');
-  const isMine = msg.sender_id === ME.id;
+  const isMine = Number(msg.sender_id) === Number(ME.id);
   const time = msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}) : '';
   const div = document.createElement('div');
   div.className = 'msg-group'; div.dataset.msgId = msg.id;
@@ -1715,26 +1764,27 @@ function appendMessage(msg, scroll=true) {
             : 'Reply in thread'}
         </div>` : '';
 
-  const canDelete = !msg.is_deleted && (isMine || ['super_admin', 'admin'].includes(ME.role));
-  const actionsHtml = msg.is_deleted ? '' : `
-    <div class="msg-actions">
-      <button class="msg-action-btn" title="Reply"
-        onclick="setReply(${msg.id}, this.closest('[data-msg-id]').dataset.senderName, this.closest('[data-msg-id]').dataset.preview)">
-        <i class="fa-solid fa-reply"></i>
+ // Actions — now rendered inside the bubble wrap as a trigger+dropdown
+  const menuId = `menu-${msg.id}`;
+  const canDelete = !Boolean(msg.is_deleted) && (isMine || ['super_admin', 'admin'].includes(ME.role));
+  const actionsDisabled = Boolean(msg.is_deleted);
+  const actionsHtml = actionsDisabled ? '' : `
+    <button class="msg-action-trigger" onclick="toggleMsgMenu('${menuId}', event)" title="More">
+      <i class="fa-solid fa-angle-down"></i>
+    </button>
+    <div class="msg-action-menu" id="${menuId}">
+      <button class="msg-action-menu-item" onclick="closeMsgMenu('${menuId}'); setReply(${msg.id}, document.querySelector('[data-msg-id=\\'${msg.id}\\']').dataset.senderName, document.querySelector('[data-msg-id=\\'${msg.id}\\']').dataset.preview)">
+        <i class="fa-solid fa-reply"></i> Reply
       </button>
-      <button class="msg-action-btn react-btn" title="React"
-        onclick="openEmojiPicker(${msg.id}, this)">
-        <i class="fa-solid fa-face-smile"></i>
+      <button class="msg-action-menu-item" onclick="closeMsgMenu('${menuId}'); openEmojiPicker(${msg.id}, this)">
+        <i class="fa-solid fa-face-smile"></i> React
       </button>
-      <button class="msg-action-btn" title="Thread"
-        onclick="openThreadById(this.closest('[data-msg-id]').querySelector('.thread-btn'))">
-        <i class="fa-solid fa-comments"></i>
+      <button class="msg-action-menu-item" onclick="closeMsgMenu('${menuId}'); openThreadById(document.querySelector('[data-msg-id=\\'${msg.id}\\']').querySelector('.thread-btn'))">
+        <i class="fa-solid fa-comments"></i> Thread
       </button>
-      ${canDelete
-        ? `<button class="msg-action-btn delete-btn" title="Delete" onclick="deleteMessage(${msg.id})">
-             <i class="fa-solid fa-trash"></i>
-           </button>`
-        : ''}
+      ${canDelete ? `<button class="msg-action-menu-item danger" onclick="closeMsgMenu('${menuId}'); deleteMessage(${msg.id})">
+        <i class="fa-solid fa-trash"></i> Delete
+      </button>` : ''}
     </div>`;
 
   const wrap = document.createElement('div');
@@ -1749,9 +1799,10 @@ function appendMessage(msg, scroll=true) {
   const wrapClass = `msg-bubble-wrap${isMedia ? ' media-wrap' : ''}`;
 
   if (isMine) {
-    wrap.innerHTML = `${actionsHtml}
+    wrap.innerHTML = `
       <div class="msg-row mine">
-        <div class="${wrapClass}">
+        <div class="${wrapClass}" data-mine="1" style="position:relative;">
+          ${actionsHtml}
           <div class="msg-bubble ${bubbleClass}">${bodyHtml}</div>
           <span class="msg-time">${time}</span>
         </div>
@@ -1762,12 +1813,13 @@ function appendMessage(msg, scroll=true) {
       <div class="reactions-bar" style="justify-content:flex-end;"></div>
       ${threadBtnHtml ? `<div style="display:flex;justify-content:flex-end;padding-right:34px;">${threadBtnHtml}</div>` : ''}`;
   } else {
-    wrap.innerHTML = `${actionsHtml}
+    wrap.innerHTML = `
       <div class="msg-row">
         ${showHeader
           ? `<div class="msg-av" style="background:${color};flex-shrink:0;">${getInitials(msg.sender_name || '?')}</div>`
           : `<div class="spacer-av"></div>`}
-        <div class="${wrapClass}">
+        <div class="${wrapClass}" style="position:relative;">
+          ${actionsHtml}
           ${showHeader && currentChatType === 'channel'
             ? `<div class="msg-sender">${escHtml(msg.sender_name)}</div>`
             : ''}
@@ -1888,6 +1940,50 @@ async function saveChannel() {
   else toast('Error updating channel','error');
 }
 
+function toggleMsgMenu(menuId, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.msg-action-menu.open').forEach(m => {
+    if (m.id !== menuId) m.classList.remove('open');
+  });
+  const menu = document.getElementById(menuId);
+  if (!menu) return;
+  if (menu.classList.contains('open')) { menu.classList.remove('open'); return; }
+
+  const btn = e.currentTarget;
+  const rect = btn.getBoundingClientRect();
+
+  // Show off-screen first to measure
+  menu.style.visibility = 'hidden';
+  menu.style.position = 'fixed';
+  menu.style.top = '-9999px';
+  menu.style.left = '-9999px';
+  menu.classList.add('open');
+
+  const menuW = menu.offsetWidth || 170;
+  const menuH = menu.offsetHeight || 148;
+
+  // Always open UPWARD from the trigger
+  let top = rect.top - menuH - 6;
+  if (top < 8) top = rect.bottom + 6; // only fall back to below if no room above at all
+
+  // Horizontal: align to right edge of trigger, clamp to viewport
+  let left = rect.right - menuW;
+  if (left < 8) left = 8;
+  if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
+
+  menu.style.top = top + 'px';
+  menu.style.left = left + 'px';
+  menu.style.visibility = '';
+}
+
+function closeMsgMenu(menuId) {
+  document.getElementById(menuId)?.classList.remove('open');
+}
+
+// Close all menus when clicking elsewhere
+document.addEventListener('click', () => {
+  document.querySelectorAll('.msg-action-menu.open').forEach(m => m.classList.remove('open'));
+});
 // ── SCROLL: auto mark-read ──
 document.getElementById('messagesList')?.addEventListener('scroll', function() {
   const el = this; if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) markLastRead();
