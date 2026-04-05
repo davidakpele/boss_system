@@ -192,7 +192,7 @@
 .msg-row { display: flex; align-items: flex-end; gap: 8px; position: relative; width: 100%; }
 .msg-row.mine {
   flex-direction: row-reverse;
-  justify-content: flex-start;  /* ADD THIS */
+  justify-content: flex-start;
 }
 
 .msg-action-trigger {
@@ -208,7 +208,6 @@
   background: rgba(0,0,0,0.18);
   color: #fff;
 }
-/* Recipient (other) bubbles get dark icon on light background */
 .msg-bubble-wrap:not([data-mine]) .msg-action-trigger {
   background: rgba(0,0,0,0.08);
   color: #333;
@@ -247,7 +246,6 @@
 .msg-action-menu-item i { width: 14px; text-align: center; font-size: 12px; color: var(--text3); }
 .msg-action-menu-item.danger i { color: #dc2626; }
 
-/* Remove old floating toolbar */
 .msg-actions { display: none !important; }
 
 .msg-action-btn {
@@ -283,7 +281,6 @@
 .msg-bubble-wrap.media-wrap .msg-bubble {
   padding-right: 13px;
 }
-/* Voice and file attachments need more room */
 .msg-bubble:has(.voice-player),
 .msg-bubble:has(.file-attach),
 .msg-bubble:has(.img-preview) {
@@ -309,7 +306,6 @@
 .msg-bubble.mine   { background: #3f3f46; color: var(--bubble-mine-text); border-bottom-right-radius: 3px; border: 1px solid transparent; }
 .msg-bubble.deleted { background: transparent; border: 1px dashed var(--border); color: var(--text3); font-style: italic; font-size: 12.5px; padding: 6px 11px; }
 
-/* @mention highlight */
 .msg-bubble .mention-tag { color: var(--mention-color); font-weight: 600; background: var(--mention-bg); border-radius: 3px; padding: 0 3px; }
 .msg-bubble.mine .mention-tag { color: #c4b5fd; background: rgba(196,181,253,0.15); }
 
@@ -331,7 +327,6 @@
 .msg-bubble.other .msg-time { color: var(--text3); text-align: left; }
 .msg-row.mine .msg-time { text-align: right; }
 .msg-bubble.mine + .msg-time { color: var(--text3); }
-/* Read receipts */
 .msg-receipts {
   display: flex; gap: 2px; margin-top: 3px; justify-content: flex-end;
 }
@@ -343,7 +338,6 @@
 }
 .msg-row:not(.mine) .msg-receipts { justify-content: flex-start; }
 
-/* Thread indicator */
 .thread-btn {
   display: inline-flex; align-items: center; gap: 5px;
   margin-top: 5px; padding: 3px 8px; border-radius: 5px;
@@ -376,22 +370,26 @@
 }
 .add-reaction-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
 
-/* Emoji picker */
+/* ── EMOJI PICKER ── */
 .emoji-picker-popup {
-  position: absolute; bottom: calc(100% + 8px);
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 12px; padding: 10px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.15);
-  z-index: 100; display: none; gap: 4px; flex-wrap: wrap;
+  position: fixed;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  z-index: 9999;          /* above everything */
+  display: none;
+  flex-wrap: wrap;
+  gap: 4px;
   width: 232px;
 }
 .emoji-picker-popup.open { display: flex; }
-.emoji-picker-popup.right { right: 0; }
-.emoji-picker-popup.left  { left: 0; }
 .ep-emoji {
   width: 32px; height: 32px; border-radius: 6px; cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   font-size: 18px; transition: background 0.1s, transform 0.1s;
+  user-select: none;
 }
 .ep-emoji:hover { background: var(--bg2); transform: scale(1.2); }
 
@@ -487,7 +485,6 @@
 .attach-btn { width: 34px; height: 34px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); cursor: pointer; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; transition: background 0.12s; }
 .attach-btn:hover { background: var(--bg3); color: var(--text); }
 
-/* Voice record button */
 .voice-btn { width: 34px; height: 34px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); cursor: pointer; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; transition: all 0.12s; }
 .voice-btn:hover { background: rgba(220,38,38,0.08); border-color: rgba(220,38,38,0.3); color: #dc2626; }
 .voice-btn.recording { background: #dc2626; border-color: #dc2626; color: #fff; animation: rpulse 1s infinite; }
@@ -542,7 +539,7 @@
 .join-btn { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 11.5px; font-weight: 600; cursor: pointer; flex-shrink: 0; transition: background 0.12s; }
 .join-btn:hover { background: var(--text); color: #fff; border-color: var(--text); }
 
-/* ── THREAD PANEL (side drawer) ── */
+/* ── THREAD PANEL ── */
 .thread-panel {
   position: absolute; top: 0; right: 0; bottom: 0;
   width: 360px; max-width: 90vw;
@@ -664,7 +661,6 @@
     <div class="left-panel-header">
       <div class="left-panel-title">Messages</div>
       <div class="left-panel-actions">
-        <!-- Mention bell -->
         <button class="mention-badge-btn" onclick="toggleMentionPanel()" title="Mentions">
           <i class="fa-solid fa-at"></i>
           <span class="mention-count" id="mentionCountBadge">{% if mention_count > 0 %}{{ mention_count }}{% endif %}</span>
@@ -685,7 +681,6 @@
       <div class="tab-btn" id="tabCh" onclick="switchTab('channels')">Channels</div>
     </div>
 
-    <!-- DM list -->
     <div class="conv-list" id="dmPanel">
       <div class="section-label">People ({{ all_users|length }})</div>
       {% for u in all_users %}
@@ -706,7 +701,6 @@
       {% endfor %}
     </div>
 
-    <!-- Channels list -->
     <div class="conv-list" id="channelsPanel" style="display:none;">
       {% if channels %}
       <div class="section-label">My Channels</div>
@@ -752,14 +746,12 @@
       <div class="empty-sub">Select someone to message or join a channel to get started</div>
     </div>
 
-    <!-- Chat header -->
     <div class="chat-header" id="chatHeader" style="display:none;">
       <div class="hdr-av" id="hdrAv"></div>
       <div>
         <div class="hdr-name" id="hdrName"></div>
         <div class="hdr-status" id="hdrStatus"></div>
       </div>
-      <!-- Search bar (hidden by default) -->
       <div class="chat-search-bar" id="chatSearchBar" style="display:none;">
         <i class="fa-solid fa-magnifying-glass"></i>
         <input type="text" id="chatSearchInput" placeholder="Search messages…"
@@ -771,19 +763,15 @@
       <button class="hdr-icon-btn" id="editChBtn" style="display:none;" onclick="openEditChannel()" title="Edit"><i class="fa-solid fa-sliders"></i></button>
     </div>
 
-    <!-- Search results panel -->
     <div class="search-results-panel" id="searchResultsPanel">
       <div class="search-results-header" id="searchResultsHeader">Search results</div>
       <div class="search-results-list" id="searchResultsList"></div>
     </div>
 
-    <!-- Messages list -->
     <div class="messages-list" id="messagesList" style="display:none;"></div>
 
-    <!-- Typing -->
     <div class="typing-bar" id="typingBar"></div>
 
-    <!-- Reply bar -->
     <div class="reply-bar" id="replyBar">
       <div class="reply-bar-inner">
         <div class="reply-bar-sender" id="replyBarSender"></div>
@@ -792,7 +780,6 @@
       <button class="reply-cancel" onclick="clearReply()"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <!-- Recording bar -->
     <div class="record-bar" id="recordBar">
       <div class="record-dot"></div>
       <div class="record-time" id="recordTime">0:00</div>
@@ -801,12 +788,9 @@
       <button class="record-send" onclick="stopAndSendRecording()"><i class="fa-solid fa-paper-plane"></i> Send</button>
     </div>
 
-    <!-- Pending files -->
     <div class="file-pending-strip" id="filePendingStrip" style="padding:0 16px;"></div>
 
-    <!-- Input -->
     <div class="chat-input-wrap" id="chatInputWrap" style="display:none;">
-      <!-- Mention dropdown -->
       <div class="mention-dropdown" id="mentionDropdown"></div>
       <input type="file" id="fileInput" multiple onchange="handleFileSelect(this.files)"/>
       <div class="input-row">
@@ -840,7 +824,7 @@
       </div>
     </div>
 
-  </div><!-- /chat-area -->
+  </div>
 
   <div class="panel-overlay" id="panelOverlay" onclick="closeLeftPanel()"></div>
 </div>
@@ -864,8 +848,7 @@
 </div>
 
 <!-- ── EMOJI PICKER (shared, repositioned via JS) ── -->
-<div id="globalEmojiPicker" class="emoji-picker-popup" style="position:fixed;">
-</div>
+<div id="globalEmojiPicker" class="emoji-picker-popup"></div>
 
 <!-- ── CREATE CHANNEL MODAL ── -->
 <div class="modal-overlay" id="newChannelModal">
@@ -936,13 +919,6 @@
 
 {% block extra_js %}
 <script>
-/* ═══════════════════════════════════════════════════════════
-   BOSS MESSAGES — Full feature JS
-   Features: Reactions · Search · Voice Notes · Read Receipts
-             Threads · @Mentions
-═══════════════════════════════════════════════════════════ */
-
-// ── CONFIG ──
 const ME = {
   id: {{ user.id }},
   name: "{{ user.full_name }}",
@@ -958,7 +934,6 @@ const ALL_USERS = [
 
 const EMOJIS = ['👍','❤️','😂','😮','😢','🔥','👏','🎉','✅','💯','🚀','💡','👀','🙏','⚡','🤔'];
 
-// ── STATE ──
 let WS_TOKEN = null, ws = null, wsReconnectTimer = null;
 let currentChannelId = null, currentChatType = null, currentChatMeta = {};
 let lastSenderId = null, typingTimer = null, typingUsers = {}, lastTypingSent = 0;
@@ -969,26 +944,170 @@ let mentionDropdownActive = false, mentionQuery = '', mentionIndex = 0;
 let searchDebounceTimer = null;
 let mentionPanelOpen = false;
 
-// Read receipt tracking
-const readReceipts = {}; // message_id -> [user_name]
+const readReceipts = {};
 const myReadMessages = new Set();
-// Reactions cache: message_id -> [{emoji,count,reacted_by_me}]
 const reactionsCache = {};
 
-// ── INIT ──
+// ── EMOJI PICKER ─────────────────────────────────────────────────────────────
+// Single flag that blocks the document click listener from firing on the
+// same tick the picker was opened.
+let emojiPickerTarget = null;
+let emojiPickerJustOpened = false;
+
+function openEmojiPicker(msgId, anchorEl) {
+  const picker = document.getElementById('globalEmojiPicker');
+
+  // If already open for this message → close it
+  if (picker.classList.contains('open') && emojiPickerTarget === msgId) {
+    closeEmojiPicker();
+    return;
+  }
+
+  emojiPickerTarget = msgId;
+
+  // Build emoji grid
+  picker.innerHTML = EMOJIS.map(e =>
+    `<div class="ep-emoji" data-emoji="${e}" title="${e}">${e}</div>`
+  ).join('');
+
+  // Attach click handlers directly on emoji elements (not on document)
+  picker.querySelectorAll('.ep-emoji').forEach(el => {
+  el.addEventListener('click', function(e) {
+    e.stopPropagation();
+    const emoji  = this.dataset.emoji;
+    const target = emojiPickerTarget;  // capture before close nulls it
+    closeEmojiPicker();                // close immediately
+    if (!target) return;
+    const fd = new FormData();
+    fd.append('emoji', emoji);
+    fetch(`/messages/${target}/react`, { method: 'POST', body: fd })
+      .catch(() => toast('Reaction failed', 'error'));
+  });
+});
+
+  // Position: measure anchor, then place picker above it
+  const rect = anchorEl.getBoundingClientRect();
+  picker.style.visibility = 'hidden';
+  picker.style.display = 'flex';   // temporarily show to measure
+
+  const pw = picker.offsetWidth  || 232;
+  const ph = picker.offsetHeight || 160;
+
+  // Prefer above the anchor; fall back below if not enough room
+  let top = rect.top - ph - 8;
+  if (top < 8) top = rect.bottom + 8;
+
+  // Align right edge with anchor right, clamped to viewport
+  let left = rect.right - pw;
+  if (left < 8) left = 8;
+  if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
+
+  picker.style.top  = top  + 'px';
+  picker.style.left = left + 'px';
+  picker.style.visibility = '';
+  picker.classList.add('open');
+
+  // Mark as just-opened so the document listener ignores this tick
+  emojiPickerJustOpened = true;
+  requestAnimationFrame(() => { emojiPickerJustOpened = false; });
+}
+
+function closeEmojiPicker() {
+  const picker = document.getElementById('globalEmojiPicker');
+  picker.classList.remove('open');
+  picker.style.display = '';
+  picker.style.visibility = '';
+  emojiPickerTarget = null;
+}
+
+// Close picker on any outside click (guarded by the just-opened flag)
+document.addEventListener('click', function(e) {
+  if (emojiPickerJustOpened) return;
+  const picker = document.getElementById('globalEmojiPicker');
+  if (picker.classList.contains('open') && !picker.contains(e.target)) {
+    closeEmojiPicker();
+  }
+});
+
+async function sendReaction(emoji) {
+  const msgId = emojiPickerTarget;
+  closeEmojiPicker();
+  if (!msgId) return;
+  const fd = new FormData();
+  fd.append('emoji', emoji);
+  try {
+    const r = await fetch(`/messages/${msgId}/react`, { method: 'POST', body: fd });
+    if (!r.ok) throw new Error('Failed');
+  } catch(e) { toast('Reaction failed', 'error'); }
+}
+
+async function quickReact(emoji, msgId) {
+  const fd = new FormData();
+  fd.append('emoji', emoji);
+  try { await fetch(`/messages/${msgId}/react`, { method: 'POST', body: fd }); } catch(e) {}
+}
+
+function applyReactionUpdate(data) {
+  reactionsCache[data.message_id] = data.reactions;
+  updateReactionsBar(data.message_id, data.reactions,
+    document.querySelector(`#messagesList [data-msg-id="${data.message_id}"]`));
+  updateReactionsBar(data.message_id, data.reactions,
+    document.querySelector(`#threadMessages [data-msg-id="${data.message_id}"]`));
+}
+
+function updateReactionsBar(msgId, reactions, wrap) {
+  if (!wrap) return;
+  let bar = wrap.querySelector('.reactions-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.className = 'reactions-bar';
+    wrap.querySelector('.msg-row')?.after(bar);
+  }
+  renderReactionsBar(bar, msgId, reactions);
+}
+
+function renderReactionsBar(bar, msgId, reactions) {
+  if (!reactions || !reactions.length) { bar.innerHTML = ''; return; }
+  bar.innerHTML = reactions.map(r =>
+    `<div class="reaction-pill ${r.reacted_by_me ? 'mine' : ''}"
+          data-emoji="${escAttr(r.emoji)}"
+          data-msg-id="${msgId}"
+          title="${r.reacted_by_me ? 'Remove' : 'React'} ${r.emoji}">
+      ${r.emoji} <span class="r-count">${r.count}</span>
+    </div>`
+  ).join('') +
+  `<div class="add-reaction-btn" data-msg-id="${msgId}" title="Add reaction">+</div>`;
+
+  // Wire up pill clicks
+  bar.querySelectorAll('.reaction-pill').forEach(pill => {
+    pill.addEventListener('click', function(e) {
+      e.stopPropagation();
+      quickReact(this.dataset.emoji, parseInt(this.dataset.msgId));
+    });
+  });
+
+  // Wire up the + button
+  const addBtn = bar.querySelector('.add-reaction-btn');
+  if (addBtn) {
+    addBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openEmojiPicker(parseInt(this.dataset.msgId), this);
+    });
+  }
+}
+// ── END EMOJI PICKER ──────────────────────────────────────────────────────────
+
 async function loadToken() {
   try { const r = await fetch('/auth/ws-token'); if (r.ok) { const d = await r.json(); WS_TOKEN = d.token; } } catch(e) {}
 }
 loadToken();
 
-// Init mention badge
 (function() {
   const count = {{ mention_count }};
   const badge = document.getElementById('mentionCountBadge');
   if (count > 0 && badge) { badge.textContent = count; badge.classList.add('visible'); }
 })();
 
-// ── TAB / SEARCH (sidebar) ──
 function switchTab(tab) {
   document.getElementById('tabDM').classList.toggle('active', tab === 'dm');
   document.getElementById('tabCh').classList.toggle('active', tab === 'channels');
@@ -1002,11 +1121,9 @@ function filterConvs(q) {
   });
 }
 
-// ── MODALS ──
 function openModal(id) { document.getElementById(id).classList.add('open'); }
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
 
-// ── OPEN DM ──
 async function openDM(userId, name, color, isOnline) {
   setActive(`dm-item-${userId}`);
   currentChatType = 'dm';
@@ -1030,7 +1147,6 @@ async function openDM(userId, name, color, isOnline) {
   } catch(e) { toast('Could not open conversation: ' + e.message, 'error'); setWsStatus('disconnected'); }
 }
 
-// ── OPEN CHANNEL ──
 async function openChannel(channelId, name, dept, createdBy) {
   setActive(`ch-item-${channelId}`); closeLeftPanel();
   currentChatType = 'channel'; currentChannelId = channelId;
@@ -1057,7 +1173,6 @@ async function openChannel(channelId, name, dept, createdBy) {
   markLastRead();
 }
 
-// ── WEBSOCKET ──
 function connectWS(channelId) {
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
   clearTimeout(wsReconnectTimer);
@@ -1103,7 +1218,6 @@ function setWsStatus(state) {
   el.innerHTML = `<i class="fa-solid fa-circle" style="font-size:5px;"></i> ${labels[state]}`;
 }
 
-// ── SEND ──
 async function sendMessage() {
   const input = document.getElementById('msgInput');
   const content = input.value.trim();
@@ -1152,7 +1266,6 @@ function renderTyping() {
   el.innerHTML = `<div class="typing-dots"><span></span><span></span><span></span></div>&nbsp;${names.join(', ')} ${names.length===1?'is':'are'} typing…`;
 }
 
-// ── FILE ATTACH ──
 function handleFileSelect(files) { for (const f of files) pendingFiles.push(f); renderPendingFiles(); document.getElementById('fileInput').value = ''; }
 function renderPendingFiles() {
   const strip = document.getElementById('filePendingStrip');
@@ -1162,7 +1275,6 @@ function renderPendingFiles() {
 }
 function removePending(idx) { pendingFiles.splice(idx,1); renderPendingFiles(); }
 
-// ── REPLY ──
 function setReply(msgId, senderName, content) {
   replyTo = { id: msgId, sender_name: senderName, content };
   document.getElementById('replyBarSender').textContent = 'Replying to ' + senderName;
@@ -1172,7 +1284,6 @@ function setReply(msgId, senderName, content) {
 }
 function clearReply() { replyTo = null; document.getElementById('replyBar').classList.remove('visible'); }
 
-// ── DELETE ──
 async function deleteMessage(msgId) {
   if (!confirm('Delete this message?')) return;
   try {
@@ -1191,68 +1302,7 @@ function markDeleted(msgId) {
   });
 }
 
-// ══════════════════════════════════════════════
-//  FEATURE 1: REACTIONS
-// ══════════════════════════════════════════════
-let emojiPickerTarget = null;
-
-function openEmojiPicker(msgId, anchorEl) {
-  emojiPickerTarget = msgId;
-  const picker = document.getElementById('globalEmojiPicker');
-  picker.innerHTML = EMOJIS.map(e => `<div class="ep-emoji" onclick="sendReaction('${e}')" title="${e}">${e}</div>`).join('');
-  picker.classList.add('open');
-  const rect = anchorEl.getBoundingClientRect();
-  picker.style.top = (rect.top - picker.offsetHeight - 8) + 'px';
-  picker.style.left = Math.min(rect.left, window.innerWidth - 250) + 'px';
-  setTimeout(() => document.addEventListener('click', closeEmojiPickerOutside), 0);
-}
-
-function closeEmojiPickerOutside(e) {
-  const picker = document.getElementById('globalEmojiPicker');
-  if (!picker.contains(e.target)) { picker.classList.remove('open'); document.removeEventListener('click', closeEmojiPickerOutside); }
-}
-
-async function sendReaction(emoji) {
-  document.getElementById('globalEmojiPicker').classList.remove('open');
-  document.removeEventListener('click', closeEmojiPickerOutside);
-  if (!emojiPickerTarget) return;
-  const fd = new FormData(); fd.append('emoji', emoji);
-  try {
-    const r = await fetch(`/messages/${emojiPickerTarget}/react`, { method:'POST', body:fd });
-    if (!r.ok) throw new Error();
-  } catch(e) { toast('Reaction failed', 'error'); }
-}
-
-function applyReactionUpdate(data) {
-  reactionsCache[data.message_id] = data.reactions;
-  updateReactionsBar(data.message_id, data.reactions, document.querySelector(`#messagesList [data-msg-id="${data.message_id}"]`));
-  updateReactionsBar(data.message_id, data.reactions, document.querySelector(`#threadMessages [data-msg-id="${data.message_id}"]`));
-}
-
-function updateReactionsBar(msgId, reactions, wrap) {
-  if (!wrap) return;
-  let bar = wrap.querySelector('.reactions-bar');
-  if (!bar) { bar = document.createElement('div'); bar.className = 'reactions-bar'; wrap.querySelector('.msg-row')?.after(bar); }
-  renderReactionsBar(bar, msgId, reactions);
-}
-
-function renderReactionsBar(bar, msgId, reactions) {
-  if (!reactions || !reactions.length) { bar.innerHTML = ''; return; }
-  bar.innerHTML = reactions.map(r =>
-    `<div class="reaction-pill ${r.reacted_by_me ? 'mine' : ''}" onclick="quickReact('${escAttr(r.emoji)}', ${msgId})" title="${r.reacted_by_me ? 'Remove' : 'React'} ${r.emoji}">
-      ${r.emoji} <span class="r-count">${r.count}</span>
-    </div>`
-  ).join('') + `<div class="add-reaction-btn" onclick="openEmojiPicker(${msgId}, this)" title="Add reaction">+</div>`;
-}
-
-async function quickReact(emoji, msgId) {
-  const fd = new FormData(); fd.append('emoji', emoji);
-  try { await fetch(`/messages/${msgId}/react`, { method:'POST', body:fd }); } catch(e) {}
-}
-
-// ══════════════════════════════════════════════
-//  FEATURE 2: SEARCH
-// ══════════════════════════════════════════════
+// ── SEARCH ──
 let searchVisible = false;
 
 function toggleSearch() {
@@ -1315,9 +1365,7 @@ function jumpToMessage(msgId) {
   }
 }
 
-// ══════════════════════════════════════════════
-//  FEATURE 3: VOICE NOTES
-// ══════════════════════════════════════════════
+// ── VOICE NOTES ──
 function toggleRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') stopAndSendRecording();
   else startRecording();
@@ -1384,13 +1432,11 @@ function buildVoicePlayer(msg) {
   const dur = msg.voice_duration || 0;
   const id = `vp-${msg.id}`;
   return `<div class="voice-player" id="${id}">
-    <button class="voice-play-btn" onclick="toggleVoicePlay('${id}','${escAttr(url)}')" title="Play">
+    <button class="voice-play-btn" onclick="toggleVoicePlay('${id}')" title="Play">
       <i class="fa-solid fa-play" id="${id}-icon"></i>
     </button>
-    <div class="voice-waveform" onclick="seekVoice('${id}','${escAttr(url)}',event)">
-      <svg class="waveform-svg" viewBox="0 0 200 28" preserveAspectRatio="none">
-        ${generateWaveform()}
-      </svg>
+    <div class="voice-waveform" onclick="seekVoice('${id}',event)">
+      <svg class="waveform-svg" viewBox="0 0 200 28" preserveAspectRatio="none">${generateWaveform()}</svg>
     </div>
     <span class="voice-time" id="${id}-time">${dur ? formatDur(dur) : '0:00'}</span>
     <audio id="${id}-audio" src="${url}" style="display:none;" onended="voiceEnded('${id}')" ontimeupdate="voiceTimeUpdate('${id}')"></audio>
@@ -1407,89 +1453,66 @@ function generateWaveform() {
   return bars;
 }
 
-function toggleVoicePlay(id, url) {
+function toggleVoicePlay(id) {
   const audio = document.getElementById(`${id}-audio`);
-  const icon = document.getElementById(`${id}-icon`);
+  const icon  = document.getElementById(`${id}-icon`);
   if (!audio) return;
   if (audio.paused) { audio.play(); icon.className = 'fa-solid fa-pause'; }
-  else { audio.pause(); icon.className = 'fa-solid fa-play'; }
+  else              { audio.pause(); icon.className = 'fa-solid fa-play'; }
 }
-
 function voiceEnded(id) {
-  const icon = document.getElementById(`${id}-icon`); if (icon) icon.className = 'fa-solid fa-play';
+  const icon  = document.getElementById(`${id}-icon`);  if (icon)  icon.className = 'fa-solid fa-play';
   const timeEl = document.getElementById(`${id}-time`);
-  const audio = document.getElementById(`${id}-audio`);
+  const audio  = document.getElementById(`${id}-audio`);
   if (audio && timeEl) timeEl.textContent = formatDur(audio.duration || 0);
 }
-
 function voiceTimeUpdate(id) {
-  const audio = document.getElementById(`${id}-audio`);
+  const audio  = document.getElementById(`${id}-audio`);
   const timeEl = document.getElementById(`${id}-time`);
   if (!audio || !timeEl) return;
   timeEl.textContent = formatDur(audio.currentTime);
 }
-
-function seekVoice(id, url, e) {
+function seekVoice(id, e) {
   const audio = document.getElementById(`${id}-audio`); if (!audio || !audio.duration) return;
   const rect = e.currentTarget.getBoundingClientRect();
-  const pct = (e.clientX - rect.left) / rect.width;
-  audio.currentTime = pct * audio.duration;
+  audio.currentTime = ((e.clientX - rect.left) / rect.width) * audio.duration;
 }
-
 function formatDur(s) { s = Math.floor(s||0); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
 
-// ══════════════════════════════════════════════
-//  FEATURE 4: READ RECEIPTS
-// ══════════════════════════════════════════════
+// ── READ RECEIPTS ──
 function markRead(msgId) {
   if (myReadMessages.has(msgId) || !ws || ws.readyState !== WebSocket.OPEN) return;
   myReadMessages.add(msgId);
   ws.send(JSON.stringify({ type: 'read', message_id: msgId }));
 }
-
 function markLastRead() {
   setTimeout(() => {
     const msgs = document.querySelectorAll('#messagesList [data-msg-id]');
-    if (msgs.length) {
-      const last = msgs[msgs.length - 1];
-      markRead(parseInt(last.dataset.msgId));
-    }
+    if (msgs.length) markRead(parseInt(msgs[msgs.length - 1].dataset.msgId));
   }, 800);
 }
-
 function applyReadReceipt(data) {
   if (!readReceipts[data.message_id]) readReceipts[data.message_id] = [];
   if (!readReceipts[data.message_id].find(r => r.user_id === data.user_id))
     readReceipts[data.message_id].push({ user_id: data.user_id, user_name: data.user_name });
   updateReceiptsUI(data.message_id);
 }
-
 function updateReceiptsUI(msgId) {
   const receipts = readReceipts[msgId] || [];
   const wrap = document.querySelector(`#messagesList [data-msg-id="${msgId}"]`);
   if (!wrap) return;
   let el = wrap.querySelector('.msg-receipts');
-  if (!el) {
-    el = document.createElement('div'); el.className = 'msg-receipts';
-    const row = wrap.querySelector('.msg-row'); if (row) row.after(el);
-  }
+  if (!el) { el = document.createElement('div'); el.className = 'msg-receipts'; wrap.querySelector('.msg-row')?.after(el); }
   el.innerHTML = receipts.slice(0, 5).map(r =>
     `<div class="receipt-av" style="background:${getUserColor(r.user_id)}" title="${escHtml(r.user_name)} read">${getInitials(r.user_name)}</div>`
   ).join('');
 }
+function getUserColor(userId) { const u = ALL_USERS.find(u => u.id === userId); return u ? u.color : '#6366f1'; }
 
-function getUserColor(userId) {
-  const u = ALL_USERS.find(u => u.id === userId);
-  return u ? u.color : '#6366f1';
-}
-
-// ══════════════════════════════════════════════
-//  FEATURE 5: THREADS
-// ══════════════════════════════════════════════
+// ── THREADS ──
 function openThread(msgId, content, senderName, color, threadCount) {
   currentThreadId = msgId;
-  const parent = document.getElementById('threadParent');
-  parent.innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start;">
+  document.getElementById('threadParent').innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start;">
     <div class="msg-av" style="background:${color};width:28px;height:28px;font-size:9px;">${getInitials(senderName)}</div>
     <div>
       <div style="font-size:11px;font-weight:700;color:var(--text3);font-family:var(--msg-mono);text-transform:uppercase;margin-bottom:4px;">${escHtml(senderName)}</div>
@@ -1507,8 +1530,7 @@ async function loadThreadReplies(threadId) {
   try {
     const r = await fetch(`/messages/channel/${currentChannelId}/history?thread_id=${threadId}`);
     const msgs = await r.json();
-    const container = document.getElementById('threadMessages');
-    container.innerHTML = '';
+    document.getElementById('threadMessages').innerHTML = '';
     msgs.forEach(m => appendThreadMessage(m));
   } catch(e) {}
 }
@@ -1539,15 +1561,9 @@ async function sendThreadReply() {
   ws.send(JSON.stringify({ type: 'message', content, thread_id: currentThreadId }));
   input.value = '';
 }
-
 function handleThreadKey(e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendThreadReply(); } }
+function closeThread() { document.getElementById('threadPanel').classList.remove('open'); currentThreadId = null; }
 
-function closeThread() {
-  document.getElementById('threadPanel').classList.remove('open');
-  currentThreadId = null;
-}
-
-// FIX 5: updateThreadCount — also updates data-count attr
 function updateThreadCount(threadId) {
   const wrap = document.querySelector(`#messagesList [data-msg-id="${threadId}"]`);
   if (!wrap) return;
@@ -1559,9 +1575,7 @@ function updateThreadCount(threadId) {
   }
 }
 
-// ══════════════════════════════════════════════
-//  FEATURE 6: @MENTIONS
-// ══════════════════════════════════════════════
+// ── @MENTIONS ──
 function handleMentionInput(textarea) {
   const val = textarea.value;
   const cursor = textarea.selectionStart;
@@ -1610,11 +1624,7 @@ function selectMention(idx) {
   input.setSelectionRange(newPos, newPos);
   closeMentionDropdown(); input.focus();
 }
-
-function closeMentionDropdown() {
-  mentionDropdownActive = false;
-  document.getElementById('mentionDropdown').classList.remove('open');
-}
+function closeMentionDropdown() { mentionDropdownActive = false; document.getElementById('mentionDropdown').classList.remove('open'); }
 
 function handleMentionNotification(data) {
   const badge = document.getElementById('mentionCountBadge');
@@ -1623,11 +1633,9 @@ function handleMentionNotification(data) {
   toast(`@mentioned by ${data.sender_name}`, 'info', 4000);
 }
 
-// ── MENTION PANEL ──
 async function toggleMentionPanel() {
   mentionPanelOpen = !mentionPanelOpen;
-  const panel = document.getElementById('mentionPanel');
-  panel.classList.toggle('open', mentionPanelOpen);
+  document.getElementById('mentionPanel').classList.toggle('open', mentionPanelOpen);
   if (mentionPanelOpen) {
     await loadMentions();
     await fetch('/messages/mentions/read-all', { method:'POST' });
@@ -1657,30 +1665,17 @@ function jumpToMention(channelId, messageId) {
   mentionPanelOpen = false;
   document.getElementById('mentionPanel').classList.remove('open');
   const chItem = document.getElementById(`ch-item-${channelId}`);
-  if (chItem && currentChannelId !== channelId) {
-    chItem.click();
-    setTimeout(() => { jumpToMessage(messageId); }, 800);
-  } else { jumpToMessage(messageId); }
+  if (chItem && currentChannelId !== channelId) { chItem.click(); setTimeout(() => { jumpToMessage(messageId); }, 800); }
+  else { jumpToMessage(messageId); }
 }
 
-// ── HELPERS: escAttr (FIX 3) ──
+// ── HELPERS ──
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-
-// FIX 3: Safe escAttr for HTML attributes — encodes all special chars
 function escAttr(s) {
-  return String(s || '')
-    .replace(/&/g, '&amp;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\n/g, ' ')
-    .replace(/\r/g, '');
+  return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,' ').replace(/\r/g,'');
 }
-
 function getInitials(n) { return (n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
 
-// ── RENDER MESSAGES ──
 function clearMessages() { document.getElementById('messagesList').innerHTML = ''; lastSenderId = null; }
 
 function renderContent(text) {
@@ -1693,7 +1688,6 @@ function renderContent(text) {
     .replace(/\n/g, '<br>');
 }
 
-// FIX 1: toggleDept — handles both label itself or child element
 function toggleDept(el) {
   const label = el.closest ? el.closest('.dept-check') : el;
   if (!label) return;
@@ -1705,29 +1699,23 @@ function toggleDept(el) {
 function formatMsgTime(isoStr) {
   const d = new Date(isoStr);
   const now = new Date();
-  const diffMs = now - d;
-  const diffDays = Math.floor(diffMs / 86400000);
+  const diffDays = Math.floor((now - d) / 86400000);
   const timeStr = d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit', hour12: true});
-
   if (diffDays === 0) return timeStr;
   if (diffDays === 1) return `Yesterday ${timeStr}`;
   if (diffDays < 7)  return `${d.toLocaleDateString([],{weekday:'short'})} ${timeStr}`;
-  if (diffDays < 30) return `${d.toLocaleDateString([],{month:'short',day:'numeric'})} ${timeStr}`;
-  if (diffDays < 365) return `${d.toLocaleDateString([],{month:'short',day:'numeric'})} ${timeStr}`;
-  return `${d.toLocaleDateString([],{year:'numeric',month:'short',day:'numeric'})} ${timeStr}`;
+  return `${d.toLocaleDateString([],{month:'short',day:'numeric'})} ${timeStr}`;
 }
 
-// FIX 4 + FIX 2: appendMessage — uses data attributes for content, no inline JS injection
 function appendMessage(msg, scroll=true) {
   const list = document.getElementById('messagesList');
   const isMine = msg.sender_id === ME.id;
   const showHeader = msg.sender_id !== lastSenderId;
   lastSenderId = msg.sender_id;
 
-  const time = msg.created_at ? formatMsgTime(msg.created_at) : '';
+  const time  = msg.created_at ? formatMsgTime(msg.created_at) : '';
   const color = msg.avatar_color || '#6366f1';
 
-  // Reply quote
   let replyHtml = '';
   if (msg.reply_to_id) {
     replyHtml = `<div class="reply-quote" onclick="scrollToMsg(${msg.reply_to_id})">
@@ -1736,7 +1724,6 @@ function appendMessage(msg, scroll=true) {
     </div>`;
   }
 
-  // Body
   let bodyHtml = '';
   if (msg.is_deleted) {
     bodyHtml = '<i class="fa-solid fa-ban" style="margin-right:6px;opacity:0.4;"></i>This message was deleted';
@@ -1749,40 +1736,38 @@ function appendMessage(msg, scroll=true) {
   }
 
   const bubbleClass = msg.is_deleted ? 'deleted' : (isMine ? 'mine' : 'other');
+  const isMedia = msg.message_type === 'voice' || msg.message_type === 'file';
+  const wrapClass = `msg-bubble-wrap${isMedia ? ' media-wrap' : ''}`;
 
-  // FIX 2: Thread button — content stored as data attr, no inline JS string injection
+  const menuId = `menu-${msg.id}`;
+  const canDelete = !Boolean(msg.is_deleted) && (isMine || ['super_admin','admin'].includes(ME.role));
+
+  // Thread button stored via data attributes — no inline string injection
   const threadBtnHtml = (!msg.is_deleted && !msg.is_thread_reply)
     ? `<div class="thread-btn"
           data-thread-msg-id="${msg.id}"
           data-thread-sender="${escAttr(msg.sender_name)}"
           data-thread-color="${escAttr(color)}"
-          data-count="${msg.thread_count || 0}"
-          onclick="openThreadById(this)">
+          data-count="${msg.thread_count || 0}">
           <i class="fa-solid fa-comments"></i>
-          ${msg.thread_count
-            ? `${msg.thread_count} ${msg.thread_count === 1 ? 'reply' : 'replies'}`
-            : 'Reply in thread'}
+          ${msg.thread_count ? `${msg.thread_count} ${msg.thread_count===1?'reply':'replies'}` : 'Reply in thread'}
         </div>` : '';
 
- // Actions — now rendered inside the bubble wrap as a trigger+dropdown
-  const menuId = `menu-${msg.id}`;
-  const canDelete = !Boolean(msg.is_deleted) && (isMine || ['super_admin', 'admin'].includes(ME.role));
-  const actionsDisabled = Boolean(msg.is_deleted);
-  const actionsHtml = actionsDisabled ? '' : `
-    <button class="msg-action-trigger" onclick="toggleMsgMenu('${menuId}', event)" title="More">
+  const actionsHtml = msg.is_deleted ? '' : `
+    <button class="msg-action-trigger" data-menu="${menuId}" title="More">
       <i class="fa-solid fa-angle-down"></i>
     </button>
     <div class="msg-action-menu" id="${menuId}">
-      <button class="msg-action-menu-item" onclick="closeMsgMenu('${menuId}'); setReply(${msg.id}, document.querySelector('[data-msg-id=\\'${msg.id}\\']').dataset.senderName, document.querySelector('[data-msg-id=\\'${msg.id}\\']').dataset.preview)">
+      <button class="msg-action-menu-item" data-action="reply" data-msg-id="${msg.id}">
         <i class="fa-solid fa-reply"></i> Reply
       </button>
-      <button class="msg-action-menu-item" onclick="closeMsgMenu('${menuId}'); openEmojiPicker(${msg.id}, this)">
+      <button class="msg-action-menu-item" data-action="react" data-msg-id="${msg.id}">
         <i class="fa-solid fa-face-smile"></i> React
       </button>
-      <button class="msg-action-menu-item" onclick="closeMsgMenu('${menuId}'); openThreadById(document.querySelector('[data-msg-id=\\'${msg.id}\\']').querySelector('.thread-btn'))">
+      <button class="msg-action-menu-item" data-action="thread" data-msg-id="${msg.id}">
         <i class="fa-solid fa-comments"></i> Thread
       </button>
-      ${canDelete ? `<button class="msg-action-menu-item danger" onclick="closeMsgMenu('${menuId}'); deleteMessage(${msg.id})">
+      ${canDelete ? `<button class="msg-action-menu-item danger" data-action="delete" data-msg-id="${msg.id}">
         <i class="fa-solid fa-trash"></i> Delete
       </button>` : ''}
     </div>`;
@@ -1790,13 +1775,9 @@ function appendMessage(msg, scroll=true) {
   const wrap = document.createElement('div');
   wrap.className = 'msg-group';
   wrap.dataset.msgId = msg.id;
-  // Store safe data for reply/thread lookups
   wrap.dataset.senderName = msg.sender_name || '';
   wrap.dataset.preview = msg.message_type === 'file' ? '[file]' : (msg.content || '');
-  wrap.dataset.content = msg.content || '';
-// Determine if this is a media message (voice/file/image)
-  const isMedia = msg.message_type === 'voice' || msg.message_type === 'file';
-  const wrapClass = `msg-bubble-wrap${isMedia ? ' media-wrap' : ''}`;
+  wrap.dataset.content  = msg.content || '';
 
   if (isMine) {
     wrap.innerHTML = `
@@ -1816,7 +1797,7 @@ function appendMessage(msg, scroll=true) {
     wrap.innerHTML = `
       <div class="msg-row">
         ${showHeader
-          ? `<div class="msg-av" style="background:${color};flex-shrink:0;">${getInitials(msg.sender_name || '?')}</div>`
+          ? `<div class="msg-av" style="background:${color};flex-shrink:0;">${getInitials(msg.sender_name||'?')}</div>`
           : `<div class="spacer-av"></div>`}
         <div class="${wrapClass}" style="position:relative;">
           ${actionsHtml}
@@ -1833,30 +1814,74 @@ function appendMessage(msg, scroll=true) {
 
   list.appendChild(wrap);
 
+  // Wire up all action buttons via event delegation on the wrap (no inline JS)
+  wireMessageActions(wrap, msg, color);
+
   if (msg.reactions && msg.reactions.length) {
-    const bar = wrap.querySelector('.reactions-bar');
     reactionsCache[msg.id] = msg.reactions;
-    renderReactionsBar(bar, msg.id, msg.reactions);
+    renderReactionsBar(wrap.querySelector('.reactions-bar'), msg.id, msg.reactions);
   }
-
   if (readReceipts[msg.id]) updateReceiptsUI(msg.id);
-
   if (scroll) { scrollBottom(); markRead(msg.id); }
 }
 
-// FIX 2: openThreadById — reads content from wrap dataset, no inline string passing
+// Wire all interactive elements on a message wrap via addEventListener (no innerHTML onclick)
+function wireMessageActions(wrap, msg, color) {
+  // Trigger button → open/close menu
+  const trigger = wrap.querySelector('.msg-action-trigger');
+  const menuId  = `menu-${msg.id}`;
+  if (trigger) {
+    trigger.addEventListener('click', function(e) {
+      e.stopPropagation();
+      toggleMsgMenu(menuId, e);
+    });
+  }
+
+  // Menu items
+  wrap.querySelectorAll('.msg-action-menu-item').forEach(btn => {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const action = this.dataset.action;
+      const mid    = parseInt(this.dataset.msgId);
+      closeMsgMenu(menuId);
+
+      if (action === 'reply') {
+        const w = document.querySelector(`[data-msg-id="${mid}"]`);
+        setReply(mid, w?.dataset.senderName || '', w?.dataset.preview || '');
+      } else if (action === 'react') {
+        // Open picker anchored to the trigger button (visible in DOM)
+        openEmojiPicker(mid, trigger || this);
+      } else if (action === 'thread') {
+        const threadBtn = wrap.querySelector('.thread-btn');
+        if (threadBtn) openThreadById(threadBtn);
+      } else if (action === 'delete') {
+        deleteMessage(mid);
+      }
+    });
+  });
+
+  // Thread button
+  const threadBtn = wrap.querySelector('.thread-btn');
+  if (threadBtn) {
+    threadBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      openThreadById(this);
+    });
+  }
+}
+
 function openThreadById(btn) {
   if (!btn) return;
-  const msgId  = parseInt(btn.dataset.threadMsgId);
-  const sender = btn.dataset.threadSender || '';
-  const color  = btn.dataset.threadColor  || '#6366f1';
-  const count  = parseInt(btn.dataset.count || '0');
-  const wrap   = btn.closest('[data-msg-id]');
+  const msgId   = parseInt(btn.dataset.threadMsgId);
+  const sender  = btn.dataset.threadSender || '';
+  const color   = btn.dataset.threadColor  || '#6366f1';
+  const count   = parseInt(btn.dataset.count || '0');
+  const wrap    = btn.closest('[data-msg-id]');
   const content = wrap ? wrap.dataset.content : '';
   openThread(msgId, content, sender, color, count);
 }
 
-// ── FILE BUBBLE BUILDER ──
+// ── FILE BUBBLE ──
 function absoluteUrl(url) {
   if (!url) return '';
   if (url.startsWith('http')) return url;
@@ -1878,7 +1903,7 @@ function buildFileBubble(msg, replyHtml='') {
 
 function fileIcon(name) {
   const ext = (name||'').split('.').pop().toLowerCase();
-  const map = { pdf:'fa-file-pdf',doc:'fa-file-word',docx:'fa-file-word',xls:'fa-file-excel',xlsx:'fa-file-excel',ppt:'fa-file-powerpoint',pptx:'fa-file-powerpoint',zip:'fa-file-zipper',rar:'fa-file-zipper',mp4:'fa-file-video',mov:'fa-file-video',mp3:'fa-file-audio',wav:'fa-file-audio',png:'fa-file-image',jpg:'fa-file-image',jpeg:'fa-file-image',gif:'fa-file-image',webp:'fa-file-image',txt:'fa-file-lines',csv:'fa-file-csv',js:'fa-file-code',ts:'fa-file-code',py:'fa-file-code',html:'fa-file-code',json:'fa-file-code' };
+  const map = {pdf:'fa-file-pdf',doc:'fa-file-word',docx:'fa-file-word',xls:'fa-file-excel',xlsx:'fa-file-excel',ppt:'fa-file-powerpoint',pptx:'fa-file-powerpoint',zip:'fa-file-zipper',rar:'fa-file-zipper',mp4:'fa-file-video',mov:'fa-file-video',mp3:'fa-file-audio',wav:'fa-file-audio',png:'fa-file-image',jpg:'fa-file-image',jpeg:'fa-file-image',gif:'fa-file-image',webp:'fa-file-image',txt:'fa-file-lines',csv:'fa-file-csv',js:'fa-file-code',ts:'fa-file-code',py:'fa-file-code',html:'fa-file-code',json:'fa-file-code'};
   return map[ext] || 'fa-file';
 }
 function formatSize(b) { if (b<1024) return b+' B'; if (b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
@@ -1890,7 +1915,7 @@ function handleLightboxClick(e) { if (e.target === document.getElementById('ligh
 
 // ── MISC ──
 function scrollToMsg(msgId) { const el = document.querySelector(`#messagesList [data-msg-id="${msgId}"]`); if (el) { el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.background='rgba(37,99,235,0.06)'; setTimeout(()=>el.style.background='',1600); } }
-function scrollBottom() { const l=document.getElementById('messagesList'); l.scrollTop=l.scrollHeight; }
+function scrollBottom() { const l = document.getElementById('messagesList'); l.scrollTop = l.scrollHeight; }
 
 function showChatUI() {
   document.getElementById('emptyState').style.display = 'none';
@@ -1900,7 +1925,6 @@ function showChatUI() {
   closeLeftPanel();
 }
 function setActive(id) { document.querySelectorAll('.conv-item').forEach(el=>el.classList.remove('active')); document.getElementById(id)?.classList.add('active'); }
-
 function openLeftPanel()  { document.querySelector('.left-panel').classList.add('open'); document.getElementById('panelOverlay').classList.add('visible'); }
 function closeLeftPanel() { document.querySelector('.left-panel').classList.remove('open'); document.getElementById('panelOverlay').classList.remove('visible'); }
 
@@ -1940,8 +1964,10 @@ async function saveChannel() {
   else toast('Error updating channel','error');
 }
 
+// ── MSG CONTEXT MENU ──
+let msgMenuJustOpened = false;
+
 function toggleMsgMenu(menuId, e) {
-  e.stopPropagation();
   document.querySelectorAll('.msg-action-menu.open').forEach(m => {
     if (m.id !== menuId) m.classList.remove('open');
   });
@@ -1949,51 +1975,52 @@ function toggleMsgMenu(menuId, e) {
   if (!menu) return;
   if (menu.classList.contains('open')) { menu.classList.remove('open'); return; }
 
-  const btn = e.currentTarget;
-  const rect = btn.getBoundingClientRect();
-
-  // Show off-screen first to measure
   menu.style.visibility = 'hidden';
-  menu.style.position = 'fixed';
-  menu.style.top = '-9999px';
+  menu.style.position   = 'fixed';
+  menu.style.top  = '-9999px';
   menu.style.left = '-9999px';
   menu.classList.add('open');
 
-  const menuW = menu.offsetWidth || 170;
+  const btn   = e.currentTarget;
+  const rect  = btn.getBoundingClientRect();
+  const menuW = menu.offsetWidth  || 170;
   const menuH = menu.offsetHeight || 148;
 
-  // Always open UPWARD from the trigger
-  let top = rect.top - menuH - 6;
-  if (top < 8) top = rect.bottom + 6; // only fall back to below if no room above at all
+  let top  = rect.top - menuH - 6;
+  if (top < 8) top = rect.bottom + 6;
 
-  // Horizontal: align to right edge of trigger, clamp to viewport
   let left = rect.right - menuW;
   if (left < 8) left = 8;
   if (left + menuW > window.innerWidth - 8) left = window.innerWidth - menuW - 8;
 
-  menu.style.top = top + 'px';
+  menu.style.top  = top  + 'px';
   menu.style.left = left + 'px';
   menu.style.visibility = '';
+
+  msgMenuJustOpened = true;
+  requestAnimationFrame(() => { msgMenuJustOpened = false; });
 }
 
 function closeMsgMenu(menuId) {
   document.getElementById(menuId)?.classList.remove('open');
 }
 
-// Close all menus when clicking elsewhere
-document.addEventListener('click', () => {
+// Close all menus on outside click
+document.addEventListener('click', function() {
+  if (msgMenuJustOpened) return;
   document.querySelectorAll('.msg-action-menu.open').forEach(m => m.classList.remove('open'));
 });
-// ── SCROLL: auto mark-read ──
+
+// Auto mark-read on scroll
 document.getElementById('messagesList')?.addEventListener('scroll', function() {
-  const el = this; if (el.scrollTop + el.clientHeight >= el.scrollHeight - 40) markLastRead();
+  if (this.scrollTop + this.clientHeight >= this.scrollHeight - 40) markLastRead();
 });
 
 // Close mention panel on outside click
 document.addEventListener('click', e => {
   const panel = document.getElementById('mentionPanel');
-  const btn = document.querySelector('.mention-badge-btn');
-  if (mentionPanelOpen && !panel.contains(e.target) && !btn.contains(e.target)) {
+  const btn   = document.querySelector('.mention-badge-btn');
+  if (mentionPanelOpen && !panel?.contains(e.target) && !btn?.contains(e.target)) {
     mentionPanelOpen = false; panel.classList.remove('open');
   }
 });
