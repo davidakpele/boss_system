@@ -13,6 +13,7 @@ from app.config import settings
 from app.routers import analytics, auth, bcc, dashboard, messages, ask_boss, documents, admin
 from app.routers import business_ops, sso, push
 from app.middleware.ip_allowlist import IPAllowlistMiddleware
+from app.routers import ai_features
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,8 +66,8 @@ async def service_worker():
 
 
 # ── Routers ───────────────────────────────────────────────────────────────────
-for r in [auth.router, sso.router, push.router, bcc.router, analytics.router,
-          dashboard.router, messages.router, ask_boss.router,
+for r in [auth.router, sso.router, push.router, bcc.router, analytics.router, ai_features.router,
+          dashboard.router, messages.router, ask_boss.router, 
           documents.router, admin.router, business_ops.router]:
     app.include_router(r)
 

@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}Sentiment Analysis — BOSS AI{% endblock %}
+{% block page_title %}Team Sentiment Analysis{% endblock %}
+{% block page_sub %}AI-powered morale tracking across channels and departments{% endblock %}
+
+{% block extra_css %}
+.sentiment-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
+.sent-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:20px; }
+.sent-score {
+  font-family:'Syne',sans-serif; font-weight:800; font-size:36px;
+  margin:8px 0 4px;
+}
+.sentiment-badge {
+  display:inline-flex; align-items:center; gap:6px;
+  padding:4px 14px; border-radius:20px; font-size:13px; font-weight:700;
+}
+.sb-positive { background:rgba(16,185,129,.12); color:#34d399; }
+.sb-neutral  { background:rgba(100,116,139,.12); color:#94a3b8; }
+.sb-negative { background:rgba(239,68,68,.12);   color:#f87171; }
+.morale-bar { height:8px; background:var(--border); border-radius:10px; overflow:hidden; margin-top:6px; }
+.morale-fill { height:100%; border-radius:10px; transition:width .6s ease; }
+.theme-chip { display:inline-flex; padding:3px 10px; border-radius:12px; font-size:11.5px; font-weight:600; background:var(--surface2); border:1px solid var(--border); margin:2px; }
+.log-row { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(31,45,66,.4); }
+.score-pill { padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; }
+@media(max-width:900px){ .sentiment-grid{grid-template-columns:1fr 1fr;} }
+@media(max-width:600px){ .sentiment-grid{grid-template-columns:1fr;} }
+{% endblock %}
+
+{% block content %}
+
+{# ── Run Analysis ── #}
+<div class="card mb-6">
+  <div class="card-title mb-3"><i class="fa-solid fa-robot" style="color:var(--accent)"></i> Run Sentiment Analysis</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr auto;gap:12px;align-items:end;">
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Channel (or All)</label>
+      <select id="sentChannel" class="form-control" style="padding-left:12px;">
+        <option value="">All Channels</option>
+        {% for ch in channels %}
+        <option value="{{ ch.id }}">{{ ch.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Analyse Last</label>
+      <select id="sentDays" class="form-control" style="padding-left:12px;">
+        <option value="3">3 days</option>
+        <option value="7" selected>7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" onclick="runAnalysis()" id="analyseBtn">
+      <i class="fa-solid fa-brain"></i> Analyse Now
+    </button>
+  </div>
+  <div id="analysisStatus" style="margin-top:12px;font-size:12.5px;color:var(--text3);display:none;"></div>
+</div>
+
+{# ── Live Result ── #}
+<div id="resultSection" style="display:none;">
+  <div class="sentiment-grid">
+    <div class="sent-card">
+      <div class="stat-label">Overall Sentiment</div>
+      <div class="sent-score" id="resScore">—</div>
+      <div id="resBadge"></div>
+    </div>
+    <div class="sent-card">
+      <div class="stat-label">Morale Indicators</div>
+      <div style="margin-top:10px;">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:3px;">Engagement</div>
+        <div class="morale-bar"><div class="morale-fill" id="barEngagement" style="background:var(--accent);width:0%"></div></div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px;margin-bottom:3px;">Collaboration</div>
+        <div class="morale-bar"><div class="morale-fill" id="barCollab" style="background:var(--green);width:0%"></div></div>
+        <div style="font-size:12px;color:var(--text3);margin-top:8px;margin-bottom:3px;">Stress Level</div>
+        <div class="morale-bar"><div class="morale-fill" id="barStress" style="background:var(--red);width:0%"></div></div>
+      </div>
+    </div>
+    <div class="sent-card">
+      <div class="stat-label">Key Themes</div>
+      <div id="resThemes" style="margin-top:10px;line-height:2;"></div>
+    </div>
+  </div>
+  <div class="card mb-6">
+    <div class="card-title"><i class="fa-solid fa-comment-dots" style="color:var(--accent)"></i> AI Summary</div>
+    <div id="resSummary" style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-top:8px;"></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:10px;" id="resMeta"></div>
+  </div>
+</div>
+
+{# ── History ── #}
+<div class="card">
+  <div class="card-title flex justify-between">
+    <span><i class="fa-solid fa-clock-rotate-left" style="color:var(--accent)"></i> Sentiment History</span>
+    <select onchange="loadChart(this.value)" class="form-control" style="width:120px;padding-left:10px;font-size:12px;">
+      <option value="30">30 days</option>
+      <option value="60">60 days</option>
+      <option value="90">90 days</option>
+    </select>
+  </div>
+  <canvas id="sentimentChart" height="140" style="margin:12px 0;"></canvas>
+  <div id="logList">
+    {% if recent_logs %}
+    {% for log in recent_logs %}
+    <div class="log-row">
+      <span class="score-pill {% if log.label=='positive' %}sb-positive{% elif log.label=='negative' %}sb-negative{% else %}sb-neutral{% endif %}">
+        {{ "%.2f"|format(log.score) }}
+      </span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:500;">
+          {% if log.channel_id %}Channel {{ log.channel_id }}{% else %}All Channels{% endif %}
+          — {{ log.period_date }}
+        </div>
+        {% if log.themes %}
+        <div style="margin-top:3px;">
+          {% for t in log.themes[:3] %}<span class="theme-chip">{{ t }}</span>{% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      <span style="font-size:11px;color:var(--text3);">{{ log.sample_size }} msgs</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div style="text-align:center;padding:40px;color:var(--text3);font-size:12.5px;">No analysis runs yet. Run your first analysis above.</div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+async function runAnalysis() {
+  const btn = document.getElementById('analyseBtn');
+  const status = document.getElementById('analysisStatus');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Analysing…';
+  status.style.display = 'block';
+  status.innerHTML = '🤖 AI is reading recent messages and analysing team sentiment…';
+
+  const r = await fetch('/ai/sentiment/analyse', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      channel_id: document.getElementById('sentChannel').value || null,
+      days: parseInt(document.getElementById('sentDays').value),
+    }),
+  });
+  const d = await r.json();
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-brain"></i> Analyse Now';
+  status.style.display = 'none';
+
+  if (!r.ok) { toast(d.error || 'Analysis failed', 'error'); return; }
+
+  // Show result
+  document.getElementById('resultSection').style.display = 'block';
+  document.getElementById('resScore').textContent = d.score >= 0 ? `+${d.score.toFixed(2)}` : d.score.toFixed(2);
+  document.getElementById('resScore').style.color = d.label==='positive'?'#34d399':d.label==='negative'?'#f87171':'#94a3b8';
+
+  const badgeClass = `sentiment-badge sb-${d.label}`;
+  const icons = {positive:'😊', neutral:'😐', negative:'😟'};
+  document.getElementById('resBadge').innerHTML = `<span class="${badgeClass}">${icons[d.label]||''} ${d.label.toUpperCase()}</span>`;
+
+  const mi = d.morale_indicators || {};
+  document.getElementById('barEngagement').style.width = (mi.engagement||50)+'%';
+  document.getElementById('barCollab').style.width = (mi.collaboration||50)+'%';
+  document.getElementById('barStress').style.width = (mi.stress||50)+'%';
+
+  document.getElementById('resThemes').innerHTML = (d.themes||[]).map(t =>
+    `<span class="theme-chip">${t}</span>`).join('') || '<span style="color:var(--text3);font-size:12px;">No recurring themes</span>';
+
+  document.getElementById('resSummary').textContent = d.summary || '';
+  document.getElementById('resMeta').textContent = `Based on ${d.sample_size} messages from the last ${d.days} days · ${d.channel || 'All Channels'}`;
+
+  document.getElementById('resultSection').scrollIntoView({behavior:'smooth'});
+  loadChart(30);
+}
+
+let sentChart = null;
+async function loadChart(days) {
+  const data = await fetch(`/ai/sentiment/data?days=${days}`).then(r=>r.json());
+  const ctx = document.getElementById('sentimentChart').getContext('2d');
+  if (sentChart) sentChart.destroy();
+  if (!data.length) return;
+  sentChart = new Chart(ctx, {
+    type:'line',
+    data:{
+      labels: data.map(d=>d.date),
+      datasets:[{
+        label:'Sentiment Score', data: data.map(d=>d.score),
+        borderColor:'#3b82f6', backgroundColor:'rgba(59,130,246,0.1)',
+        borderWidth:2, pointRadius:4, fill:true, tension:0.35,
+        pointBackgroundColor: data.map(d=>d.label==='positive'?'#34d399':d.label==='negative'?'#f87171':'#94a3b8'),
+      }]
+    },
+    options:{
+      responsive:true, animation:{duration:500},
+      plugins:{legend:{display:false}, tooltip:{backgroundColor:'#131d2e',borderColor:'#1f2d42',borderWidth:1}},
+      scales:{
+        x:{grid:{color:'#1f2d42'}, ticks:{maxRotation:45}},
+        y:{grid:{color:'#1f2d42'}, min:-1, max:1,
+           title:{display:true,text:'Score (-1 to +1)'},
+           ticks:{callback:v=>v>=0?'+'+v:v}}
+      }
+    }
+  });
+}
+loadChart(30);
+</script>
+{% endblock %}

@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block title %}Meeting Intelligence — BOSS AI{% endblock %}
+{% block page_title %}Meeting Intelligence{% endblock %}
+{% block page_sub %}Paste a transcript · AI extracts actions, decisions, and insights{% endblock %}
+
+{% block extra_css %}
+.meeting-grid { display:grid; grid-template-columns:340px 1fr; gap:16px; }
+.transcript-list { display:flex; flex-direction:column; gap:8px; }
+.transcript-item { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; cursor:pointer; transition:border-color .15s; }
+.transcript-item:hover { border-color:var(--border2); }
+.transcript-item.active { border-left:3px solid var(--accent); }
+.result-section { display:none; }
+.result-section.visible { display:block; }
+.action-card { background:var(--bg3); border:1px solid var(--border); border-radius:10px; padding:12px 14px; margin-bottom:8px; }
+.priority-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; margin-top:4px; }
+.pd-high   { background:var(--red); }
+.pd-medium { background:var(--yellow); }
+.pd-low    { background:var(--green); }
+.decision-chip { background:var(--accent-glow); border:1px solid rgba(59,130,246,.2); border-radius:8px; padding:8px 12px; margin-bottom:6px; font-size:13px; display:flex; gap:8px; align-items:flex-start; }
+.topic-badge { padding:3px 10px; border-radius:12px; background:var(--surface2); border:1px solid var(--border); font-size:11.5px; font-weight:600; display:inline-block; margin:2px; }
+.risk-badge { padding:3px 10px; border-radius:12px; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.2); color:#f87171; font-size:11.5px; display:inline-block; margin:2px; }
+@media(max-width:900px){ .meeting-grid{grid-template-columns:1fr;} }
+{% endblock %}
+
+{% block content %}
+<div class="meeting-grid">
+
+  {# ── LEFT: Past Transcripts ── #}
+  <div>
+    <div class="card-title mb-3 flex justify-between">
+      <span>Past Meetings</span>
+      <button class="btn btn-primary btn-sm" onclick="openNewAnalysis()">
+        <i class="fa-solid fa-plus"></i> New
+      </button>
+    </div>
+    <div class="transcript-list">
+      {% if transcripts %}
+      {% for t in transcripts %}
+      <div class="transcript-item" id="ti-{{ t.id }}" onclick="loadTranscript({{ t.id }})">
+        <div style="font-weight:600;font-size:13px;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.title }}</div>
+        <div style="font-size:11px;color:var(--text3);">
+          {{ t.meeting_date.strftime('%b %d, %Y') if t.meeting_date else t.created_at.strftime('%b %d, %Y') if t.created_at else '' }}
+          {% if t.action_items %}· {{ t.action_items|length }} actions{% endif %}
+        </div>
+        {% if t.sentiment_score is not none %}
+        <div style="margin-top:5px;">
+          <span class="topic-badge" style="{% if t.sentiment_score > 0.2 %}color:#34d399;{% elif t.sentiment_score < -0.2 %}color:#f87171;{% else %}color:#94a3b8;{% endif %}">
+            {% if t.sentiment_score > 0.2 %}😊{% elif t.sentiment_score < -0.2 %}😟{% else %}😐{% endif %}
+            {{ "%.2f"|format(t.sentiment_score) }}
+          </span>
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+      {% else %}
+      <div style="text-align:center;padding:40px 20px;color:var(--text3);font-size:12.5px;">
+        <i class="fa-solid fa-microphone-slash" style="font-size:28px;opacity:.15;display:block;margin-bottom:10px;"></i>
+        No transcripts yet
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── RIGHT: Input + Results ── #}
+  <div>
+    {# New Analysis Panel #}
+    <div id="newAnalysisPanel">
+      <div class="card mb-4">
+        <div class="card-title"><i class="fa-solid fa-microphone" style="color:var(--accent)"></i> New Meeting Transcript</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Meeting Title *</label>
+            <input type="text" id="mtTitle" class="form-control" placeholder="e.g. Q3 Sales Review" style="padding-left:12px;"/>
+          </div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Meeting Date</label>
+            <input type="date" id="mtDate" class="form-control" style="padding-left:12px;" value="{{ '' }}"/>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Paste Transcript *</label>
+          <textarea id="mtTranscript" class="form-control" rows="12" style="padding:12px;font-size:13px;font-family:'DM Sans',sans-serif;line-height:1.6;"
+            placeholder="Paste your meeting transcript here. It can be in any format — meeting minutes, auto-generated captions, manual notes, or structured text.
+
+Example:
+John: Good morning everyone. Let's start with the Q3 review.
+Sarah: Sales are up 15% compared to last quarter.
+John: That's great. We need to hire 2 more sales reps by October.
+Sarah: Agreed. I'll prepare the job descriptions by Friday.
+..."></textarea>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">Minimum 100 characters · AI processes the first 6,000 characters</div>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-primary" onclick="analyseTranscript()" id="analyseTranscriptBtn">
+            <i class="fa-solid fa-brain"></i> Analyse Transcript
+          </button>
+          <div id="transcriptStatus" style="font-size:12.5px;color:var(--text3);display:none;align-items:center;gap:6px;">
+            <i class="fa-solid fa-spinner fa-spin"></i> AI is analysing your meeting…
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# Results Panel #}
+    <div id="resultPanel" class="result-section">
+
+      <div class="flex justify-between items-center mb-4">
+        <div>
+          <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;" id="resTitle">—</div>
+          <div style="font-size:12px;color:var(--text3);margin-top:2px;" id="resMeta">—</div>
+        </div>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="openNewAnalysis()"><i class="fa-solid fa-plus"></i> New</button>
+          <button class="btn btn-danger btn-sm" id="deleteBtn" onclick="deleteTranscript()"><i class="fa-solid fa-trash"></i></button>
+        </div>
+      </div>
+
+      {# Summary #}
+      <div class="card mb-4">
+        <div class="card-title"><i class="fa-solid fa-align-left" style="color:var(--accent)"></i> Executive Summary</div>
+        <div id="resSummary" style="font-size:13.5px;color:var(--text2);line-height:1.75;margin-top:8px;"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        {# Action Items #}
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-check-square" style="color:var(--green)"></i> Action Items</div>
+          <div id="resActions" style="margin-top:8px;"></div>
+        </div>
+        {# Decisions #}
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-gavel" style="color:var(--yellow)"></i> Decisions Made</div>
+          <div id="resDecisions" style="margin-top:8px;"></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+        {# Topics #}
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-tags" style="color:var(--purple)"></i> Key Topics</div>
+          <div id="resTopics" style="margin-top:10px;"></div>
+        </div>
+        {# Participants + Sentiment #}
+        <div class="card">
+          <div class="card-title"><i class="fa-solid fa-users" style="color:var(--accent)"></i> Participants & Tone</div>
+          <div id="resParticipants" style="margin-top:10px;"></div>
+          <div id="resSentiment" style="margin-top:10px;"></div>
+        </div>
+      </div>
+
+      {# Risks #}
+      <div class="card" id="risksCard" style="display:none;">
+        <div class="card-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--yellow)"></i> Risks & Concerns Flagged</div>
+        <div id="resRisks" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentTranscriptId = null;
+
+function openNewAnalysis() {
+  document.getElementById('newAnalysisPanel').style.display = 'block';
+  document.getElementById('resultPanel').classList.remove('visible');
+  document.querySelectorAll('.transcript-item').forEach(el => el.classList.remove('active'));
+  currentTranscriptId = null;
+}
+
+async function analyseTranscript() {
+  const title      = document.getElementById('mtTitle').value.trim();
+  const transcript = document.getElementById('mtTranscript').value.trim();
+  const date_val   = document.getElementById('mtDate').value;
+
+  if (!title)      { toast('Meeting title required', 'error'); return; }
+  if (transcript.length < 100) { toast('Transcript too short (min 100 characters)', 'error'); return; }
+
+  const btn = document.getElementById('analyseTranscriptBtn');
+  const status = document.getElementById('transcriptStatus');
+  btn.disabled = true;
+  status.style.display = 'flex';
+
+  const r = await fetch('/ai/meeting/analyse', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({title, transcript, date: date_val || null}),
+  });
+  const d = await r.json();
+  btn.disabled = false;
+  status.style.display = 'none';
+
+  if (!r.ok) { toast(d.error || 'Analysis failed', 'error'); return; }
+
+  currentTranscriptId = d.id;
+  renderResult(d);
+  toast('Transcript analysed!', 'success');
+  setTimeout(() => location.reload(), 2000);
+}
+
+async function loadTranscript(id) {
+  document.querySelectorAll('.transcript-item').forEach(el => el.classList.remove('active'));
+  document.getElementById(`ti-${id}`)?.classList.add('active');
+  document.getElementById('newAnalysisPanel').style.display = 'none';
+
+  const r = await fetch(`/ai/meeting/${id}`);
+  if (!r.ok) { toast('Could not load transcript', 'error'); return; }
+  const d = await r.json();
+  currentTranscriptId = id;
+  renderResult(d);
+}
+
+function renderResult(d) {
+  document.getElementById('resultPanel').classList.add('visible');
+  document.getElementById('resTitle').textContent = d.title;
+
+  const meta = [
+    d.meeting_date ? new Date(d.meeting_date).toLocaleDateString([],{month:'long',day:'numeric',year:'numeric'}) : null,
+    d.duration_mins ? `~${d.duration_mins} mins` : null,
+    d.participants?.length ? `${d.participants.length} participants` : null,
+  ].filter(Boolean).join(' · ');
+  document.getElementById('resMeta').textContent = meta || 'No date';
+  document.getElementById('resSummary').textContent = d.summary || '—';
+
+  // Actions
+  const actionsEl = document.getElementById('resActions');
+  if (d.action_items?.length) {
+    actionsEl.innerHTML = d.action_items.map(a => {
+      const pClass = a.priority==='high'?'pd-high':a.priority==='low'?'pd-low':'pd-medium';
+      return `<div class="action-card">
+        <div class="flex gap-2">
+          <div class="priority-dot ${pClass}"></div>
+          <div>
+            <div style="font-size:13px;font-weight:600;">${escHtml(a.task||a)}</div>
+            ${a.owner?`<div style="font-size:11px;color:var(--text3);">Owner: ${escHtml(a.owner)}</div>`:''}
+            ${a.due_date?`<div style="font-size:11px;color:var(--accent2);">Due: ${escHtml(a.due_date)}</div>`:''}
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  } else {
+    actionsEl.innerHTML = '<div style="font-size:12.5px;color:var(--text3);padding:10px 0;">No action items extracted</div>';
+  }
+
+  // Decisions
+  const decEl = document.getElementById('resDecisions');
+  if (d.decisions?.length) {
+    decEl.innerHTML = d.decisions.map(dec =>
+      `<div class="decision-chip"><i class="fa-solid fa-check" style="color:var(--green);font-size:10px;margin-top:2px;flex-shrink:0;"></i> ${escHtml(dec)}</div>`
+    ).join('');
+  } else {
+    decEl.innerHTML = '<div style="font-size:12.5px;color:var(--text3);padding:10px 0;">No decisions recorded</div>';
+  }
+
+  // Topics
+  document.getElementById('resTopics').innerHTML = d.key_topics?.length
+    ? d.key_topics.map(t=>`<span class="topic-badge">${escHtml(t)}</span>`).join('')
+    : '<span style="color:var(--text3);font-size:12px;">None identified</span>';
+
+  // Participants & Sentiment
+  document.getElementById('resParticipants').innerHTML = d.participants?.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:5px;">${d.participants.map(p=>`<span class="topic-badge"><i class="fa-solid fa-user" style="font-size:9px;margin-right:3px;"></i>${escHtml(p)}</span>`).join('')}</div>`
+    : '<span style="color:var(--text3);font-size:12px;">Not detected</span>';
+
+  const sc = d.sentiment_score ?? 0;
+  const label = sc > 0.2 ? 'Positive' : sc < -0.2 ? 'Negative' : 'Neutral';
+  const colour = sc > 0.2 ? '#34d399' : sc < -0.2 ? '#f87171' : '#94a3b8';
+  document.getElementById('resSentiment').innerHTML =
+    `<div style="margin-top:8px;font-size:12px;color:var(--text3);">Meeting Tone: <strong style="color:${colour};">${label} (${sc>=0?'+':''}${sc.toFixed(2)})</strong></div>`;
+
+  // Risks
+  const risksCard = document.getElementById('risksCard');
+  if (d.risks_flagged?.length) {
+    risksCard.style.display = 'block';
+    document.getElementById('resRisks').innerHTML =
+      d.risks_flagged.map(r=>`<span class="risk-badge"><i class="fa-solid fa-triangle-exclamation" style="font-size:9px;margin-right:3px;"></i>${escHtml(r)}</span>`).join('');
+  } else {
+    risksCard.style.display = 'none';
+  }
+}
+
+async function deleteTranscript() {
+  if (!currentTranscriptId || !confirm('Delete this transcript?')) return;
+  const r = await fetch(`/ai/meeting/${currentTranscriptId}`, {method:'DELETE'});
+  if (r.ok) { toast('Deleted', 'info'); setTimeout(()=>location.reload(), 500); }
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}
