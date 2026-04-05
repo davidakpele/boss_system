@@ -139,30 +139,6 @@ async def chat(
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
-
-# ─────────────────────────────────────────────────────────────────
-#  ONBOARDING ASSISTANT PAGE
-# ─────────────────────────────────────────────────────────────────
-
-@router.get("/onboarding-assistant", response_class=HTMLResponse)
-async def onboarding_assistant_page(
-    request: Request, db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_user),
-):
-    history = (await db.execute(
-        select(OnboardingConversation)
-        .where(OnboardingConversation.user_id == current_user.id)
-        .order_by(OnboardingConversation.created_at.asc())
-        .limit(40)
-    )).scalars().all()
-
-    return templates.TemplateResponse(
-        request=request,
-        name="ask_boss/onboarding_assistant.html",
-        context={"user": current_user, "history": history, "page": "ask_boss"},
-    )
-
-
 # ─────────────────────────────────────────────────────────────────
 #  ONBOARDING WEBSOCKET
 #  Single socket handles: status, chat, AI token streaming
