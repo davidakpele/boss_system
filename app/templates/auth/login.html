@@ -1,3 +1,5 @@
+
+{# Login Page #}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -583,15 +585,6 @@
   <!-- RIGHT: Form Panel -->
   <div class="form-panel">
     <div class="form-inner">
-
-      <!-- Logo (visible on mobile too) -->
-      <div class="form-logo">
-        <div class="logo-mark">
-          <i class="fa-solid fa-chart-bar"></i>
-        </div>
-        <div class="brand-name">BOSS System</div>
-      </div>
-
       <div class="auth-card">
         <div class="card-title">Welcome Back</div>
         <div class="card-sub">Log in to your account</div>
@@ -626,10 +619,10 @@
           <!-- Password -->
           <div class="form-group">
             <label class="form-label" for="password">
-              <i class="fa-regular fa-lock"></i> Password
+              <i class="fa-solid fa-lock  "></i> Password
             </label>
             <div class="input-wrap">
-              <i class="fa-regular fa-lock input-icon"></i>
+              <i class="fa-solid fa-lock input-icon"></i>
               <input type="password" id="password" name="password" class="form-control"
                 placeholder="Password" required autocomplete="current-password"/>
               <button type="button" class="toggle-pw" onclick="togglePw()" aria-label="Toggle password">
@@ -663,17 +656,6 @@
           </svg>
           Sign in with Google
         </a>
-
-        <a href="/auth/microsoft" class="sso-btn">
-          <div class="ms-icon">
-            <span style="background:#F25022;"></span>
-            <span style="background:#7FBA00;"></span>
-            <span style="background:#00A4EF;"></span>
-            <span style="background:#FFB900;"></span>
-          </div>
-          Sign in with Microsoft
-        </a>
-
         <!-- Sign up -->
         <div class="signup-row">
           Don't have an account? <a href="/auth/register">Sign Up &rsaquo;</a>
