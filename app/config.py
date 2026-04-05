@@ -1,4 +1,4 @@
-# Configuration settings for the BOSS System application. src/config.py
+#src/config.py
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -30,13 +30,29 @@ class Settings(BaseSettings):
     # ── IP Allowlist ──────────────────────────────────────────────────────
     IP_ALLOWLIST_ENABLED: bool = False
  
-    # ── Web Push (VAPID) ─────────────────────────────────────────────────
-    # Generate keys once:
-    #   python -c "from py_vapid import Vapid; v=Vapid(); v.generate_keys(); print(v.public_key_urlsafe,v.private_key_urlsafe)"
+
     VAPID_PUBLIC_KEY: str = ""
     VAPID_PRIVATE_KEY: str = ""
     VAPID_CLAIMS_EMAIL: str = "admin@yourcompany.com"
  
+    DEFAULT_ADMIN_EMAIL: str = "admin@aol.com"
+    DEFAULT_ADMIN_PASSWORD: str = "admin123"
+    DEFAULT_ADMIN_NAME: str = "David Ak"
+    DEFAULT_ADMIN_DEPARTMENT: str = "Management"
+    
+    LOCKOUT_WINDOW_MINUTES: int = 15
+    MAX_LOGIN_ATTEMPTS: int = 5
+    LOCKOUT_DURATION_MINUTES: int = 30
+    
+    SESSION_EXPIRE_MINUTES: int = 480
+    
+    PASSWORD_MIN_LENGTH: int = 8
+    PASSWORD_HISTORY_DEPTH: int = 5
+    PASSWORD_REQUIRE_SPECIAL: bool = True
+    PASSWORD_REQUIRE_UPPERCASE: bool = True
+    PASSWORD_REQUIRE_LOWERCASE: bool = True
+    PASSWORD_REQUIRE_DIGIT: bool = True
+    
     class Config:
         env_file = ".env"
         extra = "ignore"
