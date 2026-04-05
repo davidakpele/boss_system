@@ -5,36 +5,30 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
   <title>Sign In — BOSS System</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"/>
   <style>
     :root {
-      /* Match dashboard light theme */
-      --bg:        #f4f5f7;
-      --bg2:       #ffffff;
-      --bg3:       #eef0f3;
-      --surface:   #ffffff;
-      --border:    #e2e5ea;
-      --border2:   #cdd0d6;
-      --accent:    #1e293b;
-      --blue:      #3b82f6;
-      --blue-bg:   rgba(59,130,246,0.08);
-      --blue-glow: rgba(59,130,246,0.15);
-      --text:      #111827;
-      --text2:     #4b5563;
-      --text3:     #9ca3af;
+      --bg:        #0d0f14;
+      --bg2:       #13161d;
+      --bg3:       #1a1d26;
+      --surface:   #1e2230;
+      --border:    rgba(255,255,255,0.08);
+      --border2:   rgba(255,255,255,0.12);
+      --red:       #e02020;
+      --red-hover: #c41a1a;
+      --red-glow:  rgba(224,32,32,0.25);
+      --text:      #f0f2f8;
+      --text2:     #9aa3b8;
+      --text3:     #5a637a;
       --green:     #10b981;
-      --green-bg:  rgba(16,185,129,0.08);
-      --red:       #ef4444;
-      --red-bg:    rgba(239,68,68,0.08);
-      --sidebar:   #1e293b;
-      --radius:    10px;
-      --radius-sm: 6px;
-      --shadow-sm: 0 1px 3px rgba(0,0,0,0.07), 0 1px 2px rgba(0,0,0,0.04);
-      --shadow:    0 4px 16px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05);
-      --shadow-lg: 0 12px 40px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
-      --font: 'Geist', system-ui, -apple-system, sans-serif;
-      --font-mono: 'Geist Mono', 'Fira Code', monospace;
+      --green-bg:  rgba(16,185,129,0.1);
+      --err:       #f87171;
+      --err-bg:    rgba(248,113,113,0.1);
+      --radius:    12px;
+      --radius-sm: 8px;
+      --font: 'Sora', system-ui, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
     }
 
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,192 +45,215 @@
       overflow-x: hidden;
     }
 
-    /* ── Left brand panel (mirrors sidebar) ── */
+    /* ── LEFT BRAND PANEL ── */
     .brand-panel {
-      width: 380px;
+      width: 52%;
       flex-shrink: 0;
-      background: var(--sidebar);
+      position: relative;
+      overflow: hidden;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 40px 36px;
-      position: relative;
-      overflow: hidden;
+      padding: 36px 44px;
     }
 
-    .brand-panel::before {
-      content: '';
+    /* Data center image fills the panel */
+    .brand-illustration {
       position: absolute;
-      inset: 0;
-      background:
-        radial-gradient(ellipse 80% 60% at 20% 20%, rgba(59,130,246,0.12) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 80% at 80% 80%, rgba(139,92,246,0.08) 0%, transparent 60%);
-      pointer-events: none;
-    }
+      bottom: 0px;
+      left: -80px;
+      width: 120%;
+      max-width: 760px;
+      opacity: 0.9;
+      animation: float 8s ease-in-out infinite;
+      filter:
+        brightness(1)
+        contrast(1.05)
+        drop-shadow(0 60px 120px rgba(0, 0, 0, 0.9))
+        drop-shadow(0 0 120px rgba(0, 180, 255, 0.22));
 
-    /* Decorative grid lines matching dashboard sidebar feel */
+      pointer-events: none;
+      z-index: 0;
+    }
+    @keyframes float {
+  0%   { transform: translateY(0px) scale(1); }
+  50%  { transform: translateY(-14px) scale(1.01); }
+  100% { transform: translateY(0px) scale(1); }
+}
+    /* Dark gradient overlay for text legibility */
     .brand-panel::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-      background-size: 40px 40px;
-      pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(13,15,20,0.35) 0%, rgba(13,15,20,0.05) 40%, rgba(13,15,20,0.65) 100%),
+    linear-gradient(90deg, rgba(13,15,20,0.15) 0%, transparent 60%);
+}
+
+.brand-panel::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+
+  background:
+    radial-gradient(circle at 40% 65%, rgba(0,150,255,0.15), transparent 60%),
+    radial-gradient(circle at 60% 70%, rgba(0,200,255,0.08), transparent 70%);
+
+  z-index: 0;
+  pointer-events: none;
+}
+
+    .brand-top,
+    .brand-bottom {
+      position: relative;
+      z-index: 2;
     }
 
-    .brand-top { position: relative; z-index: 1; }
-
+    /* Logo */
     .brand-logo {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-bottom: 48px;
+      margin-bottom: 0;
     }
 
     .logo-mark {
-      width: 36px; height: 36px;
-      background: linear-gradient(135deg, #3b82f6, #6366f1);
-      border-radius: 8px;
+      width: 40px; height: 40px;
+      background: var(--red);
+      border-radius: 10px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: var(--font-mono);
-      font-weight: 600;
-      font-size: 11px;
-      color: #fff;
-      letter-spacing: 0.02em;
-      box-shadow: 0 4px 12px rgba(59,130,246,0.35);
+      box-shadow: 0 4px 16px rgba(224,32,32,0.4);
       flex-shrink: 0;
     }
 
+    .logo-mark i { color: #fff; font-size: 16px; }
+
+    .logo-text-wrap { display: flex; flex-direction: column; }
+
     .brand-name {
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 700;
-      color: #f1f5f9;
+      color: #fff;
       letter-spacing: -0.2px;
+      line-height: 1.1;
     }
 
-    .brand-sub-name {
-      font-size: 10px;
-      color: rgba(255,255,255,0.35);
+    .brand-sub {
+      font-size: 9px;
+      color: rgba(255,255,255,0.45);
       font-family: var(--font-mono);
-      font-weight: 500;
       text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-top: 1px;
+      letter-spacing: 0.15em;
+      margin-top: 2px;
+    }
+
+    /* Hero text */
+    .brand-hero {
+      margin-top: 52px;
     }
 
     .brand-headline {
-      font-size: clamp(22px, 3vw, 28px);
-      font-weight: 700;
-      color: #f1f5f9;
-      line-height: 1.25;
-      letter-spacing: -0.5px;
-      margin-bottom: 14px;
-    }
-
-    .brand-headline em {
-      font-style: normal;
-      background: linear-gradient(90deg, #60a5fa, #a78bfa);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: clamp(24px, 3.2vw, 38px);
+      font-weight: 800;
+      color: #fff;
+      font-size:40px;
+      line-height: 1.18;
+      letter-spacing: -0.8px;
+      margin-bottom: 16px;
+      text-shadow: 0 2px 20px rgba(0,0,0,0.4);
+      font-family: var(--font), -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     .brand-desc {
-      font-size: 13px;
-      color: rgba(255,255,255,0.45);
-      line-height: 1.65;
-      max-width: 260px;
+      font-size: 13.5px;
+      color: rgba(255,255,255,0.6);
+      line-height: 1.7;
+      width:auto;
     }
 
-    /* Feature pills */
-    .feature-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-top: 36px;
-    }
-
-    .feature-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      font-size: 12.5px;
-      color: rgba(255,255,255,0.55);
-    }
-
-    .feature-icon {
-      width: 28px; height: 28px;
-      background: rgba(255,255,255,0.06);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 11px;
-      color: #60a5fa;
-      flex-shrink: 0;
-    }
-
+    /* Bottom credit */
     .brand-bottom {
-      position: relative;
-      z-index: 1;
-      font-size: 11px;
-      color: rgba(255,255,255,0.2);
-      font-family: var(--font-mono);
+      font-size: 12px;
+      color: rgba(255,255,255,0.35);
     }
 
-    /* ── Right form panel ── */
+    .brand-bottom strong { color: rgba(255,255,255,0.6); font-weight: 500; }
+
+    /* ── RIGHT FORM PANEL ── */
     .form-panel {
       flex: 1;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 32px 24px;
+      background: var(--bg2);
+      position: relative;
+    }
+
+    /* Subtle noise texture */
+    .form-panel::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+      opacity: 0.4;
+      pointer-events: none;
     }
 
     .form-inner {
       width: 100%;
-      max-width: 400px;
-      animation: fadeUp 0.4s ease both;
+      max-width: 420px;
+      position: relative;
+      z-index: 1;
+      animation: fadeUp 0.45s cubic-bezier(0.22,1,0.36,1) both;
     }
 
     @keyframes fadeUp {
-      from { opacity: 0; transform: translateY(14px); }
+      from { opacity: 0; transform: translateY(20px); }
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ── Card ── */
+    /* Form logo (right side) */
+    .form-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 28px;
+      justify-content: center;
+    }
+
+    .form-logo .logo-mark { width: 36px; height: 36px; border-radius: 9px; }
+    .form-logo .logo-mark i { font-size: 14px; }
+    .form-logo .brand-name { font-size: 20px; font-weight: 700; color: var(--text); letter-spacing: -0.4px; }
+
+    /* Card */
     .auth-card {
-      background: var(--bg2);
+      background: var(--bg3);
       border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 32px;
-      box-shadow: var(--shadow);
+      border-radius: 16px;
+      padding: 36px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04) inset;
     }
 
     .card-title {
-      font-size: 17px;
+      font-size: 22px;
       font-weight: 700;
       color: var(--text);
-      letter-spacing: -0.3px;
+      letter-spacing: -0.5px;
       margin-bottom: 4px;
+      text-align: center;
     }
 
     .card-sub {
-      font-size: 12.5px;
-      color: var(--text3);
-      margin-bottom: 24px;
-      line-height: 1.5;
+      font-size: 13px;
+      color: var(--text2);
+      margin-bottom: 28px;
+      text-align: center;
     }
 
-    /* ── Alerts ── */
+    /* Alerts */
     .error-msg, .success-msg {
       border-radius: var(--radius-sm);
-      padding: 10px 14px;
+      padding: 11px 14px;
       font-size: 12.5px;
       margin-bottom: 20px;
       display: flex;
@@ -246,38 +263,40 @@
     }
 
     .error-msg {
-      background: var(--red-bg);
-      border: 1px solid rgba(239,68,68,0.2);
-      color: #dc2626;
+      background: var(--err-bg);
+      border: 1px solid rgba(248,113,113,0.2);
+      color: var(--err);
     }
 
     .success-msg {
       background: var(--green-bg);
       border: 1px solid rgba(16,185,129,0.2);
-      color: #059669;
+      color: var(--green);
     }
 
     .error-msg i, .success-msg i { margin-top: 2px; flex-shrink: 0; font-size: 12px; }
 
-    /* ── Form elements ── */
-    .form-group { margin-bottom: 16px; }
+    /* Form elements */
+    .form-group { margin-bottom: 18px; }
 
     .form-label {
       display: block;
-      font-size: 11px;
+      font-size: 13px;
       font-weight: 600;
-      color: var(--text2);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 6px;
-      font-family: var(--font-mono);
+      color: var(--text);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
     }
+
+    .form-label i { color: var(--text3); font-size: 12px; }
 
     .input-wrap { position: relative; }
 
     .input-icon {
       position: absolute;
-      left: 11px;
+      left: 13px;
       top: 50%;
       transform: translateY(-50%);
       color: var(--text3);
@@ -286,70 +305,116 @@
       transition: color 0.15s;
     }
 
+    .toggle-pw {
+      position: absolute;
+      right: 13px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text3);
+      font-size: 13px;
+      cursor: pointer;
+      transition: color 0.15s;
+      background: none;
+      border: none;
+      padding: 4px;
+      line-height: 1;
+    }
+
+    .toggle-pw:hover { color: var(--text2); }
+
     .form-control {
       width: 100%;
-      background: var(--bg);
+      background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius-sm);
-      padding: 9px 12px 9px 36px;
+      padding: 11px 40px 11px 38px;
       color: var(--text);
-      font-size: 13.5px;
+      font-size: 14px;
       font-family: var(--font);
-      transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
       outline: none;
       -webkit-appearance: none;
       appearance: none;
     }
 
-    @media (max-width: 480px) {
-      .form-control { font-size: 16px; padding: 11px 12px 11px 36px; }
-    }
-
     .form-control:focus {
-      border-color: var(--blue);
-      box-shadow: 0 0 0 3px var(--blue-glow);
-      background: var(--bg2);
+      border-color: rgba(224,32,32,0.5);
+      box-shadow: 0 0 0 3px var(--red-glow);
     }
 
-    .input-wrap:focus-within .input-icon { color: var(--blue); }
-    .form-control::placeholder { color: var(--text3); }
+    .input-wrap:focus-within .input-icon { color: var(--red); }
+    .form-control::placeholder { color: var(--text3); font-size: 13px; }
 
-    /* ── Submit ── */
+    /* Remember + Forgot row */
+    .form-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 22px;
+      margin-top: -6px;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text2);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+      width: 15px; height: 15px;
+      accent-color: var(--red);
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    .forgot-link {
+      font-size: 13px;
+      color: var(--text2);
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .forgot-link:hover { color: var(--text); }
+
+    /* Submit */
     .btn-submit {
       width: 100%;
-      padding: 10px 16px;
-      background: var(--sidebar);
+      padding: 13px 16px;
+      background: var(--red);
       color: #fff;
-      font-size: 13.5px;
+      font-size: 14.5px;
       font-weight: 600;
       border: none;
       border-radius: var(--radius-sm);
       cursor: pointer;
       font-family: var(--font);
-      letter-spacing: -0.1px;
-      transition: opacity 0.15s, transform 0.1s, box-shadow 0.15s;
+      letter-spacing: 0.01em;
+      transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      margin-top: 6px;
-      box-shadow: 0 2px 8px rgba(30,41,59,0.25);
+      box-shadow: 0 4px 20px var(--red-glow);
       -webkit-tap-highlight-color: transparent;
       touch-action: manipulation;
     }
 
     .btn-submit:hover {
-      opacity: 0.88;
-      box-shadow: 0 4px 14px rgba(30,41,59,0.30);
+      background: var(--red-hover);
+      box-shadow: 0 6px 24px rgba(224,32,32,0.35);
     }
 
-    .btn-submit:active { transform: scale(0.98); opacity: 0.82; }
+    .btn-submit:active { transform: scale(0.98); }
 
-    /* ── Divider ── */
+    /* Divider */
     .divider {
       text-align: center;
       color: var(--text3);
-      font-size: 11.5px;
+      font-size: 12px;
       font-family: var(--font-mono);
       margin: 20px 0;
       position: relative;
@@ -359,7 +424,7 @@
       content: '';
       position: absolute;
       top: 50%;
-      width: calc(50% - 20px);
+      width: calc(50% - 18px);
       height: 1px;
       background: var(--border);
     }
@@ -367,93 +432,169 @@
     .divider::before { left: 0; }
     .divider::after  { right: 0; }
 
-    /* ── Footer ── */
-    .auth-footer {
-      text-align: center;
-      font-size: 12.5px;
-      color: var(--text3);
-      margin-top: 20px;
-    }
-
-    .auth-footer a {
-      color: var(--blue);
-      text-decoration: none;
+    /* SSO Buttons */
+    .sso-btn {
+      width: 100%;
+      padding: 11px 16px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-size: 13.5px;
       font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      transition: background 0.15s, border-color 0.15s, transform 0.1s;
+      margin-bottom: 10px;
+      -webkit-tap-highlight-color: transparent;
+      text-decoration: none;
     }
 
-    .auth-footer a:hover { text-decoration: underline; }
+    .sso-btn:hover {
+      background: rgba(255,255,255,0.05);
+      border-color: var(--border2);
+    }
 
-    .powered-by {
+    .sso-btn:active { transform: scale(0.98); }
+
+    .sso-btn img { width: 18px; height: 18px; }
+
+    /* Google G SVG inline */
+    .google-icon {
+      width: 18px; height: 18px;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .ms-icon {
+      width: 18px; height: 18px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+
+    .ms-icon span {
+      display: block;
+      border-radius: 1px;
+    }
+
+    /* Sign-up footer */
+    .signup-row {
       text-align: center;
+      font-size: 13px;
+      color: var(--text2);
       margin-top: 20px;
+    }
+
+    .signup-row a {
+      color: var(--text);
+      font-weight: 600;
+      text-decoration: none;
+      transition: color 0.15s;
+    }
+
+    .signup-row a:hover { color: #fff; }
+
+    /* Bottom links */
+    .footer-links {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+    }
+
+    .footer-links a {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 11.5px;
+      color: var(--text3);
+      text-decoration: none;
+      font-family: var(--font-mono);
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .footer-links a:hover { color: var(--text2); border-color: var(--border2); }
+    .footer-links a i { font-size: 10px; }
+
+    .copyright {
+      text-align: center;
       font-size: 11px;
       color: var(--text3);
+      margin-top: 12px;
       font-family: var(--font-mono);
     }
 
-    .powered-by span { color: var(--text2); font-weight: 500; }
-
-    /* ── Mobile: hide brand panel ── */
-    @media (max-width: 768px) {
+    /* ── Mobile ── */
+    @media (max-width: 1000px) {
       .brand-panel { display: none; }
-      .form-panel { padding: 24px 16px; }
+      .form-panel { background: var(--bg); }
     }
 
-    @media (max-width: 420px) {
-      .auth-card { padding: 20px; }
+    @media (max-width: 480px) {
+      .auth-card { padding: 24px 20px; }
+      .form-logo { margin-bottom: 20px; }
     }
   </style>
 </head>
 <body>
 
-  <!-- Left brand panel -->
+  <!-- LEFT: Brand + Image Panel -->
   <div class="brand-panel">
+    <img src="/public/assets/images/data-center.png" class="brand-illustration" />
+
     <div class="brand-top">
       <div class="brand-logo">
-        <div class="logo-mark">BOS</div>
-        <div>
+        <div class="logo-mark">
+          <i class="fa-solid fa-chart-bar"></i>
+        </div>
+        <div class="logo-text-wrap">
           <div class="brand-name">BOSS System</div>
-          <div class="brand-sub-name">Enterprise Platform</div>
+          <div class="brand-sub">Business Operating Platform</div>
         </div>
       </div>
 
-      <div class="brand-headline">Your business,<br><em>fully organized.</em></div>
-      <div class="brand-desc">
-        Centralize documents, manage compliance, and collaborate — all from one secure platform.
-      </div>
-
-      <div class="feature-list">
-        <div class="feature-item">
-          <div class="feature-icon"><i class="fa-regular fa-file-lines"></i></div>
-          Document management & approval flows
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon"><i class="fa-solid fa-microchip"></i></div>
-          AI-powered insights with BOSS AI
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon"><i class="fa-regular fa-shield-check"></i></div>
-          Real-time compliance monitoring
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon"><i class="fa-regular fa-users"></i></div>
-          Team collaboration & messaging
+      <div class="brand-hero">
+        <div class="brand-headline">The intelligent backbone<br>of your organization.</div>
+        <div class="brand-desc">
+          A full-stack, AI-powered corporate operating platform unifying
+          communication, knowledge, compliance, HR, accounting, and business
+          operations in one place.
         </div>
       </div>
     </div>
 
     <div class="brand-bottom">
-      MindSync AI Consults · BOSS v1.0
+      Developed by <strong>MindSync AI Consults</strong>
     </div>
   </div>
 
-  <!-- Right form panel -->
+  <!-- RIGHT: Form Panel -->
   <div class="form-panel">
     <div class="form-inner">
 
+      <!-- Logo (visible on mobile too) -->
+      <div class="form-logo">
+        <div class="logo-mark">
+          <i class="fa-solid fa-chart-bar"></i>
+        </div>
+        <div class="brand-name">BOSS System</div>
+      </div>
+
       <div class="auth-card">
-        <div class="card-title">Welcome back</div>
-        <div class="card-sub">Sign in to your BOSS System account</div>
+        <div class="card-title">Welcome Back</div>
+        <div class="card-sub">Log in to your account</div>
 
         {% if error %}
         <div class="error-msg">
@@ -470,39 +611,100 @@
         {% endif %}
 
         <form method="POST" action="/auth/login" autocomplete="on">
+          <!-- Email -->
           <div class="form-group">
-            <label class="form-label" for="email">Email Address</label>
+            <label class="form-label" for="email">
+              <i class="fa-regular fa-user"></i> Email
+            </label>
             <div class="input-wrap">
-              <input type="email" id="email" name="email" class="form-control"
-                placeholder="you@company.com" required autocomplete="email"/>
               <i class="fa-regular fa-envelope input-icon"></i>
+              <input type="email" id="email" name="email" class="form-control"
+                placeholder="Enter your email" required autocomplete="email"/>
             </div>
           </div>
 
+          <!-- Password -->
           <div class="form-group">
-            <label class="form-label" for="password">Password</label>
+            <label class="form-label" for="password">
+              <i class="fa-regular fa-lock"></i> Password
+            </label>
             <div class="input-wrap">
-              <input type="password" id="password" name="password" class="form-control"
-                placeholder="••••••••" required autocomplete="current-password"/>
               <i class="fa-regular fa-lock input-icon"></i>
+              <input type="password" id="password" name="password" class="form-control"
+                placeholder="Password" required autocomplete="current-password"/>
+              <button type="button" class="toggle-pw" onclick="togglePw()" aria-label="Toggle password">
+                <i class="fa-regular fa-eye" id="pw-icon"></i>
+              </button>
             </div>
+          </div>
+
+          <!-- Remember me + Forgot -->
+          <div class="form-row">
+            <label class="checkbox-label">
+              <input type="checkbox" name="remember"/> Remember Me
+            </label>
+            <a href="/auth/forgot-password" class="forgot-link">Forgot password?</a>
           </div>
 
           <button type="submit" class="btn-submit">
-            <i class="fa-regular fa-right-to-bracket"></i> Sign In to BOSS
+            Sign In
           </button>
         </form>
 
-        <div class="divider">or</div>
+        <div class="divider">OR</div>
 
-        <div class="auth-footer">
-          New to BOSS? <a href="/auth/register">Create your account</a>
+        <!-- SSO -->
+        <a href="/auth/google" class="sso-btn">
+          <svg class="google-icon" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M17.64 9.2045C17.64 8.5663 17.5827 7.9527 17.4764 7.3636H9V10.845H13.8436C13.635 11.97 13.0009 12.9232 12.0477 13.5614V15.8196H14.9564C16.6582 14.2527 17.64 11.9455 17.64 9.2045Z" fill="#4285F4"/>
+            <path d="M9 18C11.43 18 13.4673 17.1941 14.9564 15.8195L12.0477 13.5614C11.2418 14.1014 10.2109 14.4204 9 14.4204C6.65591 14.4204 4.67182 12.8373 3.96409 10.71H0.957275V13.0418C2.43818 15.9832 5.48182 18 9 18Z" fill="#34A853"/>
+            <path d="M3.96409 10.71C3.78409 10.17 3.68182 9.5932 3.68182 9C3.68182 8.4068 3.78409 7.83 3.96409 7.29V4.9582H0.957275C0.347727 6.1732 0 7.5477 0 9C0 10.4523 0.347727 11.8268 0.957275 13.0418L3.96409 10.71Z" fill="#FBBC05"/>
+            <path d="M9 3.5795C10.3214 3.5795 11.5077 4.0336 12.4405 4.9255L15.0218 2.3441C13.4632 0.8918 11.4259 0 9 0C5.48182 0 2.43818 2.0168 0.957275 4.9582L3.96409 7.29C4.67182 5.1627 6.65591 3.5795 9 3.5795Z" fill="#EA4335"/>
+          </svg>
+          Sign in with Google
+        </a>
+
+        <a href="/auth/microsoft" class="sso-btn">
+          <div class="ms-icon">
+            <span style="background:#F25022;"></span>
+            <span style="background:#7FBA00;"></span>
+            <span style="background:#00A4EF;"></span>
+            <span style="background:#FFB900;"></span>
+          </div>
+          Sign in with Microsoft
+        </a>
+
+        <!-- Sign up -->
+        <div class="signup-row">
+          Don't have an account? <a href="/auth/register">Sign Up &rsaquo;</a>
         </div>
       </div>
 
-      <div class="powered-by">Powered by <span>MindSync AI Consults</span></div>
+      <!-- Footer links -->
+      <div class="footer-links">
+        <a href="/privacy"><i class="fa-regular fa-shield"></i> Privacy Policy</a>
+        <a href="/terms"><i class="fa-regular fa-file-lines"></i> Terms</a>
+        <a href="/support"><i class="fa-regular fa-headset"></i> Support <i class="fa-solid fa-arrow-right" style="font-size:9px;"></i></a>
+      </div>
+
+      <div class="copyright">© 2024 BOSS System. All rights reserved.</div>
     </div>
   </div>
-<script>if('serviceWorker'in navigator)navigator.serviceWorker.register('/sw.js');</script>
+
+  <script>
+    function togglePw() {
+      const pw = document.getElementById('password');
+      const icon = document.getElementById('pw-icon');
+      if (pw.type === 'password') {
+        pw.type = 'text';
+        icon.className = 'fa-regular fa-eye-slash';
+      } else {
+        pw.type = 'password';
+        icon.className = 'fa-regular fa-eye';
+      }
+    }
+
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js');
+  </script>
 </body>
 </html>
