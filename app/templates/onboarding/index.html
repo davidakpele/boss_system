@@ -4,12 +4,14 @@
 {% block page_sub %}Your personal AI guide to getting started{% endblock %}
 
 {% block extra_css %}
-.ob-layout { display:grid; grid-template-columns:1fr 320px; gap:20px; height:calc(100vh - 100px); }
-.ob-chat { display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+html, body { overflow: hidden; height: 100%; }
+
+.ob-layout { display:grid; grid-template-columns:1fr 320px; gap:20px; height:calc(100vh - 100px); overflow:hidden; }
+.ob-chat { display:flex; flex-direction:column; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; min-height:0; }
 .ob-header { padding:16px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:12px; background:var(--bg2); flex-shrink:0; }
 .ob-avatar { width:44px; height:44px; border-radius:12px; background:linear-gradient(135deg,#3f3f46,#52525b); display:flex; align-items:center; justify-content:center; font-size:20px; animation:float 3s ease-in-out infinite; }
 @keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-.ob-messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; }
+.ob-messages { flex:1; overflow-y:auto; padding:20px; display:flex; flex-direction:column; gap:14px; min-height:0; }
 .ob-msg { display:flex; gap:10px; max-width:80%; }
 .ob-msg.user { align-self:flex-end; flex-direction:row-reverse; }
 .ob-bubble { padding:10px 14px; border-radius:14px; font-size:13.5px; line-height:1.6; }
@@ -33,8 +35,48 @@
 .sdot.chk { background:#f59e0b; animation:blink 1s infinite; }
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .status-line { font-size:12px; color:var(--text3); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-.ob-sidebar { display:flex; flex-direction:column; gap:14px; overflow-y:auto; }
-.ob-info-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:18px; }
+
+.ob-info-card { 
+  background:var(--surface); 
+  border:1px solid var(--border); 
+  border-radius:var(--radius); 
+  padding:18px;
+  flex-shrink:0;
+}
+.ob-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(136,136,136,0.6) transparent;
+}
+.ob-sidebar::-webkit-scrollbar { width: 2px; }
+.ob-sidebar::-webkit-scrollbar-track { background: transparent; }
+.ob-sidebar::-webkit-scrollbar-thumb { background: rgba(136,136,136,0.6); border-radius: 10px; }
+.ob-sidebar::-webkit-scrollbar-thumb:hover { background: rgba(136,136,136,1); }
+
+.question-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 300px;
+  flex-shrink: 0;
+}
+
+.question-list-body {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(136,136,136,0.6) transparent;
+}
+
+.question-list-body::-webkit-scrollbar { width: 2px; }
+.question-list-body::-webkit-scrollbar-track { background: transparent; }
+.question-list-body::-webkit-scrollbar-thumb { background: rgba(136,136,136,0.6); border-radius: 10px; }
+.question-list-body::-webkit-scrollbar-thumb:hover { background: rgba(136,136,136,1); }
+
 .ob-info-title { font-family:'Syne',sans-serif; font-weight:700; font-size:13px; margin-bottom:12px; display:flex; align-items:center; gap:8px; }
 .ob-chip { padding:6px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:20px; font-size:12px; color:var(--text2); cursor:pointer; transition:all .15s; display:block; margin-bottom:6px; }
 .ob-chip:hover { border-color:var(--accent); color:var(--accent2); background:var(--accent-glow); }
@@ -118,15 +160,32 @@
       <div class="tip-item"><span class="tip-icon">🔗</span><span>Socket: <span id="sideWs">Connecting…</span></span></div>
     </div>
 
-    <div class="ob-info-card">
-      <div class="ob-info-title"><i class="fa-solid fa-lightbulb" style="color:var(--yellow)"></i> Quick Questions</div>
-      <div class="ob-chip" onclick="ask('What are the company values and culture?')"><i class="fas fa-building" style="color:#52525b"></i> Company values & culture</div>
-      <div class="ob-chip" onclick="ask('What is the leave policy?')"><i class="fas fa-calendar-alt" style="color:#52525b"></i> Leave & time off policy</div>
-      <div class="ob-chip" onclick="ask('How does the performance review process work?')"><i class="fas fa-star" style="color:#52525b"></i> Performance reviews</div>
-      <div class="ob-chip" onclick="ask('What tools and software does the company use?')"><i class="fas fa-tools" style="color:#52525b"></i> Tools & software</div>
-      <div class="ob-chip" onclick="ask('Who should I contact for IT support?')"><i class="fas fa-laptop-code" style="color:#52525b"></i> IT support</div>
-      <div class="ob-chip" onclick="ask('What are the working hours and remote work policy?')"><i class="fas fa-clock" style="color:#52525b"></i> Working hours</div>
-      <div class="ob-chip" onclick="ask('Tell me about the {{ user.department or 'General' }} department')"><i class="fas fa-users" style="color:#52525b"></i> My department</div>
+    <div class="ob-info-card question-list">
+      <div class="question-list-body">
+        <div class="ob-info-title"><i class="fa-solid fa-lightbulb" style="color:var(--yellow)"></i> Quick Questions</div>
+        <div class="ob-chip" onclick="ask('What are the company values and culture?')"><i class="fas fa-building" style="color:#52525b"></i> Company values & culture</div>
+        <div class="ob-chip" onclick="ask('What is the leave policy?')"><i class="fas fa-calendar-alt" style="color:#52525b"></i> Leave & time off policy</div>
+        <div class="ob-chip" onclick="ask('How does the performance review process work?')"><i class="fas fa-star" style="color:#52525b"></i> Performance reviews</div>
+        <div class="ob-chip" onclick="ask('What tools and software does the company use?')"><i class="fas fa-tools" style="color:#52525b"></i> Tools & software</div>
+        <div class="ob-chip" onclick="ask('Who should I contact for IT support?')"><i class="fas fa-laptop-code" style="color:#52525b"></i> IT support</div>
+        <div class="ob-chip" onclick="ask('What are the working hours and remote work policy?')"><i class="fas fa-clock" style="color:#52525b"></i> Working hours</div>
+        <div class="ob-chip" onclick="ask('Tell me about the {{ user.department or 'General' }} department')"><i class="fas fa-users" style="color:#52525b"></i> My department</div>
+        <div class="ob-chip" onclick="ask('Who do I report to?')">
+          <i class="fas fa-user-tie" style="color:#52525b"></i> Reporting structure
+        </div>
+        <div class="ob-chip" onclick="ask('What is the leave policy?')">
+          <i class="fas fa-calendar-alt" style="color:#52525b"></i> Leave policy
+        </div>
+        <div class="ob-chip" onclick="ask('What does our company do?')">
+          <i class="fas fa-briefcase" style="color:#52525b"></i> What we do
+        </div>
+        <div class="ob-chip" onclick="ask('How do I request leave?')">
+          <i class="fas fa-paper-plane" style="color:#52525b"></i> Request leave
+        </div>
+        <div class="ob-chip" onclick="ask('What benefits do we offer?')">
+          <i class="fas fa-gift" style="color:#52525b"></i> Benefits
+        </div>
+      </div>
     </div>
 
     <div class="ob-info-card">
@@ -163,7 +222,7 @@ const OB_AVATAR_CLR = "{{ user.avatar_color }}";
 // State
 let ws          = null;
 let wsReady     = false;
-let busy        = false;        // true while AI is replying
+let busy        = false;
 let pingTimer   = null;
 let reconnTimer = null;
 let activeBubbleId = null;
@@ -210,7 +269,6 @@ function wsConnect(jwt) {
       setAi(d.ai_online);
 
     } else if (d.type === 'token') {
-      // Append streaming token to active bubble
       if (!activeBubbleId) {
         activeBubbleId = 'ob_' + Date.now();
         appendStreamBubble(activeBubbleId);
@@ -230,7 +288,6 @@ function wsConnect(jwt) {
       busy = false;
       document.getElementById('obSendBtn').disabled = false;
     }
-    // pong: no action
   };
 
   ws.onclose = () => {
@@ -245,7 +302,6 @@ function wsConnect(jwt) {
   ws.onerror = () => setSide('sideWs', 'Error', '#ef4444');
 }
 
-// ── Status helpers ────────────────────────────────────────────────
 function setAi(online) {
   const dot = document.getElementById('aiDot');
   const txt = document.getElementById('aiTxt');
@@ -265,7 +321,6 @@ function setSide(id, text, color) {
   if (el) el.innerHTML = `<span style="color:${color}">${text}</span>`;
 }
 
-// ── Chat ──────────────────────────────────────────────────────────
 function ask(q) { document.getElementById('obInput').value = q; sendMessage(); }
 
 function sendMessage() {
@@ -285,7 +340,6 @@ function sendMessage() {
   ws.send(JSON.stringify({type: 'chat', message: msg}));
 }
 
-// ── DOM helpers ───────────────────────────────────────────────────
 function appendMsg(role, content) {
   removeThinking();
   const c = document.getElementById('obMessages');
@@ -334,7 +388,6 @@ function scrollBottom() { const c=document.getElementById('obMessages'); c.scrol
 function handleKey(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sendMessage();} }
 function autoResize(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px'; }
 
-// Boot
 scrollBottom();
 initWebSocket();
 

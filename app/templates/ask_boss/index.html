@@ -127,12 +127,12 @@
         <div class="welcome-title">Ask BOSS Anything</div>
         <div class="welcome-sub">I use your company's knowledge base to answer questions. I'll show you exactly which sources I used.</div>
         <div class="suggestion-chips">
-          <div class="chip" onclick="usePrompt('What are our pricing policies?')">💰 Pricing policies</div>
-          <div class="chip" onclick="usePrompt('How do I onboard a new client?')">🤝 Client onboarding</div>
-          <div class="chip" onclick="usePrompt('What is our leave policy?')">📅 Leave policy</div>
-          <div class="chip" onclick="usePrompt('Summarize our sales process')">📊 Sales process</div>
-          <div class="chip" onclick="usePrompt('What compliance requirements do we have?')">🛡️ Compliance</div>
-          <div class="chip" onclick="usePrompt('How should I handle customer complaints?')">💬 Customer complaints</div>
+          <div class="chip" onclick="usePrompt('What are our pricing policies?')"><i class="fa-solid fa-tag"></i> Pricing policies</div>
+          <div class="chip" onclick="usePrompt('How do I onboard a new client?')"><i class="fa-solid fa-user-plus"></i> Client onboarding</div>
+          <div class="chip" onclick="usePrompt('What is our leave policy?')"><i class="fa-solid fa-calendar"></i> Leave policy</div>
+          <div class="chip" onclick="usePrompt('Summarize our sales process')"><i class="fa-solid fa-chart-bar"></i> Sales process</div>
+          <div class="chip" onclick="usePrompt('What compliance requirements do we have?')"><i class="fa-solid fa-shield"></i> Compliance</div>
+          <div class="chip" onclick="usePrompt('How should I handle customer complaints?')"><i class="fa-solid fa-comment"></i> Customer complaints</div>
         </div>
       </div>
     </div>
@@ -225,7 +225,7 @@ async function newSession() {
       <span class="session-title" style="font-weight:500;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">New Chat</span>
       <div class="session-actions" style="display:flex;gap:2px;flex-shrink:0;" onclick="event.stopPropagation()">
         <button class="icon-btn" style="width:22px;height:22px;font-size:11px;" title="Rename"
-                onclick="startRename(this.closest('.session-item'))"><i class="fa-solid fa-pen"></i></button>
+                onclick="startRename(this.closest('.session-item'))"><i class="fa fa-pencil" aria-hidden="true"></i></button>
         <button class="icon-btn" style="width:22px;height:22px;font-size:11px;color:var(--red);" title="Delete"
                 onclick="deleteSession(this.closest('.session-item'))"><i class="fa-solid fa-trash"></i></button>
       </div>
@@ -267,10 +267,10 @@ function clearMessages() {
     <div class="welcome-title">Ask BOSS Anything</div>
     <div class="welcome-sub">I use your company's knowledge base to answer questions. I'll show you exactly which sources I used.</div>
     <div class="suggestion-chips">
-      <div class="chip" onclick="usePrompt('What are our pricing policies?')">💰 Pricing policies</div>
-      <div class="chip" onclick="usePrompt('How do I onboard a new client?')">🤝 Client onboarding</div>
-      <div class="chip" onclick="usePrompt('What is our leave policy?')">📅 Leave policy</div>
-      <div class="chip" onclick="usePrompt('Summarize our sales process')">📊 Sales process</div>
+      <div class="chip" onclick="usePrompt('What are our pricing policies?')"><i class="fa-solid fa-tag"></i> Pricing policies</div>
+      <div class="chip" onclick="usePrompt('How do I onboard a new client?')"><i class="fa-solid fa-user-plus"></i> Client onboarding</div>
+      <div class="chip" onclick="usePrompt('What is our leave policy?')"><i class="fa-solid fa-calendar"></i> Leave policy</div>
+      <div class="chip" onclick="usePrompt('Summarize our sales process')"><i class="fa fa-line-chart" aria-hidden="true"></i> Sales process</div>
     </div>`;
   container.appendChild(ws);
 }
@@ -365,7 +365,7 @@ async function sendBossMessage() {
     if (sources.length) buildCitations(sources, aiEl);
   } catch(e) {
     thinking.remove();
-    appendBossMessage('assistant', '⚠️ Error connecting to AI. Ensure Ollama is running.');
+    appendBossMessage('assistant', 'Error connecting to AI. Ensure Ollama is running.');
   }
   isStreaming = false;
   document.getElementById('bossSendBtn').disabled = false;
