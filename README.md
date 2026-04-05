@@ -1,5 +1,5 @@
 # BOSS System — Business Operating System
-### Developed by MindSync AI Consults
+### Developed by David Akpele AI Consults
 
 > **The intelligent backbone of your organization.** BOSS is a full-stack, AI-powered corporate operating platform that unifies communication, knowledge management, compliance, risk, HR, accounting, inventory, and business operations — all in one dark-themed, real-time progressive web application.
 
