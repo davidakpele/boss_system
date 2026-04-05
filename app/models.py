@@ -1,6 +1,6 @@
 # app/models.py
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime, Boolean, ForeignKey,
+    Column, Date, Integer, String, Text, DateTime, Boolean, ForeignKey,
     Float, JSON, Enum as SAEnum
 )
 from sqlalchemy.orm import relationship, declarative_base
@@ -611,9 +611,62 @@ class InternalNotification(Base):
     user_id     = Column(Integer, ForeignKey("users.id"))
     title       = Column(String(300), nullable=False)
     body        = Column(Text)
-    type        = Column(String(50), default="info")  # info|success|warning|error|message|hr
+    type        = Column(String(50), default="info")  
     link        = Column(String(500))                  # click-through URL
     is_read     = Column(Boolean, default=False)
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
  
     user = relationship("User")
+
+
+class DocumentTag(Base):
+    """AI-generated and manual tags on documents and knowledge chunks."""
+    __tablename__ = "document_tags"
+    id          = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id"), nullable=True)
+    chunk_id    = Column(Integer, ForeignKey("knowledge_chunks.id"), nullable=True)
+    tag         = Column(String(100), nullable=False)
+    tag_type    = Column(String(50), default="topic")  # topic | category | keyword | sentiment
+    source      = Column(String(20), default="ai")     # ai | manual
+    confidence  = Column(Float, default=1.0)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    document = relationship("Document",      foreign_keys=[document_id])
+    chunk    = relationship("KnowledgeChunk", foreign_keys=[chunk_id])
+    
+
+class SentimentLog(Base):
+    """Periodic team sentiment snapshots derived from message analysis."""
+    __tablename__ = "sentiment_logs"
+    id          = Column(Integer, primary_key=True, index=True)
+    channel_id  = Column(Integer, ForeignKey("channels.id"), nullable=True)
+    department  = Column(String(100), nullable=True)
+    period_date = Column(Date, nullable=False)          # the day this snapshot covers
+    score       = Column(Float, nullable=False)         # -1.0 (negative) to +1.0 (positive)
+    label       = Column(String(20), nullable=False)    # positive | neutral | negative
+    themes      = Column(JSON, default=list)            # ["deadline pressure", "celebration", …]
+    sample_size = Column(Integer, default=0)            # how many messages were analysed
+    summary     = Column(Text, nullable=True)           # AI narrative paragraph
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    channel = relationship("Channel", foreign_keys=[channel_id])
+    
+
+class MeetingTranscript(Base):
+    """Pasted or uploaded meeting transcript + AI-extracted intelligence."""
+    __tablename__ = "meeting_transcripts"
+    id              = Column(Integer, primary_key=True, index=True)
+    title           = Column(String(300), nullable=False)
+    raw_transcript  = Column(Text, nullable=False)
+    meeting_date    = Column(DateTime(timezone=True), nullable=True)
+    duration_mins   = Column(Integer, nullable=True)
+    participants    = Column(JSON, default=list)         # ["Alice", "Bob", …]
+    action_items    = Column(JSON, default=list)         # [{owner, task, due_date}, …]
+    decisions       = Column(JSON, default=list)         # ["Approved Q3 budget", …]
+    key_topics      = Column(JSON, default=list)         # ["Sales pipeline", …]
+    summary         = Column(Text, nullable=True)
+    sentiment_score = Column(Float, nullable=True)
+    created_by      = Column(Integer, ForeignKey("users.id"))
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    creator = relationship("User")

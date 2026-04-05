@@ -630,6 +630,7 @@
       <a href="/ask-boss"   class="nav-item {% if page == 'ask_boss' %}active{% endif %}">
         <i class="fa-solid fa-microchip"></i> Ask BOSS
       </a>
+      
        <div class="nav-section-label mt-4">Command Centre</div>
         <a href="/bcc" class="nav-item {% if request.url.path == '/bcc' %}active{% endif %}">
           <i class="fa-solid fa-sliders"></i> BCC Dashboard
@@ -650,18 +651,28 @@
           class="nav-item {% if request.url.path == '/analytics' %}active{% endif %}">
           <i class="fa-solid fa-chart-line"></i> Analytics
         </a>
-
         <a href="/analytics/user-activity"
           class="nav-item {% if request.url.path.startswith('/analytics/user-activity') %}active{% endif %}">
           <i class="fa-solid fa-users-viewfinder"></i> User Activity
         </a>
-
         <a href="/analytics/reports"
           class="nav-item {% if request.url.path.startswith('/analytics/reports') %}active{% endif %}">
           <i class="fa-solid fa-file-chart-column"></i> Reports
         </a>
       {% endif %}
 
+      {% if user.role in ('super_admin', 'admin', 'manager') %}
+      <div class="nav-section-label mt-4">AI Intelligence</div>
+      <a href="/ai/sentiment" class="nav-item {% if page == 'ai' %}active{% endif %}">
+        <i class="fa-solid fa-heart-pulse"></i> Sentiment
+      </a>
+      <a href="/ai/meeting" class="nav-item {% if page == 'ai' %}active{% endif %}">
+        <i class="fa-solid fa-microphone-lines"></i> Meeting Intel
+      </a>
+      <a href="/ask-boss/onboarding-assistant" class="nav-item {% if page == 'ai' %}active{% endif %}">
+        <i class="fa-solid fa-graduation-cap"></i> Onboarding AI
+      </a>
+      {% endif %}
 
       <div class="nav-section-label">Knowledge</div>
       <a href="/knowledge-base" class="nav-item {% if page == 'knowledge_base' %}active{% endif %}">
@@ -831,9 +842,81 @@
   </div>
 
   <div id="toast-container"></div>
-
+  <div id="waFloatBtn" style="display:none;position:fixed;bottom:90px;right:24px;z-index:200;">
+  <button onclick="openWritingAssistant()" title="AI Writing Assistant"
+    style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);
+           border:none;color:#fff;cursor:pointer;font-size:16px;box-shadow:0 4px 16px rgba(59,130,246,.4);
+           display:flex;align-items:center;justify-content:center;transition:transform .15s;">
+    <i class="fa-solid fa-wand-magic-sparkles"></i>
+  </button>
+</div>
+ 
+<!-- Modal -->
+<div class="modal-overlay" id="writingAssistantModal">
+  <div class="modal" style="max-width:600px;max-height:88vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent)"></i> AI Writing Assistant</span>
+      <span class="modal-close" onclick="closeModal('writingAssistantModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+ 
+    <div class="form-group">
+      <label class="form-label">Your Text</label>
+      <textarea id="waInput" class="form-control" rows="5" style="padding:12px;font-family:'DM Sans',sans-serif;font-size:13.5px;line-height:1.6;"
+                placeholder="Paste or type your text here…"></textarea>
+    </div>
+ 
+    <div class="form-group">
+      <label class="form-label">What do you want to do?</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
+        {% set actions = [
+          ('improve',   '✨', 'Improve'),
+          ('fix',       '🔧', 'Fix Grammar'),
+          ('formal',    '👔', 'Make Formal'),
+          ('casual',    '😊', 'Make Casual'),
+          ('expand',    '📖', 'Expand'),
+          ('shorten',   '✂️', 'Shorten'),
+          ('translate', '🌍', 'Translate'),
+        ] %}
+        {% for val, icon, label in actions %}
+        <button class="wa-action-btn" data-action="{{ val }}" onclick="setWaAction('{{ val }}', this)"
+          style="padding:8px 6px;border:1px solid var(--border);border-radius:8px;background:var(--surface);
+                 color:var(--text2);cursor:pointer;font-size:12px;font-weight:600;transition:all .12s;text-align:center;">
+          <div style="font-size:16px;margin-bottom:3px;">{{ icon }}</div>{{ label }}
+        </button>
+        {% endfor %}
+      </div>
+    </div>
+ 
+    <div id="waLangRow" style="display:none;" class="form-group">
+      <label class="form-label">Translate To</label>
+      <select id="waLang" class="form-control" style="padding-left:12px;">
+        <option>French</option><option>Spanish</option><option>German</option>
+        <option>Portuguese</option><option>Arabic</option><option>Chinese</option>
+        <option>Japanese</option><option>Yoruba</option><option>Hausa</option><option>Igbo</option>
+      </select>
+    </div>
+ 
+    <button class="btn btn-primary" onclick="runWritingAssist()" id="waRunBtn" style="width:100%;justify-content:center;margin-bottom:14px;">
+      <i class="fa-solid fa-brain"></i> Generate
+    </button>
+ 
+    <div id="waResult" style="display:none;">
+      <label class="form-label">Result</label>
+      <div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px;position:relative;">
+        <div id="waResultText" style="font-size:13.5px;line-height:1.7;color:var(--text2);white-space:pre-wrap;"></div>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-primary" onclick="useWaResult()"><i class="fa-solid fa-check"></i> Use This</button>
+        <button class="btn btn-ghost" onclick="copyWaResult()"><i class="fa-solid fa-copy"></i> Copy</button>
+        <button class="btn btn-ghost" onclick="runWritingAssist()"><i class="fa-solid fa-rotate"></i> Regenerate</button>
+      </div>
+    </div>
+  </div>
+</div>
   <script>
     let _notifOpen = false;
+    let _waAction = 'improve';
+    let _waCallback = null;
 
     (function () {
       const sidebar = document.getElementById('sidebar');
@@ -1036,6 +1119,76 @@
     function toggleProfileMenu() {
       _profileOpen = !_profileOpen;
       document.getElementById('profileMenu').style.display = _profileOpen ? 'block' : 'none';
+    }
+
+    function setWaAction(action, btn) {
+      _waAction = action;
+      document.querySelectorAll('.wa-action-btn').forEach(b => {
+        b.style.background = 'var(--surface)';
+        b.style.borderColor = 'var(--border)';
+        b.style.color = 'var(--text2)';
+      });
+      btn.style.background = 'var(--accent-glow)';
+      btn.style.borderColor = 'rgba(59,130,246,.4)';
+      btn.style.color = 'var(--accent2)';
+      document.getElementById('waLangRow').style.display = action === 'translate' ? 'block' : 'none';
+    }
+    
+    function openWritingAssistant(text, callback) {
+      _waCallback = callback || null;
+      document.getElementById('waInput').value = text || '';
+      document.getElementById('waResult').style.display = 'none';
+      // Default to improve
+      const improveBtn = document.querySelector('[data-action="improve"]');
+      if (improveBtn) setWaAction('improve', improveBtn);
+      openModal('writingAssistantModal');
+    }
+    
+    async function runWritingAssist() {
+      const text = document.getElementById('waInput').value.trim();
+      if (!text) { toast('Please enter some text first', 'error'); return; }
+      const btn = document.getElementById('waRunBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Thinking…';
+    
+      const r = await fetch('/ai/writing/assist', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          text,
+          action: _waAction,
+          language: _waAction === 'translate' ? document.getElementById('waLang').value : null,
+        }),
+      });
+      const d = await r.json();
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-brain"></i> Generate';
+    
+      if (!r.ok) { toast(d.error || 'AI error', 'error'); return; }
+      document.getElementById('waResult').style.display = 'block';
+      document.getElementById('waResultText').textContent = d.result;
+      document.getElementById('waResult').scrollIntoView({behavior:'smooth', block:'nearest'});
+    }
+    
+    function useWaResult() {
+      const result = document.getElementById('waResultText').textContent;
+      if (_waCallback) {
+        _waCallback(result);
+      } else {
+        // Try to put in the active message input
+        const msgInput = document.getElementById('msgInput');
+        if (msgInput) msgInput.value = result;
+      }
+      closeModal('writingAssistantModal');
+    }
+    
+    function copyWaResult() {
+      const text = document.getElementById('waResultText').textContent;
+      navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success'));
+    }
+    
+    // Show float button on messages page
+    if (document.getElementById('msgInput')) {
+      document.getElementById('waFloatBtn').style.display = 'block';
     }
 
     document.addEventListener('click', e => {

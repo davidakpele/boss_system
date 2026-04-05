@@ -406,4 +406,247 @@ class AIService:
         return None
 
 
+    async def improve_text(self, text: str, action: str, target_language: str = None) -> str:
+        """
+        action: improve | expand | shorten | formal | casual | translate
+        target_language: only used when action == translate
+        """
+        action_prompts = {
+            "improve":   "Improve this text: make it clearer, more professional, and better structured. Return only the improved text.",
+            "expand":    "Expand this text with more detail and context. Keep the same tone. Return only the expanded text.",
+            "shorten":   "Shorten this text to its key points. Keep all essential meaning. Return only the shortened text.",
+            "formal":    "Rewrite this text in a formal, professional tone. Return only the rewritten text.",
+            "casual":    "Rewrite this text in a friendly, casual tone. Return only the rewritten text.",
+            "translate": f"Translate this text to {target_language or 'Spanish'}. Return only the translation.",
+            "fix":       "Fix grammar, spelling, and punctuation. Return only the corrected text.",
+        }
+        prompt = action_prompts.get(action, action_prompts["improve"])
+        msgs = [
+            {"role": "system", "content": prompt},
+            {"role": "user",   "content": text},
+        ]
+        return await self.chat_complete(msgs)
+
+    # ── Document Q&A with Citations ──────────────────────────────────────────
+
+    async def answer_with_citations(
+        self, question: str, db, document_id: int = None
+    ) -> dict:
+        """
+        Returns {"answer": str, "citations": [{"chunk_id", "source", "excerpt", "relevance"}]}
+        Uses vector RAG; when document_id is given, restricts search to that document.
+        """
+        from sqlalchemy import select
+        from app.models import KnowledgeChunk, Document
+        import numpy as np
+
+        # Embed the question
+        try:
+            q_embedding = self.embedding_model.encode([question])[0]
+        except Exception:
+            q_embedding = None
+
+        # Fetch candidate chunks
+        stmt = select(KnowledgeChunk)
+        if document_id:
+            stmt = stmt.where(KnowledgeChunk.document_id == document_id)
+        stmt = stmt.limit(200)
+        all_chunks = (await db.execute(stmt)).scalars().all()
+
+        # Score chunks
+        scored = []
+        for ch in all_chunks:
+            if q_embedding is not None and ch.embedding:
+                try:
+                    import json as _json
+                    ch_vec = np.array(_json.loads(ch.embedding) if isinstance(ch.embedding, str) else ch.embedding)
+                    score = float(np.dot(q_embedding, ch_vec) /
+                                  (np.linalg.norm(q_embedding) * np.linalg.norm(ch_vec) + 1e-10))
+                except Exception:
+                    score = 0.0
+            else:
+                # Keyword fallback
+                kw = question.lower().split()
+                score = sum(1 for k in kw if k in (ch.content or "").lower()) / max(len(kw), 1)
+            scored.append((score, ch))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = scored[:6]
+
+        # Build context with labelled source IDs
+        context_parts = []
+        citations_meta = []
+        for i, (score, ch) in enumerate(top, 1):
+            excerpt = (ch.content or "")[:400]
+            src = ch.source_type or "document"
+            context_parts.append(f"[SOURCE {i}] ({src}) {excerpt}")
+            citations_meta.append({
+                "chunk_id":  ch.id,
+                "source":    src,
+                "excerpt":   excerpt[:200],
+                "relevance": round(score, 3),
+                "document_id": ch.document_id,
+            })
+
+        context = "\n\n".join(context_parts) if context_parts else "No relevant context found."
+
+        msgs = [
+            {"role": "system", "content": (
+                "You are a document Q&A assistant. Answer the user's question using ONLY the provided sources.\n"
+                "For every fact you state, cite the source using [SOURCE N] inline — e.g. 'The policy requires X [SOURCE 2].'\n"
+                "If the answer cannot be found in the sources, say so explicitly.\n"
+                "Be precise and concise."
+            )},
+            {"role": "user", "content": (
+                f"SOURCES:\n{context}\n\n"
+                f"QUESTION: {question}"
+            )},
+        ]
+        answer = await self.chat_complete(msgs)
+
+        # Match [SOURCE N] references in answer to actual chunks
+        import re
+        cited_indices = set(int(m) - 1 for m in re.findall(r'\[SOURCE (\d+)\]', answer)
+                            if 0 <= int(m) - 1 < len(citations_meta))
+        active_citations = [citations_meta[i] for i in sorted(cited_indices)]
+
+        return {"answer": answer, "citations": active_citations}
+
+    # ── Auto-Tagging ─────────────────────────────────────────────────────────
+
+    async def generate_tags(self, text: str, existing_tags: list = None) -> dict:
+        """
+        Returns {
+            "topics":     [str, …],   # up to 5 broad topic tags
+            "keywords":   [str, …],   # up to 8 specific keyword tags
+            "category":   str,        # single best category
+            "sentiment":  str,        # positive | neutral | negative
+        }
+        """
+        existing_hint = f"\nAlready tagged with: {', '.join(existing_tags)}" if existing_tags else ""
+        msgs = [
+            {"role": "system", "content": (
+                "You are a content classification AI. Analyse the text and return ONLY valid JSON with:\n"
+                '  "topics":   array of up to 5 broad topic strings (e.g. "Human Resources")\n'
+                '  "keywords": array of up to 8 specific keyword strings\n'
+                '  "category": single best category string\n'
+                '  "sentiment": one of "positive" | "neutral" | "negative"\n'
+                "Return ONLY JSON, no markdown."
+                + existing_hint
+            )},
+            {"role": "user", "content": text[:3000]},
+        ]
+        raw = await self.chat_complete(msgs)
+        try:
+            import json as _j, re as _re
+            clean = raw.strip().replace("```json","").replace("```","").strip()
+            match = _re.search(r'\{[\s\S]*\}', clean)
+            if match:
+                data = _j.loads(match.group(0))
+                return {
+                    "topics":    [str(t) for t in data.get("topics",   [])[:5]],
+                    "keywords":  [str(k) for k in data.get("keywords", [])[:8]],
+                    "category":  str(data.get("category", "General")),
+                    "sentiment": str(data.get("sentiment","neutral")),
+                }
+        except Exception:
+            pass
+        return {"topics": [], "keywords": [], "category": "General", "sentiment": "neutral"}
+
+    # ── Sentiment Analysis ───────────────────────────────────────────────────
+
+    async def analyse_channel_sentiment(self, messages: list[str], channel_name: str = "") -> dict:
+        """
+        Analyse a batch of recent messages for team sentiment / morale.
+        Returns {score, label, themes, summary, morale_indicators}
+        """
+        if not messages:
+            return {"score": 0.0, "label": "neutral", "themes": [], "summary": "No messages to analyse.", "morale_indicators": {}}
+
+        sample = "\n".join(f"- {m}" for m in messages[:60])
+        msgs = [
+            {"role": "system", "content": (
+                "You are a team morale and sentiment analyst. Analyse the messages and return ONLY valid JSON:\n"
+                '  "score":    float from -1.0 (very negative) to +1.0 (very positive)\n'
+                '  "label":    "positive" | "neutral" | "negative"\n'
+                '  "themes":   array of up to 5 strings (recurring themes, e.g. "deadline pressure")\n'
+                '  "summary":  2-3 sentence narrative about team mood and what is driving it\n'
+                '  "morale_indicators": object with keys "engagement", "stress", "collaboration" each 0-100\n'
+                "Return ONLY JSON."
+            )},
+            {"role": "user", "content": (
+                f"Channel: {channel_name or 'Internal'}\n"
+                f"Recent messages ({len(messages)} total):\n{sample}"
+            )},
+        ]
+        raw = await self.chat_complete(msgs)
+        try:
+            import json as _j, re as _re
+            clean = raw.strip().replace("```json","").replace("```","").strip()
+            match = _re.search(r'\{[\s\S]*\}', clean)
+            if match:
+                data = _j.loads(match.group(0))
+                return {
+                    "score":             float(data.get("score", 0.0)),
+                    "label":             str(data.get("label","neutral")),
+                    "themes":            [str(t) for t in data.get("themes",[])[:5]],
+                    "summary":           str(data.get("summary","")),
+                    "morale_indicators": data.get("morale_indicators",
+                                                  {"engagement":50,"stress":50,"collaboration":50}),
+                }
+        except Exception:
+            pass
+        return {"score": 0.0, "label": "neutral", "themes": [], "summary": raw[:300], "morale_indicators": {}}
+
+    # ── Meeting Intelligence ─────────────────────────────────────────────────
+
+    async def analyse_meeting_transcript(self, transcript: str, title: str = "") -> dict:
+        """
+        Extract structured intelligence from a raw meeting transcript.
+        Returns {
+            summary, action_items, decisions, key_topics,
+            participants, duration_estimate, sentiment_score
+        }
+        """
+        msgs = [
+            {"role": "system", "content": (
+                "You are a meeting intelligence AI. Analyse the transcript and return ONLY valid JSON:\n"
+                '  "summary":         string — 3-5 sentence executive summary\n'
+                '  "action_items":    array of objects: {owner, task, due_date (string or null), priority}\n'
+                '  "decisions":       array of strings — key decisions made\n'
+                '  "key_topics":      array of strings — main discussion topics\n'
+                '  "participants":    array of strings — names detected in the transcript\n'
+                '  "duration_estimate": integer — estimated meeting length in minutes (from content depth)\n'
+                '  "sentiment_score": float -1.0 to 1.0 — overall meeting tone\n'
+                '  "risks_flagged":   array of strings — any concerns or risks raised\n'
+                "Return ONLY JSON. Never include markdown fences."
+            )},
+            {"role": "user", "content": (
+                f"MEETING: {title or 'Untitled'}\n\n"
+                f"TRANSCRIPT:\n{transcript[:6000]}"
+            )},
+        ]
+        raw = await self.chat_complete(msgs)
+        try:
+            import json as _j, re as _re
+            clean = raw.strip().replace("```json","").replace("```","").strip()
+            match = _re.search(r'\{[\s\S]*\}', clean)
+            if match:
+                data = _j.loads(match.group(0))
+                return {
+                    "summary":           str(data.get("summary","")),
+                    "action_items":      data.get("action_items", []),
+                    "decisions":         [str(d) for d in data.get("decisions",[])],
+                    "key_topics":        [str(t) for t in data.get("key_topics",[])],
+                    "participants":      [str(p) for p in data.get("participants",[])],
+                    "duration_estimate": int(data.get("duration_estimate", 0)),
+                    "sentiment_score":   float(data.get("sentiment_score", 0.0)),
+                    "risks_flagged":     [str(r) for r in data.get("risks_flagged",[])],
+                }
+        except Exception:
+            pass
+        return {"summary": raw[:500], "action_items":[], "decisions":[], "key_topics":[],
+                "participants":[], "duration_estimate":0, "sentiment_score":0.0, "risks_flagged":[]}
+        
+
 ai_service = AIService()
