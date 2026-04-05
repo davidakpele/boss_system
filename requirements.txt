@@ -27,3 +27,5 @@ itsdangerous
 authlib  
 py-vapid
 reportlab
+pyotp
+cryptography>=42.0.0
