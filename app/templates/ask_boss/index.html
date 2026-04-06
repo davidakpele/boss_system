@@ -94,7 +94,7 @@
       </div>
       {% else %}
       <div style="padding:20px;text-align:center;color:var(--text3);font-size:12px;">
-        <i class="fa-solid fa-robot" style="font-size:22px;opacity:0.2;display:block;margin-bottom:8px"></i>No sessions yet
+        <i class="fa-solid fa-robot" style="font-size:22px;opacity:0.2;display:block;margin-bottom:8px; margin:auto"></i>No sessions yet
       </div>
       {% endfor %}
     </div>
@@ -113,7 +113,6 @@
       <div class="ai-avatar" style="width:36px;height:36px;border-radius:10px;font-size:14px;">AI</div>
       <div>
         <div style="font-weight:600;font-size:14px;">BOSS AI Assistant</div>
-        <div style="font-size:11px;color:var(--text3);">Vector RAG · {{ "codellama:7b-instruct-q4_K_M" }}</div>
       </div>
       <div class="ai-status {% if ai_online %}online{% else %}offline{% endif %}">
         <div class="status-dot"></div>

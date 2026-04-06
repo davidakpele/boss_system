@@ -1049,13 +1049,13 @@
       <label class="form-label">What do you want to do?</label>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
         {% set actions = [
-          ('improve',   '✨', 'Improve'),
-          ('fix',       '🔧', 'Fix Grammar'),
-          ('formal',    '👔', 'Make Formal'),
-          ('casual',    '😊', 'Make Casual'),
-          ('expand',    '📖', 'Expand'),
-          ('shorten',   '✂️', 'Shorten'),
-          ('translate', '🌍', 'Translate'),
+          ('improve',   '', 'Improve'),
+          ('fix',       '', 'Fix Grammar'),
+          ('formal',    '', 'Make Formal'),
+          ('casual',    '', 'Make Casual'),
+          ('expand',    '', 'Expand'),
+          ('shorten',   '', 'Shorten'),
+          ('translate', '', 'Translate'),
         ] %}
         {% for val, icon, label in actions %}
         <button class="wa-action-btn" data-action="{{ val }}" onclick="setWaAction('{{ val }}', this)"
