@@ -58,7 +58,7 @@
   {% endfor %}
 {% else %}
 <div class="card" style="text-align:center;padding:60px 20px;">
-  <i class="fa-solid fa-bullhorn" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px;"></i>
+  <i class="fa-solid fa-bullhorn" style="font-size:40px;opacity:0.15;display:block;margin-bottom:12px; margin:auto"></i>
   <div style="color:var(--text3);">No announcements yet.</div>
   {% if user.role in ('super_admin', 'admin') %}
   <button class="btn btn-primary" style="margin-top:16px;" onclick="openModal('newAnnModal')">Post First Announcement</button>
@@ -86,9 +86,9 @@
       <div class="form-group">
         <label class="form-label">Priority</label>
         <select id="na-priority" class="form-control" style="padding-left:12px">
-          <option value="normal">📢 Normal</option>
-          <option value="important">⚠️ Important</option>
-          <option value="urgent">🚨 Urgent</option>
+          <option value="normal"><i class="fa-solid fa-circle" style="color:black"></i> Normal</option>
+          <option value="important"><i class="fa-solid fa-exclamation-triangle" style="color:black"></i> Important</option>
+          <option value="urgent"><i class="fa-solid fa-exclamation-circle" style="color:black"></i> Urgent</option>
         </select>
       </div>
       <div class="form-group">
