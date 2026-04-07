@@ -74,6 +74,7 @@ app.add_middleware(IPAllowlistMiddleware)
 
 # ── Static mounts ─────────────────────────────────────────────────────────────
 app.mount("/static",  StaticFiles(directory="app/static"),        name="static")
+app.mount("/public",  StaticFiles(directory="public"),       name="public") 
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 

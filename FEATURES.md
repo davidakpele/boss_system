@@ -9,52 +9,6 @@ BOSS is an **AI-powered enterprise platform** designed to run your entire busine
 
 # ✨ Core Features
 
-## 💬 Messaging & Collaboration
-
-Modern, real-time communication built for teams:
-
-* **Message Reactions (Emoji)**
-  React to messages with emojis. Stored in DB and synced in real-time via WebSockets.
-
-* **Message Search**
-  Full-text search inside conversations with highlight + jump-to results.
-
-* **Voice Notes**
-  Record and send audio using the browser MediaRecorder API.
-
-* **Read Receipts**
-  ✓✓ Delivered · Blue ✓✓ Read (tracked per user per message).
-
-* **Message Threads**
-  Reply in thread using a side panel to keep channels clean.
-
-* **@Mentions & Notifications**
-  Tag users with `@name` → instant badge notification + highlight.
-
----
-
-## 🧠 AI-Powered System
-
-* **AI Writing Assistant** — Improve, expand, translate messages inline
-* **Document Q&A (with citations)** — Ask questions and get exact source references
-* **Auto-Tagging** — AI organizes documents and knowledge automatically
-* **Sentiment Analysis** — Detect team morale trends
-* **Meeting Intelligence** — Extract actions & decisions from transcripts
-
----
-
-## 🔐 Security & Access Control
-
-Enterprise-grade protection:
-
-* Two-Factor Authentication (2FA — TOTP)
-* Session Management (view/revoke sessions)
-* Password Policy Enforcement
-* Login Attempt Lockout
-* API Key Management
-* Field-Level Encryption (sensitive data)
-* Data Retention Policies
-
 ---
 
 ## 👥 HR & People Management

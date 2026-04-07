@@ -190,7 +190,99 @@
       padding: 1px 6px; border-radius: 3px;
       min-width: 16px; text-align: center;
     }
-
+    .nav-group { margin-bottom: 1px; }
+ 
+.nav-group-btn {
+  display: flex; align-items: center; gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--sidebar-text);
+  font-size: 13px; font-weight: 400;
+  cursor: pointer; width: 100%;
+  background: transparent; border: none;
+  transition: background 0.1s, color 0.1s;
+  text-align: left; position: relative;
+  font-family: var(--font);
+}
+.nav-group-btn:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-active);
+}
+.nav-group-btn i.nav-icon {
+  width: 16px; text-align: center;
+  font-size: 12px; flex-shrink: 0; opacity: 0.7;
+}
+.nav-group-btn:hover i.nav-icon { opacity: 1; }
+ 
+.nav-group-label { flex: 1; }
+ 
+.nav-chevron {
+  font-size: 9px; color: var(--sidebar-text);
+  transition: transform 0.2s ease;
+  opacity: 0.5; margin-left: auto; flex-shrink: 0;
+}
+.nav-group.open .nav-chevron { transform: rotate(90deg); opacity: 1; }
+.nav-group.open .nav-group-btn {
+  color: var(--sidebar-text-active);
+  background: var(--sidebar-hover);
+}
+.nav-group.open .nav-group-btn i.nav-icon { opacity: 1; }
+ 
+/* Active parent (when a child is active) */
+.nav-group.has-active .nav-group-btn {
+  color: var(--sidebar-text-active);
+}
+.nav-group.has-active .nav-group-btn i.nav-icon { opacity: 1; }
+ 
+/* Children container */
+.nav-children {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease;
+}
+.nav-group.open .nav-children {
+  max-height: 500px;
+}
+ 
+.nav-child {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 10px 6px 30px;
+  border-radius: var(--radius-sm);
+  color: #71717a;
+  text-decoration: none;
+  font-size: 12.5px; font-weight: 400;
+  transition: background 0.1s, color 0.1s;
+  margin-bottom: 1px;
+}
+.nav-child:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text-active);
+}
+.nav-child.active {
+  background: var(--sidebar-active);
+  color: var(--sidebar-text-active);
+  font-weight: 500;
+}
+.nav-child i {
+  width: 14px; text-align: center;
+  font-size: 11px; flex-shrink: 0; opacity: 0.6;
+}
+.nav-child.active i, .nav-child:hover i { opacity: 1; }
+ 
+.nav-child .nav-badge {
+  margin-left: auto;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-mono);
+  font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 3px;
+}
+ 
+/* Section divider (thin line between groups) */
+.nav-divider {
+  height: 1px; background: var(--sidebar-border);
+  margin: 8px 10px;
+}
     .sidebar-footer {
       padding: 10px;
       border-top: 1px solid var(--sidebar-border);
@@ -617,111 +709,202 @@
       </div>
     </a>
 
-    <nav class="sidebar-nav">
-
-      <div class="nav-section-label">Main</div>
-      <a href="/dashboard"  class="nav-item {% if page == 'dashboard' %}active{% endif %}">
+    <nav class="sidebar-nav" id="sidebarNav">
+ 
+  <!-- ── WORKSPACE ── -->
+  <div class="nav-group" data-group="workspace">
+    <button class="nav-group-btn" onclick="toggleGroup('workspace')">
+      <i class="nav-icon fa-solid fa-layer-group"></i>
+      <span class="nav-group-label">Workspace</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/dashboard" class="nav-child {% if request.url.path == '/dashboard' %}active{% endif %}">
         <i class="fa-solid fa-table-columns"></i> Dashboard
       </a>
-      <a href="/messages"   class="nav-item {% if page == 'messages' %}active{% endif %}">
+      <a href="/messages" class="nav-child {% if request.url.path.startswith('/messages') %}active{% endif %}">
         <i class="fa-regular fa-comment-dots"></i> Messages
         {% if unread_count %}<span class="nav-badge">{{ unread_count }}</span>{% endif %}
       </a>
-      <a href="/ask-boss"   class="nav-item {% if page == 'ask_boss' %}active{% endif %}">
+      <a href="/ask-boss" class="nav-child {% if request.url.path.startswith('/ask-boss') %}active{% endif %}">
         <i class="fa-solid fa-microchip"></i> Ask BOSS
       </a>
-      
-       <div class="nav-section-label mt-4">Command Centre</div>
-        <a href="/bcc" class="nav-item {% if request.url.path == '/bcc' %}active{% endif %}">
-          <i class="fa-solid fa-sliders"></i> BCC Dashboard
-        </a>
-        <a href="/bcc/accounting" class="nav-item {% if request.url.path.startswith('/bcc/accounting') %}active{% endif %}">
-          <i class="fa-solid fa-coins"></i> Accounting
-        </a>
-        <a href="/bcc/inventory" class="nav-item {% if request.url.path.startswith('/bcc/inventory') %}active{% endif %}">
-          <i class="fa-solid fa-boxes-stacked"></i> Inventory
-        </a>
-        <a href="/bcc/hr" class="nav-item {% if request.url.path.startswith('/bcc/hr') %}active{% endif %}">
-          <i class="fa-solid fa-user-tie"></i> AI Recruitment
-        </a>
-
-      {% if user.role in ('super_admin', 'admin', 'manager') %}
-       <div class="nav-section-label mt-4">Analytics</div>
-        <a href="/analytics"
-          class="nav-item {% if request.url.path == '/analytics' %}active{% endif %}">
-          <i class="fa-solid fa-chart-line"></i> Analytics
-        </a>
-        <a href="/analytics/user-activity"
-          class="nav-item {% if request.url.path.startswith('/analytics/user-activity') %}active{% endif %}">
-          <i class="fa-solid fa-users-viewfinder"></i> User Activity
-        </a>
-        <a href="/analytics/reports"
-          class="nav-item {% if request.url.path.startswith('/analytics/reports') %}active{% endif %}">
-          <i class="fa-solid fa-file-chart-column"></i> Reports
-        </a>
-      {% endif %}
-
-      {% if user.role in ('super_admin', 'admin', 'manager') %}
-      <div class="nav-section-label mt-4">AI Intelligence</div>
-      <a href="/ai/sentiment" class="nav-item {% if request.url.path.startswith('/ai/sentiment') %}active{% endif %}">
-        <i class="fa-solid fa-heart-pulse"></i> Sentiment
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+ 
+  <!-- ── COMMAND CENTRE ── -->
+  <div class="nav-group" data-group="bcc">
+    <button class="nav-group-btn" onclick="toggleGroup('bcc')">
+      <i class="nav-icon fa-solid fa-sliders"></i>
+      <span class="nav-group-label">Command Centre</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/bcc" class="nav-child {% if request.url.path == '/bcc' %}active{% endif %}">
+        <i class="fa-solid fa-gauge-high"></i> Overview
       </a>
-      <a href="/ai/meeting" class="nav-item {% if request.url.path.startswith('/ai/meeting') %}active{% endif %}">
-        <i class="fa-solid fa-microphone-lines"></i> Meeting Intel
+      <a href="/bcc/accounting" class="nav-child {% if request.url.path.startswith('/bcc/accounting') %}active{% endif %}">
+        <i class="fa-solid fa-coins"></i> Accounting
       </a>
-      {% endif %}
-
-      <div class="nav-section-label">Knowledge</div>
-      <a href="/knowledge-base" class="nav-item {% if page == 'knowledge_base' %}active{% endif %}">
-        <i class="fa-regular fa-folder-open"></i> Knowledge Base
+      <a href="/bcc/inventory" class="nav-child {% if request.url.path.startswith('/bcc/inventory') %}active{% endif %}">
+        <i class="fa-solid fa-boxes-stacked"></i> Inventory
       </a>
-      <a href="/documents"  class="nav-item {% if page == 'documents' %}active{% endif %}">
+      <a href="/bcc/hr" class="nav-child {% if request.url.path.startswith('/bcc/hr') %}active{% endif %}">
+        <i class="fa-solid fa-user-tie"></i> AI Recruitment
+      </a>
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+ 
+  <!-- ── OPERATIONS ── -->
+  <div class="nav-group" data-group="ops">
+    <button class="nav-group-btn" onclick="toggleGroup('ops')">
+      <i class="nav-icon fa-solid fa-briefcase"></i>
+      <span class="nav-group-label">Operations</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/tasks" class="nav-child {% if request.url.path.startswith('/tasks') %}active{% endif %}">
+        <i class="fa-solid fa-square-check"></i> Task Board
+      </a>
+      <a href="/meetings" class="nav-child {% if request.url.path.startswith('/meetings') %}active{% endif %}">
+        <i class="fa-regular fa-calendar"></i> Meetings
+      </a>
+      <a href="/announcements" class="nav-child {% if request.url.path.startswith('/announcements') %}active{% endif %}">
+        <i class="fa-solid fa-bullhorn"></i> Announcements
+      </a>
+      <a href="/directory" class="nav-child {% if request.url.path.startswith('/directory') %}active{% endif %}">
+        <i class="fa-solid fa-address-book"></i> Directory
+      </a>
+      <a href="/leave" class="nav-child {% if request.url.path.startswith('/leave') %}active{% endif %}">
+        <i class="fa-regular fa-calendar-minus"></i> Leave Tracker
+      </a>
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+ 
+  <!-- ── KNOWLEDGE ── -->
+  <div class="nav-group" data-group="knowledge">
+    <button class="nav-group-btn" onclick="toggleGroup('knowledge')">
+      <i class="nav-icon fa-regular fa-folder-open"></i>
+      <span class="nav-group-label">Knowledge</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/knowledge-base" class="nav-child {% if page == 'knowledge_base' %}active{% endif %}">
+        <i class="fa-solid fa-brain"></i> Knowledge Base
+      </a>
+      <a href="/documents" class="nav-child {% if request.url.path.startswith('/documents') %}active{% endif %}">
         <i class="fa-regular fa-file-lines"></i> Documents
       </a>
-
-      <div class="nav-section-label">Organization</div>
-      {% if user.role in ('super_admin', 'admin', 'manager') %}
-      <a href="/users" class="nav-item {% if page == 'users' %}active{% endif %}">
+      <a href="/compliance" class="nav-child {% if request.url.path.startswith('/compliance') %}active{% endif %}">
+        <i class="fa-solid fa-shield-halved"></i> Compliance
+      </a>
+      <a href="/risk-management" class="nav-child {% if request.url.path.startswith('/risk-management') %}active{% endif %}">
+        <i class="fa-solid fa-circle-exclamation"></i> Risk Management
+      </a>
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+ 
+  <!-- ── AI INTELLIGENCE ── -->
+  {% if user.role.value in ('super_admin', 'admin', 'manager') %}
+  <div class="nav-group" data-group="ai">
+    <button class="nav-group-btn" onclick="toggleGroup('ai')">
+      <i class="nav-icon fa-solid fa-microchip"></i>
+      <span class="nav-group-label">AI Intelligence</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/ai/sentiment" class="nav-child {% if request.url.path.startswith('/ai/sentiment') %}active{% endif %}">
+        <i class="fa-solid fa-heart-pulse"></i> Sentiment
+      </a>
+      <a href="/ai/meeting" class="nav-child {% if request.url.path.startswith('/ai/meeting') %}active{% endif %}">
+        <i class="fa-solid fa-microphone-lines"></i> Meeting Intel
+      </a>
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+ 
+  <!-- ── ANALYTICS ── -->
+  <div class="nav-group" data-group="analytics">
+    <button class="nav-group-btn" onclick="toggleGroup('analytics')">
+      <i class="nav-icon fa-solid fa-chart-line"></i>
+      <span class="nav-group-label">Analytics</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/analytics" class="nav-child {% if request.url.path == '/analytics' %}active{% endif %}">
+        <i class="fa-solid fa-chart-pie"></i> Dashboard
+      </a>
+      <a href="/analytics/user-activity" class="nav-child {% if request.url.path.startswith('/analytics/user-activity') %}active{% endif %}">
+        <i class="fa-solid fa-users-viewfinder"></i> User Activity
+      </a>
+      <a href="/analytics/reports" class="nav-child {% if request.url.path.startswith('/analytics/reports') %}active{% endif %}">
+        <i class="fa-solid fa-file-chart-column"></i> Reports
+      </a>
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+  {% endif %}
+ 
+  <!-- ── ORGANISATION ── -->
+  <div class="nav-group" data-group="org">
+    <button class="nav-group-btn" onclick="toggleGroup('org')">
+      <i class="nav-icon fa-regular fa-building"></i>
+      <span class="nav-group-label">Organisation</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      {% if user.role.value in ('super_admin', 'admin', 'manager') %}
+      <a href="/users" class="nav-child {% if request.url.path.startswith('/users') %}active{% endif %}">
         <i class="fa-regular fa-user"></i> Users
       </a>
       {% endif %}
-      <a href="/onboarding" class="nav-item {% if page == 'onboarding' %}active{% endif %}">
+      <a href="/onboarding" class="nav-child {% if request.url.path.startswith('/onboarding') %}active{% endif %}">
         <i class="fa-solid fa-arrow-right-to-bracket"></i> Onboarding
       </a>
-      <a href="/compliance" class="nav-item {% if page == 'compliance' %}active{% endif %}">
-        <i class="fa-solid fa-shield-halved"></i> Compliance
+      {% if user.role.value in ('super_admin', 'admin') %}
+      <a href="/audit-logs" class="nav-child {% if request.url.path.startswith('/audit') %}active{% endif %}">
+        <i class="fa-solid fa-list-ul"></i> Audit Logs
       </a>
-      <a href="/risk-management" class="nav-item {% if page == 'risk_management' %}active{% endif %}">
-        <i class="fa-solid fa-circle-exclamation"></i> Risk Management
-      </a>
-      <div class="nav-section-label mt-4">Operations</div>
-        <a href="/tasks" class="nav-item {% if page == 'tasks' %}active{% endif %}">
-          <i class="fa-solid fa-square-check"></i> Task Board
-        </a>
-        <a href="/meetings" class="nav-item {% if page == 'meetings' %}active{% endif %}">
-          <i class="fa-regular fa-calendar"></i> Meetings
-        </a>
-        <a href="/announcements" class="nav-item {% if page == 'announcements' %}active{% endif %}">
-          <i class="fa-solid fa-bullhorn"></i> Announcements
-        </a>
-        <a href="/directory" class="nav-item {% if page == 'directory' %}active{% endif %}">
-          <i class="fa-solid fa-address-book"></i> Directory
-        </a>
-        <a href="/leave" class="nav-item {% if page == 'leave' %}active{% endif %}">
-          <i class="fa-regular fa-calendar-minus"></i> Leave Tracker
-        </a>
-
-       <div class="nav-section-label">Configurations</div>
-      {% if user.role in ('super_admin', 'admin', 'manager') %}
-        <a href="/audit-logs" class="nav-item {% if page == 'audit' %}active{% endif %}">
-          <i class="fa-solid fa-list-ul"></i> Audit Logs
-        </a>
       {% endif %}
-      <a href="/settings" class="nav-item {% if page == 'settings' %}active{% endif %}">
-        <i class="fa-solid fa-cog"></i> Settings
+    </div>
+  </div>
+ 
+  <div class="nav-divider"></div>
+ 
+  <!-- ── SETTINGS ── -->
+  <div class="nav-group" data-group="settings">
+    <button class="nav-group-btn" onclick="toggleGroup('settings')">
+      <i class="nav-icon fa-solid fa-cog"></i>
+      <span class="nav-group-label">Settings</span>
+      <i class="fa-solid fa-chevron-right nav-chevron"></i>
+    </button>
+    <div class="nav-children">
+      <a href="/settings" class="nav-child {% if request.url.path == '/settings' %}active{% endif %}">
+        <i class="fa-solid fa-user-gear"></i> My Profile
       </a>
-
-    </nav>
+      <a href="/settings" class="nav-child">
+        <i class="fa-solid fa-bell"></i> Notifications
+      </a>
+      {% if user.role.value == 'super_admin' %}
+      <a href="/settings/ip-allowlist" class="nav-child {% if request.url.path.startswith('/settings/ip') %}active{% endif %}">
+        <i class="fa-solid fa-shield"></i> IP Allowlist
+      </a>
+      {% endif %}
+    </div>
+  </div>
+ 
+</nav>
+ 
 
     <div class="sidebar-footer">
       <div class="user-card">
@@ -841,8 +1024,8 @@
   <div id="toast-container"></div>
   <div id="waFloatBtn" style="display:none;position:fixed;bottom:90px;right:24px;z-index:200;">
   <button onclick="openWritingAssistant()" title="AI Writing Assistant"
-    style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);
-           border:none;color:#fff;cursor:pointer;font-size:16px;box-shadow:0 4px 16px rgba(59,130,246,.4);
+    style="width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#18181b, #27272a);
+           border:none;color:#fff;cursor:pointer;font-size:16px;box-shadow:0 4px 16px rgba(6, 7, 7, 0.78);
            display:flex;align-items:center;justify-content:center;transition:transform .15s;">
     <i class="fa-solid fa-wand-magic-sparkles"></i>
   </button>
@@ -866,13 +1049,13 @@
       <label class="form-label">What do you want to do?</label>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;">
         {% set actions = [
-          ('improve',   '✨', 'Improve'),
-          ('fix',       '🔧', 'Fix Grammar'),
-          ('formal',    '👔', 'Make Formal'),
-          ('casual',    '😊', 'Make Casual'),
-          ('expand',    '📖', 'Expand'),
-          ('shorten',   '✂️', 'Shorten'),
-          ('translate', '🌍', 'Translate'),
+          ('improve',   '', 'Improve'),
+          ('fix',       '', 'Fix Grammar'),
+          ('formal',    '', 'Make Formal'),
+          ('casual',    '', 'Make Casual'),
+          ('expand',    '', 'Expand'),
+          ('shorten',   '', 'Shorten'),
+          ('translate', '', 'Translate'),
         ] %}
         {% for val, icon, label in actions %}
         <button class="wa-action-btn" data-action="{{ val }}" onclick="setWaAction('{{ val }}', this)"
@@ -1183,6 +1366,27 @@
       navigator.clipboard.writeText(text).then(() => toast('Copied!', 'success'));
     }
     
+    function toggleGroup(name) {
+  const group = document.querySelector(`[data-group="${name}"]`);
+  if (!group) return;
+  const isOpen = group.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.nav-group.open').forEach(g => g.classList.remove('open'));
+  // Open clicked (unless it was already open)
+  if (!isOpen) group.classList.add('open');
+}
+ 
+// Auto-open the group that contains the active child
+function autoOpenActiveGroup() {
+  document.querySelectorAll('.nav-child.active').forEach(child => {
+    const group = child.closest('.nav-group');
+    if (group) {
+      group.classList.add('open', 'has-active');
+    }
+  });
+}
+ 
+document.addEventListener('DOMContentLoaded', autoOpenActiveGroup);
     // Show float button on messages page
     if (document.getElementById('msgInput')) {
       document.getElementById('waFloatBtn').style.display = 'block';

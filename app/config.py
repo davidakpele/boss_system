@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     IP_ALLOWLIST_ENABLED: bool = False
  
 
-    VAPID_PUBLIC_KEY: str = ""
-    VAPID_PRIVATE_KEY: str = ""
+    VAPID_PUBLIC_KEY: str = "BDthBjOdUX9oTA7HWSFJaFTc9JUxNuiF3gkEmam0vMJ-tZYUQnwqVqG4NMuNR_moxnwhTjNSPVR5X6CjclzBZpw"
+    VAPID_PRIVATE_KEY: str = "9OxBb4E7j1o2XIy25E9VHQ_55njhIxFPBU0ykub7RDc"
     VAPID_CLAIMS_EMAIL: str = "admin@yourcompany.com"
  
     DEFAULT_ADMIN_EMAIL: str = "admin@aol.com"

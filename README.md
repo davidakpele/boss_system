@@ -1,5 +1,5 @@
 # BOSS System — Business Operating System
-### Developed by MindSync AI Consults
+### Developed by David Akpele AI Consults
 
 > **The intelligent backbone of your organization.** BOSS is a full-stack, AI-powered corporate operating platform that unifies communication, knowledge management, compliance, risk, HR, accounting, inventory, and business operations — all in one dark-themed, real-time progressive web application.
 
@@ -384,6 +384,109 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 - Polls every 30 seconds; also triggered immediately by server events
 - Types: `info` · `success` · `warning` · `error` · `message` · `hr`
 - Fires web push simultaneously when a notification is created
+
+## 🔥 **NEW: Messaging, AI & Security Enhancements (v2.1)**
+
+### 💬 Messaging & Collaboration (Upgraded)
+
+A next-generation communication layer designed for high-performance teams:
+
+* **Message Reactions (Emoji)**
+  React to messages with emojis — persisted in the database and synced instantly via WebSockets.
+
+* **Message Search**
+  Powerful full-text search across conversations with highlighted matches and jump-to navigation.
+
+* **Voice Notes**
+  Record and send audio messages directly from the browser using the MediaRecorder API.
+
+* **Read Receipts**
+
+  * ✓ Delivered
+  * ✓✓ Read (blue)
+    Tracked per user, per message in real time.
+
+* **Message Threads**
+  Keep channels clean by replying in structured side-panel threads.
+
+* **@Mentions & Smart Notifications**
+  Tag users with `@name` to trigger:
+
+  * Instant notification badges
+  * Message highlights
+  * Real-time alerts (in-app + push)
+
+---
+
+### 🧠 AI-Powered Intelligence (Expanded)
+
+BOSS is no longer just AI-assisted — it's AI-driven across the entire system:
+
+* **AI Writing Assistant**
+  Improve, expand, rewrite, or translate messages inline before sending.
+
+* **Document Q&A with Citations**
+  Ask questions and receive answers with exact source references from your knowledge base.
+
+* **Auto-Tagging Engine**
+  AI automatically classifies and organizes documents and knowledge entries.
+
+* **Sentiment Analysis**
+  Detect team mood trends across conversations to identify risks early.
+
+* **Meeting Intelligence**
+  Automatically extract:
+
+  * Action items
+  * Decisions made
+  * Key discussion points
+    From meeting transcripts and channel history.
+
+---
+
+### 🔐 Security & Access Control (Enterprise Upgrade)
+
+Advanced protection and compliance-ready infrastructure:
+
+* **Two-Factor Authentication (2FA — TOTP)**
+  Secure accounts with authenticator apps.
+
+* **Session Management**
+  View and revoke active sessions across devices.
+
+* **Password Policy Enforcement**
+  Enforce strong password rules (length, complexity, expiry).
+
+* **Login Attempt Lockout**
+  Automatically block brute-force attempts after repeated failures.
+
+* **API Key Management**
+  Generate, rotate, and revoke API keys securely.
+
+* **Field-Level Encryption**
+  Sensitive data is encrypted at rest (e.g., tokens, secrets).
+
+* **Data Retention Policies**
+  Define automatic cleanup rules for compliance and storage optimization.
+
+---
+
+## ✨ Where This Fits in the System
+
+These enhancements directly upgrade:
+
+* **Messages Module** → now comparable to Slack/WhatsApp-level collaboration
+* **Ask BOSS / AI Layer** → evolves into a full decision-support system
+* **Security Layer** → now enterprise-grade and audit-ready
+
+---
+
+## 🚀 Impact Summary
+
+* ⚡ Faster communication (search, threads, voice)
+* 🧠 Smarter workflows (AI everywhere)
+* 🔐 Stronger security (enterprise compliance ready)
+* 📈 Better team insights (sentiment + meeting intelligence)
 
 ---
 
