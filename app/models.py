@@ -678,22 +678,50 @@ class MeetingTranscript(Base):
     creator = relationship("User")
     
 
-class WhatsAppLog(Base):
-    __tablename__ = "whatsapp_logs"
+class WhatsAppContact(Base):
+    """A WhatsApp user who has messaged the business."""
+    __tablename__ = "whatsapp_contacts"
+    id          = Column(Integer, primary_key=True, index=True)
+    wa_id       = Column(String(30), unique=True, index=True, nullable=False)  # phone e.g. 2348012345678
+    name        = Column(String(255), nullable=True)     # display name from WhatsApp
+    phone       = Column(String(30), nullable=False)
+    first_seen  = Column(DateTime(timezone=True), server_default=func.now())
+    last_seen   = Column(DateTime(timezone=True), onupdate=func.now())
+    total_messages = Column(Integer, default=0)
+    is_blocked  = Column(Boolean, default=False)
+    notes       = Column(Text, nullable=True)            # internal CRM notes
  
-    id              = Column(BigInteger, primary_key=True, autoincrement=True)
-    phone_number    = Column(String(20),  nullable=False, index=True)
-    direction       = Column(SAEnum(MessageDirection), nullable=False)
-    content         = Column(Text,        nullable=False)
-    created_at      = Column(DateTime,    default=datetime.utcnow, nullable=False)
-    read_at         = Column(DateTime,    nullable=True)
-    meta_message_id = Column(String(100), nullable=True)
+    messages = relationship("WhatsAppMessage", back_populates="contact")
+    
+    
+class WhatsAppMessage(Base):
+    """Every inbound and outbound WhatsApp message."""
+    __tablename__ = "whatsapp_messages"
+    id              = Column(Integer, primary_key=True, index=True)
+    contact_id      = Column(Integer, ForeignKey("whatsapp_contacts.id"))
+    wa_message_id   = Column(String(100), unique=True, nullable=True)  # Meta message ID
+    direction       = Column(String(10), nullable=False)   # inbound | outbound
+    message_type    = Column(String(20), default="text")   # text | image | audio | document
+    content         = Column(Text, nullable=True)
+    media_url       = Column(String(500), nullable=True)
+    status          = Column(String(20), default="received")  # received|sent|delivered|read|failed
+    ai_handled      = Column(Boolean, default=False)       # True = AI auto-replied
+    ai_response     = Column(Text, nullable=True)          # what AI said back
+    intent          = Column(String(100), nullable=True)   # detected intent: accounting|hr|query|greeting
+    error           = Column(Text, nullable=True)
+    created_at      = Column(DateTime(timezone=True), server_default=func.now())
  
-    __table_args__ = (
-        Index("idx_whatsapp_logs_phone",   "phone_number"),
-        Index("idx_whatsapp_logs_created", "created_at"),
-    )
+    contact = relationship("WhatsAppContact", back_populates="messages")
  
-    def __repr__(self):
-        return f"<WhatsAppLog id={self.id} phone={self.phone_number} direction={self.direction}>"
+ 
+class WhatsAppSession(Base):
+    """Conversation context per contact — keeps AI memory of the conversation."""
+    __tablename__ = "whatsapp_sessions"
+    id          = Column(Integer, primary_key=True, index=True)
+    contact_id  = Column(Integer, ForeignKey("whatsapp_contacts.id"), unique=True)
+    history     = Column(JSON, default=list)      # [{role, content}, …] last 10 turns
+    context     = Column(String(50), default="general")  # general|accounting|hr|inventory
+    updated_at  = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+ 
+    contact = relationship("WhatsAppContact")
  
