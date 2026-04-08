@@ -1,6 +1,8 @@
 # app/models.py
+from datetime import datetime
+
 from sqlalchemy import (
-    Column, Date, Integer, String, Text, DateTime, Boolean, ForeignKey,
+    BigInteger, Column, Date, Index, Integer, String, Text, DateTime, Boolean, ForeignKey,
     Float, JSON, Enum as SAEnum
 )
 from sqlalchemy.orm import relationship, declarative_base
@@ -9,6 +11,10 @@ import enum
 
 Base = declarative_base()
 
+class MessageDirection(str, enum.Enum):
+    incoming = "incoming"
+    outgoing = "outgoing"
+    
 class TransactionType(str, enum.Enum):
     income  = "income"
     expense = "expense"
@@ -670,3 +676,24 @@ class MeetingTranscript(Base):
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
  
     creator = relationship("User")
+    
+
+class WhatsAppLog(Base):
+    __tablename__ = "whatsapp_logs"
+ 
+    id              = Column(BigInteger, primary_key=True, autoincrement=True)
+    phone_number    = Column(String(20),  nullable=False, index=True)
+    direction       = Column(SAEnum(MessageDirection), nullable=False)
+    content         = Column(Text,        nullable=False)
+    created_at      = Column(DateTime,    default=datetime.utcnow, nullable=False)
+    read_at         = Column(DateTime,    nullable=True)
+    meta_message_id = Column(String(100), nullable=True)
+ 
+    __table_args__ = (
+        Index("idx_whatsapp_logs_phone",   "phone_number"),
+        Index("idx_whatsapp_logs_created", "created_at"),
+    )
+ 
+    def __repr__(self):
+        return f"<WhatsAppLog id={self.id} phone={self.phone_number} direction={self.direction}>"
+ 

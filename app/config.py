@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     PASSWORD_REQUIRE_LOWERCASE: bool = True
     PASSWORD_REQUIRE_DIGIT: bool = True
     
+    WHATSAPP_ACCESS_TOKEN: str = "EAAUyBQ13A9kBRDdPXZAkhicdO6wsirxLce29DrTh3OwGMkRJ6hZBUC1Fu4O7VGM3cqzi1ZBam6XzGJN0bzOT7Ov12YYJV0ouUzCTxteqoV6plGhsVovAB0jzIZAaXAcpeCBYjc4oxkUTNTZA2fsbJpWomUHLZA15lJSAmMzrmUc6pyqC3rBOqpUVtTekyolZCmXKXrUMqecJuc48blZCCOW6vrbbf4B629rgoSZCu2179Q2INoaAZBnZCDCZC8SH2p7R1HUikpHzQsqRjPtNmPQgBgBe"
+    WHATSAPP_PHONE_NUMBER_ID: str = "1082779354917692"
+    WHATSAPP_BUSINESS_ACCOUNT_I: str = "1483821526670188"
+    WHATSAPP_VERIFY_TOKEN: str = "boss_webhook_secret_2024"
+    WHATSAPP_API_VERSION: str = "v21.0"
+    
     class Config:
         env_file = ".env"
         extra = "ignore"
