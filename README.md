@@ -340,7 +340,167 @@ Full 7-stage hiring pipeline — the system does the heavy lifting:
 
 ---
 
-### 14. Security
+Here's the updated WhatsApp section for your README.md. Add this under the **"🔥 NEW: Messaging, AI & Security Enhancements (v2.1)"** section or as its own subsection:
+
+---
+
+### 14. WhatsApp Business Integration (v2.2)
+
+BOSS now connects directly to **WhatsApp Business API** — turning your business phone number into an AI-powered customer and employee engagement channel.
+
+#### Key Features
+
+**🤖 AI-Powered WhatsApp Assistant**
+- Customers and employees can message your WhatsApp number and get intelligent responses powered by Ollama LLM
+- Automatic intent detection: `accounting` · `inventory` · `hr` · `greeting` · `query`
+- RAG-powered answers using your company knowledge base (documents, policies, FAQs)
+- Maintains conversation history per contact (last 10 turns)
+
+**💰 Natural Language Accounting**
+- Users can record transactions by simply messaging: *"I paid $15,000 for transportation today"*
+- AI automatically parses: type (income/expense), amount, currency, category, description
+- Returns a friendly confirmation: *"Got it! Recorded your expense of $15,000."*
+- Transaction auto-saved to Accounting module
+
+**📦 Context-Aware Responses**
+- Intent routing ensures accounting messages go to finance AI, inventory queries check stock levels
+- Knowledge base retrieval surfaces relevant company information
+- WhatsApp-optimised responses: short, emoji-warm, with *bold markdown* for emphasis
+
+**🔐 Contact Management Dashboard**
+- Full CRM for WhatsApp contacts at `/whatsapp`
+- View all contacts, message history, block/unblock, add CRM notes
+- Real-time stats: total contacts, messages, AI-handled rate, today's volume
+- Token health check — verify your WhatsApp API token is valid
+- Live token updates from UI without server restart
+
+**📊 Automatic Record Keeping**
+- Every inbound/outbound message saved to database
+- Message direction: `inbound` / `outbound`
+- Status tracking: `received` · `sent` · `failed` · `read`
+- AI handling flag and detected intent stored per message
+
+#### How It Works
+
+```
+  WhatsApp User
+       │
+       ▼  (sends message)
+  Meta WhatsApp API
+       │
+       ▼  (POST to /whatsapp/webhook)
+  ┌────────────────────────────────────────────────────────┐
+  │              BOSS Webhook Handler                       │
+  │  • Verifies signature and token                         │
+  │  • Extracts wa_id, message content                      │
+  │  • Saves inbound message                                │
+  │  • Marks as read (blue ticks)                           │
+  └────────────────────┬───────────────────────────────────┘
+                       ▼
+  ┌────────────────────────────────────────────────────────┐
+  │              Intent Detection                           │
+  │  greeting → accounting → inventory → hr → query         │
+  └────────────────────┬───────────────────────────────────┘
+                       ▼
+  ┌────────────────────────────────────────────────────────┐
+  │           AI Response Engine (Ollama)                   │
+  │  • Retrieves relevant knowledge chunks (RAG)            │
+  │  • Parses transactions if accounting intent             │
+  │  • Generates WhatsApp-optimised reply                   │
+  └────────────────────┬───────────────────────────────────┘
+                       ▼
+  ┌────────────────────────────────────────────────────────┐
+  │           Response Actions                              │
+  │  • Auto-save accounting record (if transaction)         │
+  │  • Update conversation history                          │
+  │  • Send reply via WhatsApp API                          │
+  │  • Save outbound message                                │
+  └────────────────────────────────────────────────────────┘
+```
+
+#### Configuration
+
+Add to your `.env`:
+
+```env
+# WhatsApp Business API
+WHATSAPP_ENABLED=true
+WHATSAPP_API_VERSION=v18.0
+WHATSAPP_PHONE_NUMBER_ID=23490xxxxxxxx
+WHATSAPP_ACCESS_TOKEN=EAA... (long-lived token)
+WHATSAPP_VERIFY_TOKEN=your_webhook_verify_token_here
+```
+
+#### Setup Instructions
+
+1. **Create Meta App** at [developers.facebook.com](https://developers.facebook.com)
+2. **Add WhatsApp product** to your app
+3. **Get your Phone Number ID** from the WhatsApp API dashboard
+4. **Generate access token** (business integration → long-lived token)
+5. **Configure webhook** in Meta dashboard:
+   - Callback URL: `https://yourdomain.com/whatsapp/webhook`
+   - Verify token: (the value you set in `WHATSAPP_VERIFY_TOKEN`)
+   - Subscribe to: `messages`, `message_deliveries`, `message_reads`
+6. **Add your business number** (can be a test number from Meta)
+
+#### API Endpoints
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/whatsapp/webhook` | GET | Meta webhook verification |
+| `/whatsapp/webhook` | POST | Receive inbound messages |
+| `/whatsapp/send` | POST | Manual send from dashboard |
+| `/whatsapp` | GET | Dashboard page (HTML) |
+| `/whatsapp/contacts` | GET | All contacts JSON |
+| `/whatsapp/contacts/{id}/history` | GET | Contact + message history |
+| `/whatsapp/contacts/{id}/block` | POST | Block/unblock contact |
+| `/whatsapp/contacts/{id}/note` | POST | Add CRM note |
+| `/whatsapp/stats` | GET | JSON stats for dashboard |
+| `/whatsapp/token-status` | GET | Check token validity |
+| `/whatsapp/update-token` | POST | Update token at runtime |
+
+#### Example API Response
+
+When sending a message via `/whatsapp/send`:
+
+```json
+{
+    "messaging_product": "whatsapp",
+    "contacts": [
+        {
+            "input": "23490xxxxxxxx",
+            "wa_id": "23490xxxxxxxx"
+        }
+    ],
+    "messages": [
+        {
+            "id": "wamid.HBgNMjM0OTAxOTM4NDQ5NhUCABEYEjI2RTcxQTkyMEJFMkFFMDIxMQA="
+        }
+    ]
+}
+```
+
+#### Security & Best Practices
+
+- **Block contacts** — prevent spam or unwanted messages
+- **Rate limiting** — handles Meta's retry policies (always returns 200 immediately)
+- **Async processing** — webhook doesn't block on AI generation
+- **Token rotation** — update tokens from UI without restarting
+- **Message context** — reply threading supported via `context.message_id`
+
+#### Database Tables Added
+
+```
+whatsapp_contacts     — wa_id, phone, name, total_messages, is_blocked, notes
+whatsapp_messages     — direction, content, status, intent, ai_handled, ai_response
+whatsapp_sessions     — per-contact conversation history (JSON)
+```
+
+---
+
+> *This feature transforms WhatsApp from a simple messaging app into a business operations channel — enabling transaction recording, customer support, and employee self-service directly from your business phone number.*
+
+### 15. Security
 
 **SSO (Single Sign-On)**
 - Google Workspace OAuth2 — `/auth/sso/google`

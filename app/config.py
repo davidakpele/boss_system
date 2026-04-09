@@ -53,9 +53,23 @@ class Settings(BaseSettings):
     PASSWORD_REQUIRE_LOWERCASE: bool = True
     PASSWORD_REQUIRE_DIGIT: bool = True
     
+    WHATSAPP_ACCESS_TOKEN: str = "EAAUyBQ13A9kBRKjfZBIXcvW3O5w7jdBZC0q90ewl4S7y0onsCjBGBDrvlUQPA8KQx2yaHGCZA74RwyBRQiZAfgZAVoOwI49iNas1flohHF8koa6T30b1umYMbmhTSRfo7fdzEBrIUFdZBwHRceSdOjNlRcrdpZAYZCRP3JuqfCCkg7RCZBe7doTmERIZAGTTyZA6FKEYE263n2mSTxdWSuNFRYXOQnMyVKAZANNRFKEZCDt7ZB7AXYb3P7Xi8cGuAwvYNTZCPbFl3ZB3I5NaUOxWahMBYPnp"
+    WHATSAPP_PHONE_NUMBER_ID: str = "1082779354917692"
+    WHATSAPP_BUSINESS_ACCOUNT_ID: str = "1483821526670188"
+    WHATSAPP_VERIFY_TOKEN: str = "boss_webhook_secret_2024"
+    WHATSAPP_API_VERSION: str = "v21.0"
+    
     class Config:
         env_file = ".env"
         extra = "ignore"
  
+ 
+    @property
+    def whatsapp_enabled(self) -> bool:
+        return bool(self.WHATSAPP_ACCESS_TOKEN and self.WHATSAPP_PHONE_NUMBER_ID)
+ 
+    @property
+    def whatsapp_api_url(self) -> str:
+        return f"https://graph.facebook.com/{self.WHATSAPP_API_VERSION}/{self.WHATSAPP_PHONE_NUMBER_ID}/messages"
  
 settings = Settings()

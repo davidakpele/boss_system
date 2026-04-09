@@ -1,0 +1,328 @@
+{% extends "base.html" %}
+{% block title %}WhatsApp — BOSS BCC{% endblock %}
+{% block page_title %}WhatsApp Business{% endblock %}
+{% block page_sub %}AI-powered customer conversations · Auto-accounting · Knowledge base responses{% endblock %}
+
+{% block extra_css %}
+.wa-layout { display:grid; grid-template-columns:320px 1fr; gap:0; height:calc(100vh - 130px); margin:-24px; overflow:hidden; }
+.wa-sidebar { background:var(--bg); border-right:1px solid var(--border); display:flex; flex-direction:column; overflow:hidden; }
+.wa-header  { padding:14px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }
+.wa-search  { padding:10px 12px; border-bottom:1px solid var(--border); flex-shrink:0; }
+.wa-search input { width:100%; background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:7px 14px 7px 32px; font-size:13px; color:var(--text); outline:none; }
+.wa-contacts { flex:1; overflow-y:auto; }
+.wa-contact-item { display:flex; align-items:center; gap:10px; padding:12px 16px; cursor:pointer; border-bottom:1px solid var(--border); transition:background .1s; }
+.wa-contact-item:hover { background:var(--bg2); }
+.wa-contact-item.active { background:var(--blue-bg); border-left:3px solid var(--blue); }
+.wa-av { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,#25d366,#128c7e); display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; color:#fff; flex-shrink:0; }
+.wa-contact-info { flex:1; min-width:0; }
+.wa-contact-name { font-weight:600; font-size:13.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.wa-contact-sub  { font-size:11px; color:var(--text3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:1px; }
+.wa-chat-area { display:flex; flex-direction:column; overflow:hidden; background:var(--bg2); }
+.wa-chat-header { padding:12px 20px; border-bottom:1px solid var(--border); background:var(--bg); display:flex; align-items:center; gap:12px; flex-shrink:0; }
+.wa-messages { flex:1; overflow-y:auto; padding:16px 20px; display:flex; flex-direction:column; gap:8px; }
+.wa-bubble-wrap { display:flex; max-width:70%; }
+.wa-bubble-wrap.inbound  { align-self:flex-start; }
+.wa-bubble-wrap.outbound { align-self:flex-end; flex-direction:row-reverse; }
+.wa-bubble { padding:9px 13px; border-radius:10px; font-size:13.5px; line-height:1.55; word-break:break-word; }
+.wa-bubble.inbound  { background:var(--bg); border:1px solid var(--border); border-top-left-radius:2px; }
+.wa-bubble.outbound { background:#dcf8c6; color:#111; border-top-right-radius:2px; }
+.wa-time { font-size:10px; color:var(--text3); margin-top:3px; text-align:right; }
+.wa-intent-chip { font-size:9.5px; padding:1px 6px; border-radius:8px; font-weight:700; margin-left:4px; }
+.wa-send-row { padding:12px 16px; border-top:1px solid var(--border); background:var(--bg); display:flex; gap:10px; align-items:flex-end; flex-shrink:0; }
+.wa-send-input { flex:1; background:var(--bg2); border:1px solid var(--border); border-radius:20px; padding:10px 16px; font-size:13.5px; font-family:var(--font); outline:none; resize:none; max-height:100px; }
+.wa-send-input:focus { border-color:var(--blue); }
+.wa-send-btn { width:40px; height:40px; border-radius:50%; background:#25d366; border:none; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:16px; flex-shrink:0; transition:opacity .15s; }
+.wa-send-btn:hover { opacity:.85; }
+.wa-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--text3); gap:12px; }
+.wa-stat-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:30px; }
+.wa-stat { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; text-align:center; }
+.wa-stat-val { font-family:var(--font-mono); font-weight:700; font-size:22px; margin:4px 0; }
+.wa-stat-label { font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); font-weight:600; }
+.wa-status-on  { color:#25d366; } 
+.wa-status-off { color:var(--red); }
+.ai-badge { background:rgba(37,211,102,.1); color:#25d366; border:1px solid rgba(37,211,102,.2); border-radius:6px; font-size:10px; font-weight:700; padding:1px 6px; }
+@media(max-width:768px){ .wa-layout{grid-template-columns:1fr;} }
+{% endblock %}
+
+{% block content %}
+
+{# ── Status bar ── #}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+  <div style="display:flex;align-items:center;gap:6px;font-size:13px;">
+    <i class="fa-brands fa-whatsapp" style="font-size:18px;color:#25d366;"></i>
+    <strong>WhatsApp Business</strong>
+    {% if wa_enabled %}
+    <span class="badge badge-green"><i class="fa-solid fa-circle" style="font-size:7px;"></i> Connected</span>
+    {% else %}
+    <span class="badge badge-red"><i class="fa-solid fa-circle" style="font-size:7px;"></i> Not Configured</span>
+    {% endif %}
+  </div>
+  <div style="font-size:12px;color:var(--text3);">
+    Phone ID: <code>{{ wa_number or 'Not set' }}</code>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="btn btn-ghost btn-sm" onclick="openManualSend()">
+      <i class="fa-solid fa-paper-plane"></i> Send Message
+    </button>
+    <a href="#" class="btn btn-ghost btn-sm" onclick="refreshContacts()">
+      <i class="fa-solid fa-rotate"></i> Refresh
+    </a>
+  </div>
+</div>
+
+{# ── Stats ── #}
+<div class="wa-stat-strip mb-4">
+  <div class="wa-stat">
+    <div class="wa-stat-label">Contacts</div>
+    <div class="wa-stat-val" style="color:var(--blue);">{{ total_contacts }}</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-label">Total Messages</div>
+    <div class="wa-stat-val" style="color:var(--text);">{{ total_messages }}</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-label">AI Handled</div>
+    <div class="wa-stat-val" style="color:#25d366;">{{ ai_handled }}</div>
+  </div>
+  <div class="wa-stat">
+    <div class="wa-stat-label">Today</div>
+    <div class="wa-stat-val" style="color:var(--yellow);">{{ today_msgs }}</div>
+  </div>
+</div>
+
+{# ── Main chat layout ── #}
+<div class="wa-layout" style="height:calc(100vh - 260px);">
+
+  {# Left: contacts #}
+  <div class="wa-sidebar">
+    <div class="wa-header">
+      <span style="font-weight:700;font-size:14px;"><i class="fa-brands fa-whatsapp" style="color:#25d366;margin-right:6px;"></i>Conversations</span>
+      <span class="badge badge-gray" id="contactCount">{{ contacts|length }}</span>
+    </div>
+    <div class="wa-search" style="position:relative;">
+      <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:24px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;"></i>
+      <input type="text" placeholder="Search contacts…" oninput="filterContacts(this.value)" style="padding-left:36px;"/>
+    </div>
+    <div class="wa-contacts" id="contactList">
+      {% for c in contacts %}
+      <div class="wa-contact-item" id="ci-{{ c.id }}" onclick="openContact({{ c.id }}, '{{ c.name or c.phone }}', '{{ c.wa_id }}')" data-name="{{ (c.name or c.phone)|lower }}">
+        <div class="wa-av" style="{% if c.is_blocked %}opacity:.4;{% endif %}">
+          {{ (c.name or c.phone)[:1].upper() }}
+        </div>
+        <div class="wa-contact-info">
+          <div class="wa-contact-name">
+            {{ c.name or c.phone }}
+            {% if c.is_blocked %}<span style="color:var(--red);font-size:10px;"> · Blocked</span>{% endif %}
+          </div>
+          <div class="wa-contact-sub">
+            +{{ c.wa_id }} · {{ c.total_messages }} messages
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div style="text-align:center;padding:40px 20px;color:var(--text3);font-size:12.5px;">
+        <i class="fa-brands fa-whatsapp" style="font-size:36px;opacity:.15;display:block;margin-bottom:10px;"></i>
+        No conversations yet.<br>Messages will appear here when customers contact you.
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  {# Right: chat #}
+  <div class="wa-chat-area" id="chatArea">
+    <div class="wa-empty" id="emptyState">
+      <i class="fa-brands fa-whatsapp" style="font-size:56px;opacity:.1;"></i>
+      <div style="font-size:15px;font-weight:600;color:var(--text2);">Select a conversation</div>
+      <div style="font-size:13px;max-width:260px;text-align:center;line-height:1.6;">
+        Click a contact on the left to view their conversation and AI responses.
+      </div>
+    </div>
+
+    <div id="chatView" style="display:none;flex:1;flex-direction:column;overflow:hidden;display:none;">
+      <div class="wa-chat-header">
+        <div class="wa-av" id="chatAv" style="width:36px;height:36px;font-size:13px;"></div>
+        <div style="flex:1;">
+          <div style="font-weight:700;font-size:14px;" id="chatName">—</div>
+          <div style="font-size:11px;color:var(--text3);" id="chatPhone">—</div>
+        </div>
+        <div class="flex gap-2">
+          <span class="ai-badge"><i class="fa-solid fa-robot"></i> AI Auto-Reply ON</span>
+          <button class="btn btn-ghost btn-xs" id="blockBtn" onclick="toggleBlock()">
+            <i class="fa-solid fa-ban"></i> Block
+          </button>
+        </div>
+      </div>
+      <div class="wa-messages" id="waMessages"></div>
+      <div class="wa-send-row">
+        <textarea class="wa-send-input" id="waSendInput" rows="1" placeholder="Type a message…"
+                  onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();manualReply();}"
+                  oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,100)+'px'"></textarea>
+        <button class="wa-send-btn" onclick="manualReply()" title="Send">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ── Manual Send Modal ── #}
+<div class="modal-overlay" id="manualSendModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-title">
+      <span><i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> Send WhatsApp Message</span>
+      <span class="modal-close" onclick="closeModal('manualSendModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Phone Number (with country code)</label>
+      <input type="text" id="ms-to" class="form-control" placeholder="e.g. 2348012345678" style="padding-left:12px;"/>
+      <div style="font-size:11px;color:var(--text3);margin-top:4px;">No + or spaces — just digits. E.g. 2348012345678 for Nigeria.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Message</label>
+      <textarea id="ms-msg" class="form-control" rows="4" style="padding:12px;" placeholder="Type your message…"></textarea>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('manualSendModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendManual()" style="background:#25d366;border-color:#25d366;">
+        <i class="fa-brands fa-whatsapp"></i> Send
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+let currentContactId = null;
+let currentContactWaId = null;
+let isBlocked = false;
+
+const INTENT_COLORS = {
+  accounting: 'background:rgba(16,185,129,.12);color:#34d399;',
+  inventory:  'background:rgba(59,130,246,.12);color:#60a5fa;',
+  hr:         'background:rgba(139,92,246,.12);color:#a78bfa;',
+  greeting:   'background:rgba(245,158,11,.12);color:#fbbf24;',
+  query:      'background:var(--bg3);color:var(--text3);',
+};
+
+function filterContacts(q) {
+  q = q.toLowerCase();
+  document.querySelectorAll('.wa-contact-item').forEach(el => {
+    el.style.display = (el.dataset.name||'').includes(q) ? '' : 'none';
+  });
+}
+
+async function openContact(id, name, waId) {
+  currentContactId = id;
+  currentContactWaId = waId;
+  document.querySelectorAll('.wa-contact-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('ci-' + id)?.classList.add('active');
+
+  document.getElementById('chatAv').textContent = name[0].toUpperCase();
+  document.getElementById('chatName').textContent = name;
+  document.getElementById('chatPhone').textContent = '+' + waId;
+
+  document.getElementById('emptyState').style.display = 'none';
+  const cv = document.getElementById('chatView');
+  cv.style.display = 'flex';
+  cv.style.flexDirection = 'column';
+  cv.style.overflow = 'hidden';
+  cv.style.flex = '1';
+
+  await loadMessages(id);
+}
+
+async function loadMessages(contactId) {
+  const r = await fetch(`/whatsapp/contacts/${contactId}/history`);
+  const msgs = await r.json();
+  const container = document.getElementById('waMessages');
+  container.innerHTML = '';
+
+  if (!msgs.length) {
+    container.innerHTML = '<div style="text-align:center;padding:30px;color:var(--text3);font-size:12.5px;">No messages yet in this conversation.</div>';
+    return;
+  }
+
+  msgs.forEach(m => {
+    const wrap = document.createElement('div');
+    wrap.className = `wa-bubble-wrap ${m.direction}`;
+
+    const time = m.created_at ? new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}) : '';
+    const intentChip = m.intent && m.direction === 'inbound'
+      ? `<span class="wa-intent-chip" style="${INTENT_COLORS[m.intent]||''}">${m.intent}</span>`
+      : '';
+    const aiMark = m.ai_handled && m.direction === 'outbound'
+      ? '<span style="font-size:9px;color:#25d366;margin-left:4px;">🤖 AI</span>'
+      : '';
+
+    wrap.innerHTML = `
+      <div>
+        <div class="wa-bubble ${m.direction}">${escHtml(m.content || '[media]')} ${intentChip}</div>
+        <div class="wa-time">${time} ${aiMark}</div>
+      </div>`;
+    container.appendChild(wrap);
+  });
+  container.scrollTop = container.scrollHeight;
+}
+
+async function manualReply() {
+  if (!currentContactWaId) return;
+  const input = document.getElementById('waSendInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const r = await fetch('/whatsapp/send', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({to: currentContactWaId, message: text}),
+  });
+  const d = await r.json();
+  if (r.ok) {
+    input.value = '';
+    input.style.height = 'auto';
+    toast('Message sent ✓', 'success');
+    await loadMessages(currentContactId);
+  } else {
+    toast(d.error || 'Send failed', 'error');
+  }
+}
+
+async function toggleBlock() {
+  if (!currentContactId) return;
+  const r = await fetch(`/whatsapp/contacts/${currentContactId}/block`, {method:'POST'});
+  const d = await r.json();
+  isBlocked = d.is_blocked;
+  document.getElementById('blockBtn').innerHTML = isBlocked
+    ? '<i class="fa-solid fa-check"></i> Unblock'
+    : '<i class="fa-solid fa-ban"></i> Block';
+  toast(isBlocked ? 'Contact blocked' : 'Contact unblocked', 'info');
+}
+
+function openManualSend() { openModal('manualSendModal'); }
+
+async function sendManual() {
+  const to  = document.getElementById('ms-to').value.trim().replace(/\D/g,'');
+  const msg = document.getElementById('ms-msg').value.trim();
+  if (!to || !msg) { toast('Phone and message required', 'error'); return; }
+  const r = await fetch('/whatsapp/send', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({to, message: msg}),
+  });
+  const d = await r.json();
+  if (r.ok) {
+    toast('Sent!', 'success');
+    closeModal('manualSendModal');
+    setTimeout(() => location.reload(), 800);
+  } else {
+    toast(d.error || 'Failed', 'error');
+  }
+}
+
+async function refreshContacts() { location.reload(); }
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+</script>
+{% endblock %}

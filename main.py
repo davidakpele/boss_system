@@ -11,7 +11,7 @@ import json as _json
 
 from app.database import init_db, AsyncSessionLocal
 from app.config import settings
-from app.routers import analytics, auth, bcc, dashboard, messages, ask_boss, documents, admin
+from app.routers import analytics, auth, bcc, dashboard, messages, ask_boss, documents, admin, whatsapp
 from app.routers import business_ops, sso, push
 from app.middleware.ip_allowlist import IPAllowlistMiddleware
 from app.routers import ai_features
@@ -97,7 +97,7 @@ for r in [
     auth.router, sso.router, push.router, bcc.router,
     analytics.router, ai_features.router, dashboard.router,
     messages.router, ask_boss.router, documents.router,
-    admin.router, business_ops.router,
+    admin.router, business_ops.router, whatsapp.router,
 ]:
     app.include_router(r)
 
