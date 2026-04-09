@@ -42,7 +42,6 @@ templates = Jinja2Templates(directory="app/templates")
 # ══════════════════════════════════════════════════════════════════════════════
 #  META API HELPER
 # ══════════════════════════════════════════════════════════════════════════════
-
 async def send_whatsapp_message(to: str, text: str = None, wa_message_id: str = None, use_template: bool = False):
     if use_template:
         payload = {
@@ -55,12 +54,14 @@ async def send_whatsapp_message(to: str, text: str = None, wa_message_id: str = 
             }
         }
     else:
+        # Updated to match your desired format
         payload = {
             "messaging_product": "whatsapp",
-            "recipient_type": "individual",
             "to": to,
             "type": "text",
-            "text": {"preview_url": False, "body": text},
+            "text": {
+                "body": text
+            }
         }
 
     if wa_message_id and not use_template:
@@ -68,7 +69,7 @@ async def send_whatsapp_message(to: str, text: str = None, wa_message_id: str = 
 
     headers = {
         "Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}",
-        "Content-Type":  "application/json",
+        "Content-Type": "application/json",
     }
 
     try:
@@ -81,8 +82,8 @@ async def send_whatsapp_message(to: str, text: str = None, wa_message_id: str = 
     except Exception as e:
         logger.error(f"WhatsApp send error: {e}")
         return {"error": str(e)}
-
-
+    
+    
 async def mark_message_read(wa_message_id: str):
     """Mark a message as read (shows blue ticks to sender)."""
     if not settings.whatsapp_enabled:
@@ -453,10 +454,8 @@ async def whatsapp_dashboard(
         .where(WhatsAppMessage.created_at >= datetime.utcnow().replace(hour=0, minute=0, second=0))
     )).scalar() or 0
 
-    # Recent contacts with last message
     contacts = (await db.execute(
-        select(WhatsAppContact).order_by(WhatsAppContact.last_seen.desc().nullslast(),
-                                          WhatsAppContact.first_seen.desc()).limit(20)
+        select(WhatsAppContact).order_by(WhatsAppContact.last_seen.desc().nullslast(), WhatsAppContact.first_seen.desc()).limit(20)
     )).scalars().all()
 
     return templates.TemplateResponse(request=request, name="whatsapp/dashboard.html", context={
@@ -469,7 +468,6 @@ async def whatsapp_dashboard(
         "wa_enabled": settings.whatsapp_enabled,
         "wa_number": settings.WHATSAPP_PHONE_NUMBER_ID,
     })
-
 
 @router.get("/contacts")
 async def list_contacts(
@@ -504,7 +502,6 @@ async def contact_history(
         "created_at": m.created_at.isoformat() if m.created_at else "",
     } for m in msgs])
 
-
 @router.post("/contacts/{contact_id}/block")
 async def block_contact(
     contact_id: int,
@@ -517,13 +514,12 @@ async def block_contact(
         await db.commit()
     return JSONResponse({"is_blocked": c.is_blocked if c else False})
 
-
 @router.post("/contacts/{contact_id}/note")
 async def add_note(
     contact_id: int, request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
-):
+    ):
     body = await request.json()
     note = (body.get("note") or "").strip()
     c = (await db.execute(select(WhatsAppContact).where(WhatsAppContact.id == contact_id))).scalar_one_or_none()
@@ -531,7 +527,6 @@ async def add_note(
         c.notes = note
         await db.commit()
     return JSONResponse({"status": "saved"})
-
 
 @router.post("/send")
 async def manual_send(
@@ -549,9 +544,9 @@ async def manual_send(
     if not settings.whatsapp_enabled:
         return JSONResponse({"error": "WhatsApp not configured"}, status_code=503)
 
-    result = await send_whatsapp_message(to, message, use_template=True)
+    result = await send_whatsapp_message(to, message, use_template=False)
+    
     if "messages" in result:
-        # Save outbound
         contact = (await db.execute(
             select(WhatsAppContact).where(WhatsAppContact.wa_id == to)
         )).scalar_one_or_none()
@@ -566,10 +561,10 @@ async def manual_send(
             content=message, status="sent", ai_handled=False,
         ))
         await db.commit()
-        return JSONResponse({"status": "sent"})
+        return JSONResponse(content=result)
     else:
-        return JSONResponse({"error": str(result.get("error", "Unknown error"))}, status_code=500)
-
+        return JSONResponse(content=result, status_code=500)
+    
 
 @router.get("/stats")
 async def wa_stats(
