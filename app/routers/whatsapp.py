@@ -43,21 +43,27 @@ templates = Jinja2Templates(directory="app/templates")
 #  META API HELPER
 # ══════════════════════════════════════════════════════════════════════════════
 
-async def send_whatsapp_message(to: str, text: str, wa_message_id: str = None) -> dict:
-    """Send a text reply via the Meta WhatsApp Cloud API."""
-    if not settings.whatsapp_enabled:
-        logger.warning("WhatsApp not configured — skipping send")
-        return {"error": "not_configured"}
+async def send_whatsapp_message(to: str, text: str = None, wa_message_id: str = None, use_template: bool = False):
+    if use_template:
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "template",
+            "template": {
+                "name": "hello_world",
+                "language": {"code": "en_US"}
+            }
+        }
+    else:
+        payload = {
+            "messaging_product": "whatsapp",
+            "recipient_type": "individual",
+            "to": to,
+            "type": "text",
+            "text": {"preview_url": False, "body": text},
+        }
 
-    payload = {
-        "messaging_product": "whatsapp",
-        "recipient_type": "individual",
-        "to": to,
-        "type": "text",
-        "text": {"preview_url": False, "body": text},
-    }
-    # Quote original message if available
-    if wa_message_id:
+    if wa_message_id and not use_template:
         payload["context"] = {"message_id": wa_message_id}
 
     headers = {
@@ -543,7 +549,7 @@ async def manual_send(
     if not settings.whatsapp_enabled:
         return JSONResponse({"error": "WhatsApp not configured"}, status_code=503)
 
-    result = await send_whatsapp_message(to, message)
+    result = await send_whatsapp_message(to, message, use_template=True)
     if "messages" in result:
         # Save outbound
         contact = (await db.execute(
@@ -584,3 +590,86 @@ async def wa_stats(
         "labels": [str(r.day) for r in rows],
         "values": [r.count for r in rows],
     })
+    
+@router.get("/token-status")
+async def token_status(
+    current_user: User = Depends(require_user),
+):
+    """Check if the current WhatsApp token is still valid."""
+    if not settings.whatsapp_enabled:
+        return JSONResponse({"valid": False, "reason": "WhatsApp not configured in .env"})
+ 
+    url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}"
+    headers = {"Authorization": f"Bearer {settings.WHATSAPP_ACCESS_TOKEN}"}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url, headers=headers)
+            data = r.json()
+        if r.status_code == 200:
+            return JSONResponse({"valid": True, "phone_id": data.get("id"), "display": data.get("display_phone_number")})
+        else:
+            err = data.get("error", {})
+            return JSONResponse({"valid": False, "reason": err.get("message", "Unknown error"), "code": err.get("code")})
+    except Exception as e:
+        return JSONResponse({"valid": False, "reason": str(e)})
+ 
+ 
+@router.post("/update-token")
+async def update_token(
+    request: Request,
+    current_user: User = Depends(require_user),
+):
+    """
+    Update the WhatsApp access token at runtime without restarting the server.
+    Also writes it to .env so it persists on restart.
+    Only super_admin can do this.
+    """
+    from app.models import UserRole
+    if current_user.role not in (UserRole.super_admin, UserRole.admin):
+        raise HTTPException(status_code=403)
+ 
+    body = await request.json()
+    new_token = (body.get("token") or "").strip()
+    if not new_token or len(new_token) < 50:
+        return JSONResponse({"error": "Token looks too short — paste the full token"}, status_code=400)
+ 
+    # Verify the token works before saving
+    url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}"
+    headers = {"Authorization": f"Bearer {new_token}"}
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url, headers=headers)
+            if r.status_code != 200:
+                err = r.json().get("error", {})
+                return JSONResponse({"error": f"Token invalid: {err.get('message','Unknown')}"}, status_code=400)
+    except Exception as e:
+        return JSONResponse({"error": f"Could not verify token: {e}"}, status_code=400)
+ 
+    # Update in memory immediately
+    settings.WHATSAPP_ACCESS_TOKEN = new_token
+ 
+    # Update .env file on disk so it survives restart
+    try:
+        env_path = ".env"
+        with open(env_path, "r") as f:
+            lines = f.readlines()
+ 
+        updated = False
+        new_lines = []
+        for line in lines:
+            if line.startswith("WHATSAPP_ACCESS_TOKEN="):
+                new_lines.append(f"WHATSAPP_ACCESS_TOKEN={new_token}\n")
+                updated = True
+            else:
+                new_lines.append(line)
+ 
+        if not updated:
+            new_lines.append(f"\nWHATSAPP_ACCESS_TOKEN={new_token}\n")
+ 
+        with open(env_path, "w") as f:
+            f.writelines(new_lines)
+ 
+        return JSONResponse({"status": "updated", "message": "Token updated and saved to .env ✓"})
+    except Exception as e:
+        # Token updated in memory even if file write fails
+        return JSONResponse({"status": "updated_memory_only", "message": f"Token active now but .env write failed: {e}"})
