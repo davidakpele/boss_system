@@ -609,3 +609,5 @@ async def update_token(
         return JSONResponse({"status": "updated", "message": "Token updated and saved to .env ✓"})
     except Exception as e:
         return JSONResponse({"status": "updated_memory_only", "message": f"Token active now but .env write failed: {e}"})
+    
+    
