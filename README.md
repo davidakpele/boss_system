@@ -11,7 +11,7 @@ All powered by **real-time systems + local AI (offline)**.
 
 Most companies use **10+ disconnected tools**.
 
-BOSS replaces them with **one intelligent system**:
+The software replaces them with **one intelligent system**:
 
 * 💬 Messaging (Slack-style)
 * 🧠 AI Assistant (RAG-powered)
@@ -40,29 +40,6 @@ Today, BOSS is evolving into a full AI-powered corporate operating system — wi
 There are bugs to fix. Features to refine. Big ideas to bring to life.
 
 Like many open source projects, the biggest challenge isn’t ideas — it’s time and consistency.
-
----
-
-## 🎬 Demo (Watch This First)
-
-👉 *Coming soon — 2 min demo video*
-
----
-
-## 🧪 Run in 2 Minutes
-
-```bash
-git clone https://github.com/yourusername/boss-system
-cd boss-system
-
-docker-compose up --build
-```
-
-Open:
-
-```
-http://localhost:8000
-```
 
 ---
 
