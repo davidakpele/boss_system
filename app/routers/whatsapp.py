@@ -39,9 +39,6 @@ router = APIRouter(prefix="/whatsapp", tags=["whatsapp"])
 templates = Jinja2Templates(directory="app/templates")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  META API HELPER
-# ══════════════════════════════════════════════════════════════════════════════
 async def send_whatsapp_message(to: str, text: str = None, wa_message_id: str = None, use_template: bool = False):
     if use_template:
         payload = {
@@ -103,11 +100,6 @@ async def mark_message_read(wa_message_id: str):
     except Exception as e:
         logger.warning(f"Mark-read error: {e}")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  INTENT DETECTION
-# ══════════════════════════════════════════════════════════════════════════════
-
 def detect_intent(text: str) -> str:
     """Quick rule-based intent detection before handing to AI."""
     text_lower = text.lower()
@@ -136,11 +128,6 @@ def detect_intent(text: str) -> str:
     top = max(scores, key=scores.get)
     return top if scores[top] > 0 else "query"
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  AI RESPONSE ENGINE
-# ══════════════════════════════════════════════════════════════════════════════
-
 async def build_ai_reply(
     contact: WhatsAppContact,
     user_text: str,
@@ -154,7 +141,6 @@ async def build_ai_reply(
     """
     history = session.history or []
 
-    # ── Greeting ─────────────────────────────────────────────────────────────
     if intent == "greeting":
         name = contact.name or "there"
         return (
@@ -165,8 +151,7 @@ async def build_ai_reply(
             "❓ *Business questions* — I know all about your company\n\n"
             "What can I help you with today?"
         ), None
-
-    # ── Accounting intent — try to parse a transaction ────────────────────────
+        
     if intent == "accounting":
         msgs = [
             {"role": "system", "content": (
@@ -195,15 +180,12 @@ async def build_ai_reply(
                 return reply, data
         except Exception as e:
             logger.warning(f"Accounting parse error: {e}")
-        # Fall through to general AI
 
-    # ── RAG query — search knowledge base ────────────────────────────────────
     context_chunks = await ai_service.retrieve_context(user_text, db)
     context_text = "\n\n".join(
         c.get("content", "")[:400] for c in context_chunks[:4]
     ) if context_chunks else ""
 
-    # Build WhatsApp-optimised system prompt
     system = (
         "You are BOSS, an AI business assistant responding via WhatsApp.\n"
         "RULES:\n"
@@ -219,22 +201,15 @@ async def build_ai_reply(
     system += "\nAnswer based on the knowledge above when relevant."
 
     messages = [{"role": "system", "content": system}]
-    # Add conversation history (last 6 turns)
     for turn in history[-6:]:
         messages.append({"role": turn["role"], "content": turn["content"]})
     messages.append({"role": "user", "content": user_text})
 
     reply = await ai_service.chat_complete(messages)
-    # Trim to WhatsApp-safe length
     if len(reply) > 1600:
         reply = reply[:1580] + "…"
 
     return reply.strip(), None
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  WEBHOOK — VERIFICATION (GET)
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/webhook")
 async def verify_webhook(request: Request):
@@ -252,10 +227,6 @@ async def verify_webhook(request: Request):
     raise HTTPException(status_code=403, detail="Verification failed")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  WEBHOOK — INBOUND MESSAGES (POST)
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/webhook")
 async def receive_webhook(request: Request):
     """
@@ -265,9 +236,7 @@ async def receive_webhook(request: Request):
     try:
         body = await request.json()
     except Exception:
-        return JSONResponse({"status": "ok"})  # always 200
-
-    # Process in background (don't block the response)
+        return JSONResponse({"status": "ok"})  
     import asyncio
     asyncio.create_task(_process_webhook(body))
     return JSONResponse({"status": "ok"})
@@ -280,7 +249,6 @@ async def _process_webhook(body: dict):
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
 
-        # Ignore status updates (delivered, read confirmations)
         if "statuses" in value:
             return
 
@@ -292,7 +260,6 @@ async def _process_webhook(body: dict):
             wa_msg_id = msg.get("id", "")
             msg_type = msg.get("type", "text")
 
-            # Extract text content
             if msg_type == "text":
                 content = msg.get("text", {}).get("body", "").strip()
             elif msg_type == "interactive":
@@ -305,7 +272,6 @@ async def _process_webhook(body: dict):
             if not content or not wa_id:
                 continue
 
-            # Get display name from Meta contacts array
             display_name = next(
                 (c.get("profile", {}).get("name") for c in contacts_meta if c.get("wa_id") == wa_id),
                 None
@@ -319,7 +285,6 @@ async def _process_webhook(body: dict):
     except Exception as e:
         logger.error(f"Webhook processing error: {e}", exc_info=True)
 
-
 async def _handle_inbound(
     db: AsyncSession,
     wa_id: str,
@@ -329,8 +294,6 @@ async def _handle_inbound(
     msg_type: str,
 ):
     """Core logic: find/create contact → AI reply → save → send."""
-
-    # ── 1. Get or create contact ──────────────────────────────────────────────
     contact = (await db.execute(
         select(WhatsAppContact).where(WhatsAppContact.wa_id == wa_id)
     )).scalar_one_or_none()
@@ -346,12 +309,10 @@ async def _handle_inbound(
 
     contact.total_messages = (contact.total_messages or 0) + 1
 
-    # ── 2. Skip blocked contacts ──────────────────────────────────────────────
     if contact.is_blocked:
         await db.commit()
         return
 
-    # ── 3. Save inbound message ───────────────────────────────────────────────
     inbound = WhatsAppMessage(
         contact_id=contact.id,
         wa_message_id=wa_msg_id,
@@ -363,10 +324,7 @@ async def _handle_inbound(
     db.add(inbound)
     await db.flush()
 
-    # Mark as read (blue ticks)
     await mark_message_read(wa_msg_id)
-
-    # ── 4. Get/create session ─────────────────────────────────────────────────
     session = (await db.execute(
         select(WhatsAppSession).where(WhatsAppSession.contact_id == contact.id)
     )).scalar_one_or_none()
@@ -375,11 +333,9 @@ async def _handle_inbound(
         db.add(session)
         await db.flush()
 
-    # ── 5. Detect intent ──────────────────────────────────────────────────────
     intent = detect_intent(content)
     inbound.intent = intent
-
-    # ── 6. AI generates reply ─────────────────────────────────────────────────
+    
     reply, accounting_data = await build_ai_reply(
         contact, content, intent, session, db
     )
@@ -387,7 +343,6 @@ async def _handle_inbound(
     inbound.ai_handled = True
     inbound.ai_response = reply
 
-    # ── 7. Auto-record accounting transaction ─────────────────────────────────
     if accounting_data and accounting_data.get("is_transaction"):
         try:
             rec = AccountingRecord(
@@ -396,26 +351,22 @@ async def _handle_inbound(
                 currency=accounting_data.get("currency", "USD"),
                 category=accounting_data.get("category", "General"),
                 description=accounting_data.get("description", content),
-                recorded_by=None,   # no BOSS user — came from WhatsApp
+                recorded_by=None,
                 ai_parsed=True,
             )
             db.add(rec)
             logger.info(f"Auto-recorded {accounting_data['type']} of {accounting_data['amount']} from WhatsApp")
         except Exception as e:
             logger.error(f"Failed to save accounting record: {e}")
-
-    # ── 8. Update session history ─────────────────────────────────────────────
     history = list(session.history or [])
     history.append({"role": "user",      "content": content})
     history.append({"role": "assistant", "content": reply})
-    session.history = history[-20:]  # keep last 10 turns (20 entries)
+    session.history = history[-20:] 
 
     await db.commit()
 
-    # ── 9. Send reply ─────────────────────────────────────────────────────────
     send_result = await send_whatsapp_message(wa_id, reply, wa_msg_id)
 
-    # Save outbound record
     async with AsyncSessionLocal() as out_db:
         out_msg = WhatsAppMessage(
             contact_id=contact.id,
@@ -433,17 +384,12 @@ async def _handle_inbound(
     logger.info(f"WhatsApp: replied to {wa_id} (intent={intent})")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  DASHBOARD PAGE
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("", response_class=HTMLResponse)
 async def whatsapp_dashboard(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    # Quick stats
     total_contacts = (await db.execute(select(func.count(WhatsAppContact.id)))).scalar() or 0
     total_messages = (await db.execute(select(func.count(WhatsAppMessage.id)))).scalar() or 0
     ai_handled     = (await db.execute(
@@ -628,7 +574,6 @@ async def update_token(
     if not new_token or len(new_token) < 50:
         return JSONResponse({"error": "Token looks too short — paste the full token"}, status_code=400)
  
-    # Verify the token works before saving
     url = f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{settings.WHATSAPP_PHONE_NUMBER_ID}"
     headers = {"Authorization": f"Bearer {new_token}"}
     try:
@@ -639,11 +584,8 @@ async def update_token(
                 return JSONResponse({"error": f"Token invalid: {err.get('message','Unknown')}"}, status_code=400)
     except Exception as e:
         return JSONResponse({"error": f"Could not verify token: {e}"}, status_code=400)
- 
-    # Update in memory immediately
     settings.WHATSAPP_ACCESS_TOKEN = new_token
- 
-    # Update .env file on disk so it survives restart
+
     try:
         env_path = ".env"
         with open(env_path, "r") as f:
@@ -666,5 +608,4 @@ async def update_token(
  
         return JSONResponse({"status": "updated", "message": "Token updated and saved to .env ✓"})
     except Exception as e:
-        # Token updated in memory even if file write fails
         return JSONResponse({"status": "updated_memory_only", "message": f"Token active now but .env write failed: {e}"})
