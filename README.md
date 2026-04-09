@@ -1,5 +1,30 @@
 # BOSS System — Business Operating System
-### Developed by David Akpele AI Consults
+
+Goodness gracious… building a full business operating system is no joke.
+
+When I started building **BOSS System**, it was just an idea — a way to unify messaging, AI, HR, accounting, inventory, and operations into one intelligent platform. I wanted to create something that could replace scattered tools and give organizations a single powerful backbone.
+
+But as the system grew, so did the complexity.
+
+Today, BOSS is evolving into a full AI-powered corporate operating system — with real-time communication, knowledge intelligence (RAG), compliance tracking, AI recruitment, WhatsApp automation, and much more. And honestly… there’s still a long way to go.
+
+There are bugs to fix. Features to refine. Big ideas to bring to life.
+
+And like many open source projects, the biggest challenge isn’t ideas — it’s time and consistency.
+
+That’s where you come in.
+
+Your sponsorship helps me:
+
+* Dedicate more time to improving BOSS
+* Build new AI-powered features faster
+* Maintain and scale the platform
+* Keep the project open and accessible to everyone
+
+If you believe in the future of AI-powered business tools, and want to support something ambitious, I’d truly appreciate your support.
+
+Let’s build the future of business systems together 🚀
+[![Sponsor](https://img.shields.io/badge/Sponsor-❤️-ff69b4)](https://github.com/sponsors/davidakpele)
 
 > **The intelligent backbone of your organization.** BOSS is a full-stack, AI-powered corporate operating platform that unifies communication, knowledge management, compliance, risk, HR, accounting, inventory, and business operations — all in one dark-themed, real-time progressive web application.
 
@@ -930,31 +955,5 @@ server {
 | Analytics chart period default | Period selector default value in `analytics.html` |
 
 ---
-
-Goodness gracious… building a full business operating system is no joke.
-
-When I started building **BOSS System**, it was just an idea — a way to unify messaging, AI, HR, accounting, inventory, and operations into one intelligent platform. I wanted to create something that could replace scattered tools and give organizations a single powerful backbone.
-
-But as the system grew, so did the complexity.
-
-Today, BOSS is evolving into a full AI-powered corporate operating system — with real-time communication, knowledge intelligence (RAG), compliance tracking, AI recruitment, WhatsApp automation, and much more. And honestly… there’s still a long way to go.
-
-There are bugs to fix. Features to refine. Big ideas to bring to life.
-
-And like many open source projects, the biggest challenge isn’t ideas — it’s time and consistency.
-
-That’s where you come in.
-
-Your sponsorship helps me:
-
-* Dedicate more time to improving BOSS
-* Build new AI-powered features faster
-* Maintain and scale the platform
-* Keep the project open and accessible to everyone
-
-If you believe in the future of AI-powered business tools, and want to support something ambitious, I’d truly appreciate your support.
-
-Let’s build the future of business systems together 🚀
-[![Sponsor](https://img.shields.io/badge/Sponsor-❤️-ff69b4)](https://github.com/sponsors/davidakpele)
 
 *Built with ❤️ by **David Akpele** · BOSS System v2.0*
