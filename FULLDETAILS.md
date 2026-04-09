@@ -74,28 +74,18 @@ http://localhost:8000
 
 ## 📸 Screenshots
 
-![Login](public/assets/images/login.png)
-
 ### Dashboard
 
 ![Dashboard](public/assets/images/1.png)
 
 ### Messaging
 
-![Messages](public/assets/images/message.png)
+![Messages](public/assets/images/2.png)
 
 ### Ask BOSS (AI)
 
-![AI](public/assets/images/ask.png)
+![AI](public/assets/images/3.png)
 
-
-### OnBoarding BOSS (AI & Employee)
-
-![AI](public/assets/images/onboarding.png)
-
-### Whatsapp (Messages and IA Auto Response)
-
-![AI](public/assets/images/whatsapp.png)
 ---
 
 ## 🧩 Core Modules
@@ -338,7 +328,3 @@ Support development:
 > It’s the **operating system for modern businesses**.
 
 ---
-
-## 📄 Read complete details here
-
-👉 [View DETAILS](./FULLDETAILS.md)
