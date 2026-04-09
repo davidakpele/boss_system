@@ -11,7 +11,7 @@ All powered by **real-time systems + local AI (offline)**.
 
 Most companies use **10+ disconnected tools**.
 
-The software replaces them with **one intelligent system**:
+BOSS replaces them with **one intelligent system**:
 
 * 💬 Messaging (Slack-style)
 * 🧠 AI Assistant (RAG-powered)
@@ -27,19 +27,26 @@ The software replaces them with **one intelligent system**:
 
 ---
 
-## 🧠 The Story Behind BOSS
+## 🎬 Demo (Watch This First)
 
-Goodness gracious… building a full business operating system is no joke.
+👉 *Coming soon — 2 min demo video*
 
-When I started building **BOSS System**, it was just an idea — a way to unify messaging, AI, HR, accounting, inventory, and operations into one intelligent platform.
+---
 
-But as the system grew, so did the complexity.
+## 🧪 Run in 2 Minutes
 
-Today, BOSS is evolving into a full AI-powered corporate operating system — with real-time communication, knowledge intelligence (RAG), compliance tracking, AI recruitment, WhatsApp automation, and much more.
+```bash
+git clone https://github.com/yourusername/boss-system
+cd boss-system
 
-There are bugs to fix. Features to refine. Big ideas to bring to life.
+docker-compose up --build
+```
 
-Like many open source projects, the biggest challenge isn’t ideas — it’s time and consistency.
+Open:
+
+```
+http://localhost:8000
+```
 
 ---
 
@@ -67,27 +74,17 @@ Like many open source projects, the biggest challenge isn’t ideas — it’s t
 
 ## 📸 Screenshots
 
-![Login](public/assets/images/login.png)
-
 ### Dashboard
 
 ![Dashboard](public/assets/images/1.png)
 
 ### Messaging
 
-![Messages](public/assets/images/message.png)
+![Messages](public/assets/images/2.png)
 
 ### Ask BOSS (AI)
 
-![AI](public/assets/images/ask.png)
-
-### Onboarding
-
-![Onboarding](public/assets/images/onboarding.png)
-
-### WhatsApp Integration
-
-![WhatsApp](public/assets/images/whatsapp.png)
+![AI](public/assets/images/3.png)
 
 ---
 
@@ -132,7 +129,7 @@ Like many open source projects, the biggest challenge isn’t ideas — it’s t
 
 ### 💰 Accounting
 
-* Natural language input
+* Natural language input:
 
   > “I paid 15000 for transport”
 * Auto classification
@@ -167,6 +164,8 @@ Like many open source projects, the biggest challenge isn’t ideas — it’s t
 ---
 
 ### 📱 WhatsApp Integration
+
+Turn WhatsApp into a **business OS interface**:
 
 * AI auto-replies
 * Transaction recording
@@ -301,6 +300,8 @@ If this project helps you:
 
 ## 💰 Sponsor
 
+Support development:
+
 👉 https://github.com/sponsors/davidakpele
 
 ---
@@ -321,10 +322,9 @@ If this project helps you:
 
 ---
 
-## 📄 Full Documentation
+## 🧠 Final Thought
 
-👉 [View DETAILS](./FULLDETAILS.md)
+> This is not just another tool.
+> It’s the **operating system for modern businesses**.
 
 ---
-
-> Built with ❤️ by **David Akpele** · BOSS System v2.0
