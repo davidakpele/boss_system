@@ -92,7 +92,7 @@ async def service_worker():
     )
 
 
-# ── Routers ───────────────────────────────────────────────────────────────────
+# ── Routers
 for r in [
     auth.router, sso.router, push.router, bcc.router,
     analytics.router, ai_features.router, dashboard.router,
@@ -101,8 +101,6 @@ for r in [
 ]:
     app.include_router(r)
 
-
-# ── Admin-only security endpoints ─────────────────────────────────────────────
 from app.security_service import LockoutService
 
 @app.post("/admin/security/unlock/{email}", tags=["admin-security"])
@@ -138,7 +136,7 @@ async def admin_run_retention(
     return JSONResponse({"purged": results})
 
 
-# ── Error handlers ────────────────────────────────────────────────────────────
+# ── Error handlers 
 @app.exception_handler(403)
 async def handle_403(request: Request, exc):
     return templates.TemplateResponse(
