@@ -103,7 +103,7 @@ The command center with a real-time overview of the entire organization:
 ![Dashboard Preview](public/assets/images/1.png)
 
 ### 2. Messages (Real-Time Communication)
-A full-featured internal communication system modelled after WhatsApp/Slack:
+A full-featured internal communication system modelled after WhatsApp:
 
 **Direct Messages** — private 1-on-1 conversations with online presence indicators.
 
@@ -626,16 +626,6 @@ Advanced protection and compliance-ready infrastructure:
 
 * **Data Retention Policies**
   Define automatic cleanup rules for compliance and storage optimization.
-
----
-
-## ✨ Where This Fits in the System
-
-These enhancements directly upgrade:
-
-* **Messages Module** → now comparable to Slack/WhatsApp-level collaboration
-* **Ask BOSS / AI Layer** → evolves into a full decision-support system
-* **Security Layer** → now enterprise-grade and audit-ready
 
 ---
 
