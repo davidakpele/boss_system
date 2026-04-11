@@ -1,4 +1,4 @@
-# main.py  — full file (drop-in replacement for your existing main.py)
+# main.py
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -8,15 +8,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 import json as _json
-
 from app.database import init_db, AsyncSessionLocal
 from app.config import settings
 from app.routers import analytics, auth, bcc, dashboard, messages, ask_boss, documents, admin, whatsapp
 from app.routers import business_ops, sso, push
 from app.middleware.ip_allowlist import IPAllowlistMiddleware
 from app.routers import ai_features
-
-# Security additions
 from app.security_service import seed_default_admin, DataRetentionService
 from app.routers.auth import require_admin
 from app.database import get_db
