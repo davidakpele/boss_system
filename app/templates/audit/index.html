@@ -10,6 +10,14 @@
     <span><i class="fa-solid fa-list-check" style="color:var(--accent)"></i> Activity Log</span>
     <span class="text-sm text-muted">Last 100 events</span>
   </div>
+  <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <a href="/platform/audit/export?format=csv&days=90" class="btn btn-ghost btn-sm">
+      <i class="fa-solid fa-download"></i> Export CSV (90 days)
+    </a>
+    <a href="/platform/audit/export?format=pdf&days=30" class="btn btn-ghost btn-sm">
+      <i class="fa-solid fa-file-pdf"></i> Export PDF (30 days)
+    </a>
+  </div>
   <table class="table">
     <thead>
       <tr>

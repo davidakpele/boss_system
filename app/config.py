@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     WHATSAPP_VERIFY_TOKEN: str = "boss_webhook_secret_2024"
     WHATSAPP_API_VERSION: str = "v21.0"
     
+    AUDIT_LOG_RETAIN_DAYS: int = 90
+    SESSION_RETAIN_DAYS: int = 30
+    RATE_LIMIT_RETAIN_DAYS: int = 7
+    LOGIN_ATTEMPT_RETAIN_DAYS: int = 30
+    MESSAGE_RETAIN_DAYS: int = 730
+    
     class Config:
         env_file = ".env"
         extra = "ignore"

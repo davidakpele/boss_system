@@ -52,13 +52,14 @@ class User(Base):
     is_online = Column(Boolean, default=False)
     avatar_color = Column(String(20), default="#6366f1")
     onboarding_complete = Column(Boolean, default=False)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-
     sent_messages = relationship("Message", foreign_keys="Message.sender_id", back_populates="sender")
     documents = relationship("Document", back_populates="author", foreign_keys="Document.author_id")
     audit_logs = relationship("AuditLog", back_populates="user")
     onboarding_progress = relationship("OnboardingProgress", back_populates="user")
+    tenant = relationship("Tenant", back_populates="users", foreign_keys="[User.tenant_id]") 
 
 
 class Channel(Base):
@@ -725,3 +726,88 @@ class WhatsAppSession(Base):
  
     contact = relationship("WhatsAppContact")
  
+class Tenant(Base):
+    """Each company/organisation that subscribes to BOSS."""
+    __tablename__ = "tenants"
+    id            = Column(Integer, primary_key=True, index=True)
+    name          = Column(String(300), nullable=False)
+    slug          = Column(String(100), unique=True, index=True, nullable=False)  # url-safe identifier
+    domain        = Column(String(255), nullable=True)   # custom domain if any
+    plan          = Column(String(50), default="starter") # starter | pro | enterprise
+    is_active     = Column(Boolean, default=True)
+    max_users     = Column(Integer, default=10)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now())
+    expires_at    = Column(DateTime(timezone=True), nullable=True)
+ 
+    # White-label settings
+    brand_name    = Column(String(200), nullable=True)
+    brand_logo_url= Column(String(500), nullable=True)
+    brand_favicon = Column(String(500), nullable=True)
+    primary_color = Column(String(20), default="#dc2626")   # accent colour
+    sidebar_color = Column(String(20), default="#18181b")   # sidebar bg
+    custom_css    = Column(Text, nullable=True)              # injected on every page
+ 
+    users    = relationship("User",    foreign_keys="User.tenant_id", back_populates="tenant")
+    settings = relationship("TenantSetting", back_populates="tenant")
+ 
+ 
+class TenantSetting(Base):
+    """Key-value config per tenant."""
+    __tablename__ = "tenant_settings"
+    id         = Column(Integer, primary_key=True, index=True)
+    tenant_id  = Column(Integer, ForeignKey("tenants.id"), nullable=False)
+    key        = Column(String(100), nullable=False)
+    value      = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+ 
+    tenant = relationship("Tenant", back_populates="settings")
+ 
+
+class BackupLog(Base):
+    """Record of every backup run."""
+    __tablename__ = "backup_logs"
+    id          = Column(Integer, primary_key=True, index=True)
+    tenant_id   = Column(Integer, ForeignKey("tenants.id"), nullable=True)
+    status      = Column(String(20), default="running")  # running | success | failed
+    file_path   = Column(String(500), nullable=True)
+    file_size   = Column(Integer, nullable=True)         # bytes
+    duration_s  = Column(Float, nullable=True)           # seconds
+    error       = Column(Text, nullable=True)
+    triggered_by= Column(String(50), default="scheduler") # scheduler | manual
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+    completed_at= Column(DateTime(timezone=True), nullable=True)
+ 
+
+class ChangelogEntry(Base):
+    """Version release notes shown in-app."""
+    __tablename__ = "changelog_entries"
+    id          = Column(Integer, primary_key=True, index=True)
+    version     = Column(String(20), nullable=False)      # e.g. "2.1.0"
+    title       = Column(String(300), nullable=False)
+    body        = Column(Text, nullable=False)             # markdown
+    type        = Column(String(20), default="feature")   # feature | fix | improvement | security
+    is_published= Column(Boolean, default=True)
+    created_by  = Column(Integer, ForeignKey("users.id"), nullable=True)
+    created_at  = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    author = relationship("User", foreign_keys=[created_by])
+ 
+ 
+class ChangelogRead(Base):
+    """Track which users have seen the latest changelog."""
+    __tablename__ = "changelog_reads"
+    id         = Column(Integer, primary_key=True, index=True)
+    user_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    version    = Column(String(20), nullable=False)
+    read_at    = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    user = relationship("User")
+ 
+class RateLimitBucket(Base):
+    """Sliding window rate limit tracking per IP / user."""
+    __tablename__ = "rate_limit_buckets"
+    id          = Column(Integer, primary_key=True, index=True)
+    key         = Column(String(200), unique=True, index=True, nullable=False)  # ip:endpoint or user:endpoint
+    hits        = Column(Integer, default=1)
+    window_start= Column(DateTime(timezone=True), server_default=func.now())
+    blocked_until = Column(DateTime(timezone=True), nullable=True)
