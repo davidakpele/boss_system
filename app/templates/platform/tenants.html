@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Tenants — BOSS Platform{% endblock %}
+{% block page_title %}Multi-Tenant Management{% endblock %}
+{% block page_sub %}Manage all organisations running on this BOSS instance{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div style="font-size:13px;color:var(--text3);">{{ tenants|length }} organisation{{ 's' if tenants|length != 1 else '' }}</div>
+  <button class="btn btn-primary" onclick="openModal('newTenantModal')"><i class="fa-solid fa-plus"></i> Add Organisation</button>
+</div>
+
+{% if tenants %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;">
+  {% for t in tenants %}
+  <div class="card" style="border-left:3px solid {{ t.primary_color or 'var(--accent)' }};">
+    <div class="flex items-center gap-3 mb-3">
+      {% if t.brand_logo_url %}
+      <img src="{{ t.brand_logo_url }}" style="width:36px;height:36px;border-radius:8px;object-fit:contain;" />
+      {% else %}
+      <div style="width:36px;height:36px;border-radius:8px;background:{{ t.primary_color or 'var(--accent)' }};display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:14px;">
+        {{ (t.brand_name or t.name)[:1].upper() }}
+      </div>
+      {% endif %}
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;font-size:14px;">{{ t.brand_name or t.name }}</div>
+        <div style="font-size:11px;color:var(--text3);">{{ t.slug }} · {{ t.plan.title() }}</div>
+      </div>
+      <span class="badge badge-{% if t.is_active %}green{% else %}red{% endif %}">
+        {% if t.is_active %}Active{% else %}Inactive{% endif %}
+      </span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text3);margin-bottom:14px;">
+      <div>Max Users: <strong style="color:var(--text);">{{ t.max_users }}</strong></div>
+      <div>Domain: <strong style="color:var(--text);">{{ t.domain or 'Not set' }}</strong></div>
+      <div>Created: <strong style="color:var(--text);">{{ t.created_at.strftime('%b %d, %Y') if t.created_at else '' }}</strong></div>
+      <div>Color: <span style="display:inline-block;width:12px;height:12px;border-radius:3px;background:{{ t.primary_color }};vertical-align:middle;"></span> {{ t.primary_color }}</div>
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost btn-xs" onclick="toggleTenant({{ t.id }})">
+        {% if t.is_active %}<i class="fa-solid fa-pause"></i> Deactivate{% else %}<i class="fa-solid fa-play"></i> Activate{% endif %}
+      </button>
+      <button class="btn btn-ghost btn-xs" onclick="editTenant({{ t.id }}, {{ t|tojson|safe }})">
+        <i class="fa-solid fa-pen"></i> Edit Brand
+      </button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:60px 20px;color:var(--text3);">
+  <i class="fa-solid fa-building" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
+  No organisations yet. Add your first tenant above.
+</div>
+{% endif %}
+
+{# Create Modal #}
+<div class="modal-overlay" id="newTenantModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-building" style="color:var(--accent)"></i> New Organisation</span>
+      <span class="modal-close" onclick="closeModal('newTenantModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Organisation Name *</label><input type="text" id="nt-name" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Slug (URL identifier) *</label><input type="text" id="nt-slug" class="form-control" placeholder="my-company" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Plan</label>
+        <select id="nt-plan" class="form-control" style="padding-left:12px;">
+          <option value="starter">Starter (10 users)</option>
+          <option value="pro">Pro (50 users)</option>
+          <option value="enterprise">Enterprise (unlimited)</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Max Users</label><input type="number" id="nt-maxusers" class="form-control" value="10" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Brand Name</label><input type="text" id="nt-brand" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Accent Color</label><input type="color" id="nt-color" class="form-control" value="#dc2626" style="padding:4px;height:40px;"/></div>
+    </div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('newTenantModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="createTenant()"><i class="fa-solid fa-plus"></i> Create</button>
+    </div>
+  </div>
+</div>
+
+{# Edit Brand Modal #}
+<div class="modal-overlay" id="editTenantModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-palette" style="color:var(--accent)"></i> Edit Brand</span>
+      <span class="modal-close" onclick="closeModal('editTenantModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <input type="hidden" id="et-id"/>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Brand Name</label><input type="text" id="et-brand" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Domain</label><input type="text" id="et-domain" class="form-control" placeholder="app.mycompany.com" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Logo URL</label><input type="text" id="et-logo" class="form-control" placeholder="https://…" style="padding-left:12px;"/></div>
+      <div class="form-group"><label class="form-label">Accent Color</label><input type="color" id="et-color" class="form-control" style="padding:4px;height:40px;"/></div>
+      <div class="form-group"><label class="form-label">Sidebar Color</label><input type="color" id="et-sidebar" class="form-control" style="padding:4px;height:40px;"/></div>
+      <div class="form-group"><label class="form-label">Max Users</label><input type="number" id="et-maxusers" class="form-control" style="padding-left:12px;"/></div>
+    </div>
+    <div class="form-group"><label class="form-label">Custom CSS (injected on every page)</label><textarea id="et-css" class="form-control" rows="3" style="padding:10px;font-family:monospace;font-size:12px;"></textarea></div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('editTenantModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTenant()"><i class="fa-solid fa-floppy-disk"></i> Save</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function createTenant() {
+  const r = await fetch('/tenants/create', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      name: document.getElementById('nt-name').value.trim(),
+      slug: document.getElementById('nt-slug').value.trim(),
+      plan: document.getElementById('nt-plan').value,
+      max_users: parseInt(document.getElementById('nt-maxusers').value),
+      brand_name: document.getElementById('nt-brand').value,
+      primary_color: document.getElementById('nt-color').value,
+    })
+  });
+  const d = await r.json();
+  if (r.ok) { toast('Organisation created!', 'success'); closeModal('newTenantModal'); setTimeout(()=>location.reload(),600); }
+  else toast(d.error || 'Error', 'error');
+}
+
+function editTenant(id, data) {
+  document.getElementById('et-id').value = id;
+  document.getElementById('et-brand').value   = data.brand_name || '';
+  document.getElementById('et-domain').value  = data.domain || '';
+  document.getElementById('et-logo').value    = data.brand_logo_url || '';
+  document.getElementById('et-color').value   = data.primary_color || '#dc2626';
+  document.getElementById('et-sidebar').value = data.sidebar_color || '#18181b';
+  document.getElementById('et-maxusers').value= data.max_users || 10;
+  document.getElementById('et-css').value     = data.custom_css || '';
+  openModal('editTenantModal');
+}
+
+async function saveTenant() {
+  const id = document.getElementById('et-id').value;
+  const r = await fetch(`/tenants/${id}/update`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      brand_name:    document.getElementById('et-brand').value,
+      domain:        document.getElementById('et-domain').value,
+      brand_logo_url:document.getElementById('et-logo').value,
+      primary_color: document.getElementById('et-color').value,
+      sidebar_color: document.getElementById('et-sidebar').value,
+      max_users:     parseInt(document.getElementById('et-maxusers').value),
+      custom_css:    document.getElementById('et-css').value,
+    })
+  });
+  if (r.ok) { toast('Updated!', 'success'); closeModal('editTenantModal'); setTimeout(()=>location.reload(),600); }
+  else toast('Error', 'error');
+}
+
+async function toggleTenant(id) {
+  const r = await fetch(`/tenants/${id}/toggle`, {method:'POST'});
+  if (r.ok) { setTimeout(()=>location.reload(),400); }
+}
+</script>
+{% endblock %}

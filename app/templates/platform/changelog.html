@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}Changelog — BOSS{% endblock %}
+{% block page_title %}Changelog{% endblock %}
+{% block page_sub %}Version history and release notes{% endblock %}
+
+{% block extra_css %}
+.cl-entry { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:24px; margin-bottom:16px; position:relative; }
+.cl-entry::before { content:''; position:absolute; left:-1px; top:0; bottom:0; width:3px; border-radius:var(--radius) 0 0 var(--radius); }
+.cl-feature::before  { background:var(--green); }
+.cl-fix::before      { background:var(--blue); }
+.cl-improvement::before { background:var(--yellow); }
+.cl-security::before { background:var(--red); }
+.cl-version { font-family:var(--font-mono); font-size:12px; color:var(--text3); font-weight:600; }
+.cl-title   { font-family:'Syne',sans-serif; font-weight:800; font-size:18px; margin:4px 0 8px; }
+.cl-body    { font-size:13.5px; color:var(--text2); line-height:1.75; }
+.cl-body ul { margin:8px 0 8px 18px; }
+.cl-body li { margin-bottom:4px; }
+.type-pill { padding:3px 10px; border-radius:12px; font-size:11px; font-weight:700; }
+.tp-feature     { background:rgba(16,185,129,.1);  color:#34d399; }
+.tp-fix         { background:rgba(59,130,246,.1);  color:#60a5fa; }
+.tp-improvement { background:rgba(245,158,11,.1);  color:#fbbf24; }
+.tp-security    { background:rgba(239,68,68,.1);   color:#f87171; }
+{% endblock %}
+
+{% block content %}
+{% if user.role.value == 'super_admin' %}
+<div class="card mb-6">
+  <div class="card-title"><i class="fa-solid fa-plus" style="color:var(--accent)"></i> Add Release Note</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px;">
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Version</label>
+      <input type="text" id="cl-ver" class="form-control" placeholder="2.1.0" style="padding-left:12px;"/>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Type</label>
+      <select id="cl-type" class="form-control" style="padding-left:12px;">
+        <option value="feature">🟢 Feature</option>
+        <option value="fix">🔵 Bug Fix</option>
+        <option value="improvement">🟡 Improvement</option>
+        <option value="security">🔴 Security</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+      <label class="form-label">Title</label>
+      <input type="text" id="cl-title" class="form-control" placeholder="What was added?" style="padding-left:12px;"/>
+    </div>
+  </div>
+  <div class="form-group">
+    <label class="form-label">Body (Markdown supported)</label>
+    <textarea id="cl-body" class="form-control" rows="4" style="padding:12px;" placeholder="- Added X feature&#10;- Fixed Y bug&#10;- Improved Z performance"></textarea>
+  </div>
+  <button class="btn btn-primary" onclick="publishChangelog()"><i class="fa-solid fa-paper-plane"></i> Publish</button>
+</div>
+{% endif %}
+
+{% if entries %}
+{% for entry in entries %}
+<div class="cl-entry cl-{{ entry.type }}">
+  <div class="flex items-center gap-3 mb-2">
+    <span class="cl-version">v{{ entry.version }}</span>
+    <span class="type-pill tp-{{ entry.type }}">{{ entry.type.title() }}</span>
+    <span style="font-size:11px;color:var(--text3);margin-left:auto;">
+      {{ entry.created_at.strftime('%B %d, %Y') if entry.created_at else '' }}
+    </span>
+    {% if entry.version not in read_versions %}
+    <span class="badge badge-blue" style="font-size:9.5px;">NEW</span>
+    {% endif %}
+  </div>
+  <div class="cl-title">{{ entry.title }}</div>
+  <div class="cl-body">
+    {% set lines = entry.body.split('\n') %}
+    {% for line in lines %}
+      {% if line.startswith('- ') or line.startswith('* ') %}<li>{{ line[2:] }}</li>
+      {% elif line.startswith('## ') %}<strong style="display:block;margin:8px 0 4px;">{{ line[3:] }}</strong>
+      {% elif line %}<p style="margin:4px 0;">{{ line }}</p>{% endif %}
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card" style="text-align:center;padding:60px 20px;color:var(--text3);">
+  <i class="fa-solid fa-scroll" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
+  No changelog entries yet. Publish your first release note above.
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function publishChangelog() {
+  const version = document.getElementById('cl-ver').value.trim();
+  const title   = document.getElementById('cl-title').value.trim();
+  const body    = document.getElementById('cl-body').value.trim();
+  const type    = document.getElementById('cl-type').value;
+  if (!version || !title || !body) { toast('Version, title and body are required', 'error'); return; }
+  const r = await fetch('/platform/changelog/create', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({version, title, body, type}),
+  });
+  if (r.ok) { toast('Published!', 'success'); setTimeout(() => location.reload(), 600); }
+  else toast('Error publishing', 'error');
+}
+</script>
+{% endblock %}

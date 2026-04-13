@@ -1,4 +1,6 @@
 # main.py
+import asyncio
+from datetime import datetime, timedelta
 import os
 import logging
 from contextlib import asynccontextmanager
@@ -17,6 +19,8 @@ from app.routers import ai_features
 from app.security_service import seed_default_admin, DataRetentionService
 from app.routers.auth import require_admin
 from app.database import get_db
+from app.routers import platform as platform_router
+from app.middleware.rate_limiter import RateLimiterMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logging.basicConfig(level=logging.INFO)
@@ -95,6 +99,8 @@ for r in [
     analytics.router, ai_features.router, dashboard.router,
     messages.router, ask_boss.router, documents.router,
     admin.router, business_ops.router, whatsapp.router,
+    platform_router.router,
+    
 ]:
     app.include_router(r)
 
@@ -145,3 +151,23 @@ async def handle_404(request: Request, exc):
         return HTMLResponse("", status_code=204)
     return templates.TemplateResponse(
         request=request, name="errors/404.html", context={}, status_code=404)
+    
+
+async def _scheduled_backup():
+    """Run daily backup at 2am UTC."""
+    while True:
+        now = datetime.utcnow()
+        # Calculate seconds until next 2am
+        next_run = now.replace(hour=2, minute=0, second=0, microsecond=0)
+        if next_run <= now:
+            next_run += timedelta(days=1)
+        await asyncio.sleep((next_run - now).total_seconds())
+        from app.routers.platform import _run_backup
+        from app.database import AsyncSessionLocal
+        from app.models import BackupLog
+        async with AsyncSessionLocal() as db:
+            log = BackupLog(triggered_by="scheduler")
+            db.add(log)
+            await db.commit()
+            await db.refresh(log)
+            asyncio.create_task(_run_backup(log.id))

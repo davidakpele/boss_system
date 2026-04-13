@@ -1,0 +1,210 @@
+{% extends "base.html" %}
+{% block title %}System Health — BOSS{% endblock %}
+{% block page_title %}System Health{% endblock %}
+{% block page_sub %}Database · AI Engine · Disk · Memory · WebSockets · Backups{% endblock %}
+
+{% block extra_css %}
+.health-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
+.health-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; }
+.health-card.ok     { border-left:3px solid var(--green); }
+.health-card.warn   { border-left:3px solid var(--yellow); }
+.health-card.error  { border-left:3px solid var(--red); }
+.health-icon { font-size:22px; margin-bottom:8px; }
+.health-label { font-size:10.5px; text-transform:uppercase; letter-spacing:.07em; color:var(--text3); font-weight:600; }
+.health-val   { font-family:var(--font-mono); font-size:22px; font-weight:700; margin:4px 0; }
+.health-sub   { font-size:12px; color:var(--text3); }
+.progress-bar { height:6px; background:var(--border); border-radius:10px; overflow:hidden; margin-top:8px; }
+.progress-fill { height:100%; border-radius:10px; transition:width .4s; }
+.stat-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(31,45,66,.3); font-size:12.5px; }
+.stat-row:last-child { border-bottom:none; }
+.backup-row { display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid rgba(31,45,66,.3); font-size:12.5px; }
+.backup-row:last-child { border-bottom:none; }
+@media(max-width:900px){ .health-grid{grid-template-columns:1fr 1fr;} }
+@media(max-width:600px){ .health-grid{grid-template-columns:1fr;} }
+{% endblock %}
+
+{% block content %}
+
+<div class="flex justify-between items-center mb-6">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <div id="overallStatus" style="width:10px;height:10px;border-radius:50%;background:var(--text3);"></div>
+    <span id="overallLabel" style="font-size:13px;color:var(--text3);">Checking…</span>
+  </div>
+  <div class="flex gap-2">
+    <span style="font-size:11px;color:var(--text3);" id="lastUpdated">Updating every 10s</span>
+    <button class="btn btn-ghost btn-sm" onclick="triggerBackup()" id="backupBtn">
+      <i class="fa-solid fa-database"></i> Backup Now
+    </button>
+  </div>
+</div>
+
+{# ── Health cards ── #}
+<div class="health-grid" id="healthGrid">
+  <!-- filled by JS -->
+  {% for i in range(6) %}
+  <div class="health-card" style="min-height:120px;display:flex;align-items:center;justify-content:center;">
+    <i class="fa-solid fa-spinner fa-spin" style="color:var(--text3);"></i>
+  </div>
+  {% endfor %}
+</div>
+
+{# ── Table counts + backup logs ── #}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+  <div class="card">
+    <div class="card-title"><i class="fa-solid fa-table" style="color:var(--accent)"></i> Table Row Counts</div>
+    <div id="tableCounts"></div>
+  </div>
+  <div class="card">
+    <div class="card-title flex justify-between">
+      <span><i class="fa-solid fa-database" style="color:var(--green)"></i> Recent Backups</span>
+      <a href="#" onclick="triggerBackup()" class="btn btn-ghost btn-xs"><i class="fa-solid fa-play"></i> Run</a>
+    </div>
+    <div id="backupLogs">
+      <div style="text-align:center;padding:20px;color:var(--text3);font-size:12.5px;">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadHealth() {
+  const r = await fetch('/platform/health');
+  if (!r.ok) return;
+  const d = await r.json();
+  renderHealth(d);
+  document.getElementById('lastUpdated').textContent = 'Updated ' + new Date().toLocaleTimeString();
+}
+
+function renderHealth(d) {
+  const grid = document.getElementById('healthGrid');
+  const db   = d.database || {};
+  const ai   = d.ai || {};
+  const disk = d.disk || {};
+  const mem  = d.memory || {};
+  const ws   = d.websockets || {};
+
+  const diskPct = disk.pct_used || 0;
+  const memPct  = mem.pct_used  || 0;
+
+  const cards = [
+    {
+      label: 'Database', status: db.ok ? 'ok' : 'error',
+      icon: 'fa-database', iconColor: db.ok ? 'var(--green)' : 'var(--red)',
+      val: db.ok ? `${db.latency_ms}ms` : 'Down',
+      sub: db.ok ? 'PostgreSQL connected' : 'Connection failed',
+      extra: '',
+    },
+    {
+      label: 'AI Engine (Ollama)', status: ai.ok ? 'ok' : 'error',
+      icon: 'fa-microchip', iconColor: ai.ok ? 'var(--green)' : 'var(--red)',
+      val: ai.ok ? 'Online' : 'Offline',
+      sub: ai.model || 'Not configured',
+      extra: '',
+    },
+    {
+      label: 'Disk Storage', status: diskPct > 90 ? 'error' : diskPct > 75 ? 'warn' : 'ok',
+      icon: 'fa-hard-drive', iconColor: diskPct > 90 ? 'var(--red)' : diskPct > 75 ? 'var(--yellow)' : 'var(--green)',
+      val: `${disk.free_gb || 0} GB free`,
+      sub: `${diskPct}% used of ${disk.total_gb || 0} GB`,
+      extra: `<div class="progress-bar"><div class="progress-fill" style="width:${diskPct}%;background:${diskPct>90?'var(--red)':diskPct>75?'var(--yellow)':'var(--green)'};"></div></div>`,
+    },
+    {
+      label: 'Memory', status: memPct > 90 ? 'error' : memPct > 75 ? 'warn' : 'ok',
+      icon: 'fa-memory', iconColor: memPct > 90 ? 'var(--red)' : memPct > 75 ? 'var(--yellow)' : 'var(--green)',
+      val: `${mem.used_gb || 0} / ${mem.total_gb || 0} GB`,
+      sub: `${memPct}% in use`,
+      extra: `<div class="progress-bar"><div class="progress-fill" style="width:${memPct}%;background:${memPct>90?'var(--red)':memPct>75?'var(--yellow)':'var(--green)'};"></div></div>`,
+    },
+    {
+      label: 'WebSockets', status: 'ok',
+      icon: 'fa-bolt', iconColor: 'var(--yellow)',
+      val: `${ws.active || 0}`,
+      sub: 'Active connections',
+      extra: '',
+    },
+    {
+      label: 'Uploads Directory', status: 'ok',
+      icon: 'fa-folder-open', iconColor: 'var(--blue)',
+      val: `${(d.uploads || {}).size_mb || 0} MB`,
+      sub: d.uptime_hours ? `Server up ${d.uptime_hours}h` : 'Storage used',
+      extra: '',
+    },
+  ];
+
+  grid.innerHTML = cards.map(c => `
+    <div class="health-card ${c.status}">
+      <div class="health-icon" style="color:${c.iconColor};"><i class="fa-solid ${c.icon}"></i></div>
+      <div class="health-label">${c.label}</div>
+      <div class="health-val" style="color:${c.iconColor};">${c.val}</div>
+      <div class="health-sub">${c.sub}</div>
+      ${c.extra}
+    </div>`).join('');
+
+  // Overall status
+  const allOk = db.ok && ai.ok && diskPct < 90 && memPct < 90;
+  const dot   = document.getElementById('overallStatus');
+  const lbl   = document.getElementById('overallLabel');
+  dot.style.background = allOk ? 'var(--green)' : 'var(--red)';
+  lbl.textContent = allOk ? 'All systems operational' : 'Issues detected — check cards above';
+  lbl.style.color = allOk ? 'var(--green)' : 'var(--red)';
+
+  // Table counts
+  const counts = db.counts || {};
+  document.getElementById('tableCounts').innerHTML = Object.entries(counts).map(([k,v]) => `
+    <div class="stat-row">
+      <span style="color:var(--text2);text-transform:capitalize;">${k.replace(/_/g,' ')}</span>
+      <span style="font-family:var(--font-mono);font-weight:600;">${v.toLocaleString()}</span>
+    </div>`).join('');
+}
+
+async function loadBackupLogs() {
+  const r = await fetch('/platform/backup/logs');
+  if (!r.ok) return;
+  const logs = await r.json();
+  const el = document.getElementById('backupLogs');
+  if (!logs.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">No backups yet. Click Run to create one.</div>';
+    return;
+  }
+  el.innerHTML = logs.slice(0,8).map(l => {
+    const statusColor = l.status==='success'?'var(--green)':l.status==='failed'?'var(--red)':'var(--yellow)';
+    const size = l.file_size ? `${(l.file_size/1e6).toFixed(1)} MB` : '—';
+    const dur  = l.duration_s ? `${l.duration_s}s` : '';
+    const date = l.created_at ? new Date(l.created_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    return `<div class="backup-row">
+      <div style="width:8px;height:8px;border-radius:50%;background:${statusColor};flex-shrink:0;"></div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:500;">${l.triggered_by} — ${l.status}</div>
+        <div style="font-size:11px;color:var(--text3);">${date} · ${size} ${dur}</div>
+      </div>
+      ${l.status==='success'?`<a href="/platform/backup/${l.id}/download" class="btn btn-ghost btn-xs"><i class="fa-solid fa-download"></i></a>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function triggerBackup() {
+  const btn = document.getElementById('backupBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Running…';
+  const r = await fetch('/platform/backup', {method:'POST'});
+  const d = await r.json();
+  if (r.ok) {
+    toast('Backup started in background', 'success');
+    setTimeout(() => loadBackupLogs(), 3000);
+  } else {
+    toast('Backup failed', 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fa-solid fa-database"></i> Backup Now';
+}
+
+// Auto-refresh every 10 seconds
+loadHealth();
+loadBackupLogs();
+setInterval(loadHealth, 10000);
+setInterval(loadBackupLogs, 30000);
+</script>
+{% endblock %}
