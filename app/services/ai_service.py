@@ -17,11 +17,8 @@ class AIService:
     def __init__(self):
         self.base_url = settings.OLLAMA_BASE_URL
         self.model = settings.OLLAMA_MODEL
-        self._embedder = None   # lazy-loaded
+        self._embedder = None 
 
-    # ──────────────────────────────────────────────
-    #  EMBEDDING MODEL  (sentence-transformers)
-    # ──────────────────────────────────────────────
     def _get_embedder(self):
         """Lazy-load the embedding model so startup is fast."""
         if self._embedder is None:
