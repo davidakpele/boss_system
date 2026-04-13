@@ -579,8 +579,26 @@ async def tenants_page(
     if current_user.role != UserRole.super_admin:
         raise HTTPException(status_code=403)
     tenants = (await db.execute(select(Tenant).order_by(Tenant.created_at.desc()))).scalars().all()
+    tenants_data = [
+        {
+            "id": t.id,
+            "name": t.name,
+            "slug": t.slug,
+            "plan": t.plan,
+            "is_active": t.is_active,
+            "max_users": t.max_users,
+            "domain": t.domain,
+            "brand_name": t.brand_name,
+            "brand_logo_url": t.brand_logo_url,
+            "primary_color": t.primary_color,
+            "sidebar_color": t.sidebar_color,
+            "created_at": t.created_at,
+            "expires_at": t.expires_at,
+        }
+        for t in tenants
+    ]
     return templates.TemplateResponse(request=request, name="platform/tenants.html", context={
-        "user": current_user, "page": "platform", "tenants": tenants,
+        "user": current_user, "page": "platform", "tenants": tenants_data,
     })
 
 

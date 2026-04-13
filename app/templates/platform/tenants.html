@@ -39,7 +39,7 @@
       <button class="btn btn-ghost btn-xs" onclick="toggleTenant({{ t.id }})">
         {% if t.is_active %}<i class="fa-solid fa-pause"></i> Deactivate{% else %}<i class="fa-solid fa-play"></i> Activate{% endif %}
       </button>
-      <button class="btn btn-ghost btn-xs" onclick="editTenant({{ t.id }}, {{ t|tojson|safe }})">
+      <button class="btn btn-ghost btn-xs" onclick="editTenant({{ t.id }}, {{ {'id': t.id, 'name': t.name, 'slug': t.slug, 'plan': t.plan, 'is_active': t.is_active, 'max_users': t.max_users, 'domain': t.domain, 'brand_name': t.brand_name, 'primary_color': t.primary_color, 'sidebar_color': t.sidebar_color}|tojson|safe }})">
         <i class="fa-solid fa-pen"></i> Edit Brand
       </button>
     </div>
