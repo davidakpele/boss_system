@@ -109,23 +109,6 @@ Here's a comprehensive list of everything that would make BOSS a world-class ent
 
 ---
 
-## ⚙️ Platform & Infrastructure
-76. **Multi-Tenant Architecture** — run BOSS for multiple companies, full data isolation
-77. **White Labelling** — replace all BOSS branding with client's logo and colours
-78. **Automated Database Backups** — scheduled pg_dump with configurable retention
-79. **Health Check Dashboard** — DB status, Ollama status, disk, memory, active WebSockets
-80. **Email Digest** — daily/weekly summary of activity emailed to managers
-81. **Changelog & Version Notes** — in-app changelog after each update
-82. **Dark / Light Mode Toggle** — currently dark only; add light mode
-83. **Keyboard Shortcuts** — `G D` dashboard, `G M` messages, `Cmd+K` global search
-84. **Global Search** — one bar searching messages, docs, tasks, users, knowledge simultaneously
-85. **Drag-and-Drop File Uploads** — drop files anywhere on page
-86. **Audit Trail Export** — download full audit log as CSV/PDF for compliance
-87. **Rate Limiting** — protect API endpoints from abuse
-88. **Webhook Receiver** — accept events from external systems into BOSS
-
----
-
 ## 🌍 Localisation
 89. **Multi-Language UI** — translate BOSS interface (Yoruba, Hausa, French, etc.)
 90. **Time Zone Support** — per-user timezone for timestamps and scheduling

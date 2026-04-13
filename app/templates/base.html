@@ -79,7 +79,7 @@
   </div>
  
   <div class="nav-divider"></div>
- 
+ {% if user.role.value == 'super_admin' %}
   <div class="nav-group" data-group="platform">
     <button class="nav-group-btn" onclick="toggleGroup('platform')">
       <i class="nav-icon fa-solid fa-sliders"></i>
@@ -101,6 +101,8 @@
       </a>
     </div>
   </div>
+  <div class="nav-divider"></div>
+{% endif %}
   <!-- ── OPERATIONS ── -->
   <div class="nav-group" data-group="ops">
     <button class="nav-group-btn" onclick="toggleGroup('ops')">

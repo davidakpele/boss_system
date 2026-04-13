@@ -543,6 +543,22 @@ whatsapp_sessions     — per-contact conversation history (JSON)
 - Types: `info` · `success` · `warning` · `error` · `message` · `hr`
 - Fires web push simultaneously when a notification is created
 
+
+## 18. ⚙️ Platform & Infrastructure
+- **Multi-Tenant Architecture** — run BOSS for multiple companies, full data isolation
+- **White Labelling** — replace all BOSS branding with client's logo and colours
+- **Automated Database Backups** — scheduled pg_dump with configurable retention
+- **Health Check Dashboard** — DB status, Ollama status, disk, memory, active WebSockets
+- **Email Digest** — daily/weekly summary of activity emailed to managers
+- **Changelog & Version Notes** — in-app changelog after each update
+- **Dark / Light Mode Toggle** — currently dark only; add light mode
+- **Keyboard Shortcuts** — `G D` dashboard, `G M` messages, `Cmd+K` global search
+- **Global Search** — one bar searching messages, docs, tasks, users, knowledge simultaneously
+- **Drag-and-Drop File Uploads** — drop files anywhere on page
+- **Audit Trail Export** — download full audit log as CSV/PDF for compliance
+- **Rate Limiting** — protect API endpoints from abuse
+- **Webhook Receiver** — accept events from external systems into BOSS
+
 ## 🔥 **NEW: Messaging, AI & Security Enhancements (v2.1)**
 
 ### 💬 Messaging & Collaboration (Upgraded)
