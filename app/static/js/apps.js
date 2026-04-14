@@ -1,16 +1,14 @@
-// Confirm helper
+
 function confirmAction(msg, cb) {
   if (window.confirm(msg)) cb();
 }
 
-// Format date
 function fmtDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
   return d.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
 }
 
-// Debounce
 function debounce(fn, delay) {
   let t;
   return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), delay); };
@@ -53,7 +51,6 @@ function applyTheme(theme) {
     document.documentElement.style.setProperty('--sidebar-hover', '#0f1c2e');
   }
  
-  // Update toggle button icon
   const btn = document.getElementById('themeToggleBtn');
   if (btn) btn.innerHTML = theme === 'light'
     ? '<i class="fa-solid fa-moon"></i>'
@@ -65,11 +62,7 @@ function toggleTheme() {
   applyTheme(current === 'dark' ? 'light' : 'dark');
 }
  
- 
-// ══════════════════════════════════════════════════════════════════════════════
-//  8. KEYBOARD SHORTCUTS
-// ══════════════════════════════════════════════════════════════════════════════
- 
+
 (function initKeyboardShortcuts() {
   let gPressed = false;
   let gTimer   = null;
@@ -93,14 +86,12 @@ function toggleTheme() {
     const tag = e.target.tagName.toLowerCase();
     const isInput = ['input','textarea','select'].includes(tag) || e.target.isContentEditable;
  
-    // Cmd+K or Ctrl+K → Global Search
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
       openGlobalSearch();
       return;
     }
  
-    // Escape → close search / modals
     if (e.key === 'Escape') {
       closeGlobalSearch();
       return;
@@ -108,7 +99,6 @@ function toggleTheme() {
  
     if (isInput) return;
  
-    // G + letter navigation
     if (e.key === 'g' || e.key === 'G') {
       gPressed = true;
       clearTimeout(gTimer);
@@ -126,7 +116,6 @@ function toggleTheme() {
       }
     }
  
-    // ? → show shortcut help
     if (e.key === '?') {
       openModal('shortcutsModal');
     }
@@ -134,10 +123,6 @@ function toggleTheme() {
 })();
  
 
-// ══════════════════════════════════════════════════════════════════════════════
-//  9. GLOBAL SEARCH
-// ══════════════════════════════════════════════════════════════════════════════
- 
 let _searchOpen   = false;
 let _searchTimer  = null;
 let _searchIndex  = -1;
@@ -178,7 +163,6 @@ function openGlobalSearch() {
       if (e.target === overlay) closeGlobalSearch();
     });
  
-    // Inject styles
     if (!document.getElementById('gsStyle')) {
       const style = document.createElement('style');
       style.id = 'gsStyle';
@@ -212,8 +196,7 @@ function openGlobalSearch() {
  
   overlay.style.display = 'flex';
   setTimeout(() => document.getElementById('globalSearchInput')?.focus(), 50);
- 
-  // Show quick nav hints on open
+
   document.getElementById('globalSearchResults').innerHTML = `
     <div style="padding:16px 16px 8px;font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;">Quick Navigation</div>
     ${[
@@ -307,11 +290,6 @@ function updateSearchSelection() {
   });
 }
  
- 
-// ══════════════════════════════════════════════════════════════════════════════
-//  10. DRAG-AND-DROP FILE UPLOADS
-// ══════════════════════════════════════════════════════════════════════════════
- 
 (function initDragDrop() {
   let dragCounter = 0;
  
@@ -356,18 +334,14 @@ function updateSearchSelection() {
  
     const files = Array.from(e.dataTransfer?.files || []);
     if (!files.length) return;
- 
-    // Route to the appropriate handler based on current page
     const path = window.location.pathname;
  
     if (path.includes('/messages')) {
-      // Messages page — attach to message input
       if (typeof handleFileSelect === 'function') {
         handleFileSelect(files);
         toast(`${files.length} file${files.length > 1 ? 's' : ''} attached to message`, 'success');
       }
     } else if (path.includes('/documents')) {
-      // Documents page — trigger document upload
       const fileInput = document.querySelector('input[type="file"]');
       if (fileInput) {
         const dt = new DataTransfer();
@@ -377,7 +351,6 @@ function updateSearchSelection() {
         toast(`${files.length} file${files.length > 1 ? 's' : ''} ready to upload`, 'success');
       }
     } else {
-      // Anywhere else — show a toast and open file picker if available
       toast(`${files.length} file${files.length > 1 ? 's' : ''} dropped — navigate to Messages or Documents to upload`, 'info');
     }
   });

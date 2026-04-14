@@ -18,11 +18,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ask-boss", tags=["ask_boss"])
 templates = Jinja2Templates(directory="app/templates")
 
-
-# ─────────────────────────────────────────────────────────────────
-#  MAIN ASK BOSS PAGE
-# ─────────────────────────────────────────────────────────────────
-
 @router.get("", response_class=HTMLResponse)
 async def ask_boss_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -139,7 +134,6 @@ async def chat(
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")
 
-# ─────────────────────────────────────────────────────────────────
 #  ONBOARDING WEBSOCKET
 #  Single socket handles: status, chat, AI token streaming
 #
@@ -153,7 +147,6 @@ async def chat(
 #    { "type": "token", "content": "..." }
 #    { "type": "done" }
 #    { "type": "error", "message": "..." }
-# ─────────────────────────────────────────────────────────────────
 
 @router.websocket("/onboarding-assistant/ws/{user_id}")
 async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
@@ -214,7 +207,6 @@ async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
                     ))
                     await db.commit()
 
-                # Stream AI tokens directly over WebSocket
                 full_response = ""
                 try:
                     async with AsyncSessionLocal() as db:
@@ -231,8 +223,6 @@ async def onboarding_ws(websocket: WebSocket, user_id: int, token: str = None):
                     logger.error(f"AI stream error: {e}")
                     await websocket.send_json({"type": "error", "message": "AI service error. Please try again."})
                     continue
-
-                # Save assistant reply
                 async with AsyncSessionLocal() as db:
                     db.add(OnboardingConversation(
                         user_id=authed_user.id, role="assistant", content=full_response
@@ -335,7 +325,6 @@ async def delete_session(
     )).scalar_one_or_none()
     if not convo:
         raise HTTPException(404)
-    # delete messages first
     msgs = (await db.execute(
         select(AIMessage).where(AIMessage.conversation_id == convo.id)
     )).scalars().all()

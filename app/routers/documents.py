@@ -18,12 +18,10 @@ router = APIRouter(tags=["knowledge"])
 templates = Jinja2Templates(directory="app/templates")
 
 
-# ─── background: embed + risk-detect a document ───────────────────────────────
 async def _post_approve_background(doc_id: int, content: str, department: str):
     """Run after document approval: generate embeddings and detect risks."""
     from app.database import AsyncSessionLocal
     async with AsyncSessionLocal() as db:
-        # 1. Embed all chunks for this document
         chunks = (await db.execute(
             select(KnowledgeChunk).where(KnowledgeChunk.document_id == doc_id)
         )).scalars().all()
@@ -33,11 +31,9 @@ async def _post_approve_background(doc_id: int, content: str, department: str):
                 if emb:
                     chunk.embedding = emb
         await db.commit()
-
-        # 2. AI Risk Detection
+        
         risks = await ai_service.detect_risks_from_text(content, source_label=f"document:{doc_id}")
         for r in risks:
-            # Don't duplicate
             existing = (await db.execute(
                 select(RiskItem).where(
                     RiskItem.title == r["title"],
@@ -122,7 +118,6 @@ async def new_document_form(request: Request, current_user: User = Depends(requi
     return templates.TemplateResponse(request=request, name="documents/new.html",
                                       context={"user": current_user, "page": "documents"})
 
-
 @router.post("/documents/new")
 async def create_document(
     background_tasks: BackgroundTasks,
@@ -171,7 +166,7 @@ async def create_document(
                 document_id=doc.id, source_type="document",
                 content=ct, summary=summary, department=department,
             ))
-        # compliance
+
         try:
             for item in (await ai_service.extract_compliance_from_document(full_content))[:10]:
                 db.add(ComplianceRecord(
@@ -182,8 +177,6 @@ async def create_document(
             doc.is_compliance = True
         except Exception as e:
             logger.error(f"Compliance extraction: {e}")
-
-        # Schedule background embedding + risk detection
         background_tasks.add_task(_post_approve_background, doc.id, full_content, department)
 
     db.add(AuditLog(user_id=current_user.id, action="create_document", resource_type="document",

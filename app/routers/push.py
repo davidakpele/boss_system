@@ -20,8 +20,6 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/push", tags=["push"])
 
-
-# ── Low-level send (sync, called from async context via executor if needed) ────
 def _push(subscription_info: dict, payload: dict) -> bool:
     if not settings.VAPID_PRIVATE_KEY or not settings.VAPID_PUBLIC_KEY:
         return False
@@ -38,8 +36,6 @@ def _push(subscription_info: dict, payload: dict) -> bool:
         logger.warning(f"Push send error: {exc}")
         return False
 
-
-# ── Public API ────────────────────────────────────────────────────────────────
 @router.get("/vapid-public-key")
 async def vapid_key():
     return JSONResponse({"publicKey": settings.VAPID_PUBLIC_KEY})
@@ -118,8 +114,6 @@ async def send_test(
     )
     return JSONResponse({"sent": sent, "total": len(subs)})
 
-
-# ── Internal helper — call from other routers ─────────────────────────────────
 async def notify_user(
     user_id: int,
     title: str,

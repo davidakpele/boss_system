@@ -42,17 +42,11 @@ from app.security_service import (
     TwoFactorService, APIKeyService, PasswordPolicy,
 )
 
-
-# ── Password helpers ──────────────────────────────────────────────────────────
-
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
-
-
-# ── JWT helpers ───────────────────────────────────────────────────────────────
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     to_encode = data.copy()
@@ -61,9 +55,6 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     )
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-
-
-# ── Auth dependencies ─────────────────────────────────────────────────────────
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/token", auto_error=False)
 
@@ -108,18 +99,11 @@ def require_role(roles: list[str]):
     return _check
 
 
-# ── Router setup ──────────────────────────────────────────────────────────────
-
 router    = APIRouter(prefix="/auth", tags=["auth"])
 templates = Jinja2Templates(directory="app/templates")
 
 AVATAR_COLORS = ["#6366f1","#8b5cf6","#ec4899","#f59e0b",
                  "#10b981","#3b82f6","#ef4444","#14b8a6"]
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  SSO — OAuth2 PKCE (unchanged logic, sessions now tracked)
-# ═══════════════════════════════════════════════════════════════════════════════
 
 GOOGLE_AUTH_URL     = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN_URL    = "https://oauth2.googleapis.com/token"
@@ -311,11 +295,6 @@ async def sso_microsoft_callback(request: Request, db: AsyncSession = Depends(ge
         client_id=settings.MICROSOFT_CLIENT_ID, client_secret=settings.MICROSOFT_CLIENT_SECRET,
     )
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  WS token (unchanged)
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/ws-token")
 async def get_ws_token(access_token: Optional[str] = Cookie(default=None)):
     if not access_token:
@@ -325,11 +304,6 @@ async def get_ws_token(access_token: Optional[str] = Cookie(default=None)):
     except JWTError:
         return JSONResponse({"token": None}, status_code=401)
     return JSONResponse({"token": access_token})
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Login / logout / register
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, current_user=Depends(get_current_user)):
@@ -365,7 +339,6 @@ async def login(
             status_code=code,
         )
 
-    # ── 1. Lockout check ─────────────────────────────────────────────────────
     locked, unlock_at = await LockoutService.is_locked(db, email)
     if locked:
         unlock_str = unlock_at.strftime("%H:%M UTC") if unlock_at else "later"
@@ -374,8 +347,7 @@ async def login(
             f"Try again after {unlock_str}.",
             429,
         )
-
-    # ── 2. Credential check ──────────────────────────────────────────────────
+        
     result = await db.execute(select(User).where(User.email == email))
     user   = result.scalar_one_or_none()
 
@@ -385,11 +357,7 @@ async def login(
 
     if not user.is_active:
         return _fail("Account deactivated. Contact your administrator.")
-
-    # ── 3. Record success (clears rolling failure count) ─────────────────────
     await LockoutService.record_attempt(db, email, ip, success=True, user_agent=ua)
-
-    # ── 4. 2FA gate ──────────────────────────────────────────────────────────
     if await TwoFactorService.is_enabled(db, user.id):
         pending = create_access_token(
             {"sub": str(user.id), "2fa_pending": True},
@@ -399,7 +367,6 @@ async def login(
         redir.set_cookie("_2fa_pending", pending, httponly=True, samesite="lax", max_age=300)
         return redir
 
-    # ── 5. Issue session + JWT ────────────────────────────────────────────────
     user.is_online = True
     session = await SessionService.create(db, user.id, ip, ua)
     token   = create_access_token({"sub": str(user.id), "sid": session.id})
@@ -427,7 +394,6 @@ async def logout(
 ):
     if current_user:
         current_user.is_online = False
-        # Revoke the specific session from the JWT if available
         try:
             tok = request.cookies.get("access_token")
             if tok:
@@ -461,7 +427,6 @@ async def register(
     department: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ):
-    # Password policy
     violations = PasswordPolicy.validate(password)
     if violations:
         return templates.TemplateResponse(
@@ -498,10 +463,6 @@ async def register(
 
     return RedirectResponse("/auth/login?registered=1", status_code=302)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  2FA routes
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/2fa/setup", response_class=HTMLResponse)
 async def twofa_setup_page(
@@ -610,10 +571,6 @@ async def twofa_disable(
     return JSONResponse({"message": "2FA disabled."})
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Session management
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/sessions", response_class=HTMLResponse)
 async def list_sessions(
     request: Request,
@@ -649,10 +606,6 @@ async def revoke_all_sessions(
     count = await SessionService.revoke_all(db, current_user.id, except_token=current_tok)
     return JSONResponse({"message": f"{count} other session(s) revoked."})
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  API Key management
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/api-keys", response_class=HTMLResponse)
 async def api_keys_page(
@@ -696,10 +649,6 @@ async def revoke_api_key(
         raise HTTPException(404, "API key not found.")
     return JSONResponse({"message": "API key revoked."})
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Password change
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/change-password", response_class=HTMLResponse)
 async def change_password_page(

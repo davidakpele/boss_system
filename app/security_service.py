@@ -35,19 +35,13 @@ from app.security_models import (
     UserSession, APIKey,
     PasswordHistory, DataRetentionPolicy,
 )
-from app.config import settings   # ← single source of truth
+from app.config import settings 
 
-# Optional Fernet — only needed if FIELD_ENCRYPTION_KEY is set
 try:
     from cryptography.fernet import Fernet
     _FERNET_AVAILABLE = True
 except ImportError:
     _FERNET_AVAILABLE = False
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Password policy
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class PasswordPolicy:
 
@@ -107,12 +101,6 @@ class PasswordPolicy:
     async def record(db: AsyncSession, user_id: int, new_hash: str) -> None:
         """Append the current bcrypt hash to the history table."""
         db.add(PasswordHistory(user_id=user_id, hash=new_hash))
-        # No auto-trim — we only ever SELECT the last N rows
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Lockout service
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class LockoutService:
 
@@ -211,11 +199,6 @@ class LockoutService:
             ))
         await db.commit()
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Session service
-# ═══════════════════════════════════════════════════════════════════════════════
-
 class SessionService:
 
     @staticmethod
@@ -312,11 +295,6 @@ class SessionService:
             await db.commit()
         return session
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Two-Factor Authentication (TOTP)
-# ═══════════════════════════════════════════════════════════════════════════════
-
 class TwoFactorService:
 
     @staticmethod
@@ -399,13 +377,10 @@ class TwoFactorService:
         )).scalar_one_or_none()
 
         if not record:
-            return True   # 2FA not enabled — let the caller through
-
-        # Try TOTP
+            return True  
         if TwoFactorService._totp(record.secret).verify(code, valid_window=1):
             return True
 
-        # Try backup codes
         result = await db.execute(
             select(TwoFactorBackupCode).where(
                 and_(
@@ -447,11 +422,6 @@ class TwoFactorService:
             )
         )).scalar_one_or_none()
         return record is not None
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  API Key service
-# ═══════════════════════════════════════════════════════════════════════════════
 
 class APIKeyService:
 
@@ -534,11 +504,6 @@ class APIKeyService:
         )
         return list(result.scalars())
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Field-level encryption
-# ═══════════════════════════════════════════════════════════════════════════════
-
 class FieldEncryption:
     """
     Transparent Fernet encryption for sensitive column values.
@@ -572,13 +537,13 @@ class FieldEncryption:
     @classmethod
     def encrypt(cls, value: str) -> str:
         if value.startswith(cls.PREFIX):
-            return value  # already encrypted
+            return value 
         return cls.PREFIX + cls._get_fernet().encrypt(value.encode()).decode()
 
     @classmethod
     def decrypt(cls, value: str) -> str:
         if not value.startswith(cls.PREFIX):
-            return value  # plaintext / unencrypted legacy data
+            return value 
         try:
             return cls._get_fernet().decrypt(value[len(cls.PREFIX):].encode()).decode()
         except Exception:
@@ -588,18 +553,11 @@ class FieldEncryption:
     def is_encrypted(cls, value: str) -> bool:
         return isinstance(value, str) and value.startswith(cls.PREFIX)
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Data-retention service
-# ═══════════════════════════════════════════════════════════════════════════════
-
 class DataRetentionService:
     """
     Enforce configured retention policies.
     Call run_all() from a nightly scheduler or the admin endpoint.
     """
-
-    # resource name → (module_path.ClassName, date_column_name)
     RESOURCE_MAP = {
         "audit_logs":     ("app.models.AuditLog",              "created_at"),
         "login_attempts": ("app.security_models.LoginAttempt", "created_at"),
@@ -652,11 +610,6 @@ class DataRetentionService:
 
         return results
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  Default super-admin seeder
-# ═══════════════════════════════════════════════════════════════════════════════
-
 async def seed_default_admin(db: AsyncSession) -> None:
     """
     Creates the hardcoded super-admin on first startup.
@@ -671,7 +624,7 @@ async def seed_default_admin(db: AsyncSession) -> None:
     )).scalar_one_or_none()
 
     if existing:
-        return  # already seeded — nothing to do
+        return
 
     import random
     AVATAR_COLORS = ["#6366f1", "#8b5cf6", "#ec4899", "#f59e0b",
@@ -694,8 +647,6 @@ async def seed_default_admin(db: AsyncSession) -> None:
     db.add(admin)
     await db.commit()
     await db.refresh(admin)
-
-    # Seed default data-retention policies too
     await DataRetentionService.seed_defaults(db)
 
     import logging

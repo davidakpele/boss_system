@@ -40,11 +40,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 templates = Jinja2Templates(directory="app/templates")
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  HELPERS
-# ──────────────────────────────────────────────────────────────────────────────
-
 def _date_range(days: int):
     today = date.today()
     return [today - timedelta(days=i) for i in range(days - 1, -1, -1)]
@@ -55,11 +50,6 @@ def _week_range(weeks: int):
     monday = today - timedelta(days=today.weekday())
     return [monday - timedelta(weeks=i) for i in range(weeks - 1, -1, -1)]
 
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  MAIN ANALYTICS PAGE
-# ──────────────────────────────────────────────────────────────────────────────
-
 @router.get("", response_class=HTMLResponse)
 async def analytics_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -68,7 +58,6 @@ async def analytics_page(
     if current_user.role not in (UserRole.super_admin, UserRole.admin, UserRole.manager):
         raise HTTPException(status_code=403)
 
-    # Headline numbers
     total_docs   = (await db.execute(select(func.count(Document.id)))).scalar() or 0
     total_users  = (await db.execute(select(func.count(User.id)).where(User.is_active == True))).scalar() or 0
     total_chunks = (await db.execute(select(func.count(KnowledgeChunk.id)))).scalar() or 0
@@ -91,11 +80,6 @@ async def analytics_page(
         "total_chunks": total_chunks, "total_msgs": total_msgs,
         "compliance_pct": compliance_pct, "departments": departments,
     })
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  CHART DATA ENDPOINTS
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/data/uploads")
 async def uploads_over_time(
@@ -166,7 +150,6 @@ async def activity_heatmap(
     )).all()
 
     day_map = {str(r.day): r.count for r in rows}
-    # Build 84 cells: week 0..11, day-of-week 0..6 (Mon=0)
     today = date.today()
     monday = today - timedelta(days=today.weekday())
     cells = []
@@ -240,8 +223,6 @@ async def knowledge_growth(
     day_map = {str(r.day): r.count for r in rows}
     labels = [str(d) for d in _date_range(days)]
     daily = [day_map.get(lbl, 0) for lbl in labels]
-
-    # Cumulative
     cumulative, running = [], 0
     for v in daily:
         running += v
@@ -257,7 +238,6 @@ async def knowledge_by_dept(
 ):
     """Knowledge chunks grouped by department (pie/donut)."""
     try:
-        # Use CASE WHEN instead of coalesce to avoid asyncpg type-inference issues
         from sqlalchemy import case
         dept_expr = case(
             (KnowledgeChunk.department == None, "General"),
@@ -309,11 +289,6 @@ async def top_users(
          "color": r.avatar_color, "count": r.msg_count}
         for r in rows
     ])
-
-
-# ──────────────────────────────────────────────────────────────────────────────
-#  USER ACTIVITY REPORT
-# ──────────────────────────────────────────────────────────────────────────────
 
 @router.get("/user-activity", response_class=HTMLResponse)
 async def user_activity_page(
@@ -392,10 +367,6 @@ async def user_activity_data(
     return JSONResponse(results)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
-#  REPORTS PAGE + PDF GENERATION
-# ──────────────────────────────────────────────────────────────────────────────
-
 @router.get("/reports", response_class=HTMLResponse)
 async def reports_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -424,27 +395,23 @@ async def download_dept_report(
 
     since = datetime.utcnow() - timedelta(weeks=weeks)
 
-    # Fetch chunks
     stmt = select(KnowledgeChunk).where(KnowledgeChunk.created_at >= since)
     if department:
         stmt = stmt.where(KnowledgeChunk.department == department)
     stmt = stmt.order_by(KnowledgeChunk.created_at.desc()).limit(100)
     chunks = (await db.execute(stmt)).scalars().all()
 
-    # Compliance records
     comp_stmt = select(ComplianceRecord)
     if department:
-        pass  # compliance isn't dept-filtered but we include it anyway
+        pass  
     comp_stmt = comp_stmt.order_by(ComplianceRecord.created_at.desc()).limit(30)
     comp_records = (await db.execute(comp_stmt)).scalars().all()
 
-    # New documents
     doc_stmt = select(Document).where(Document.created_at >= since)
     if department:
         doc_stmt = doc_stmt.where(Document.department == department)
     new_docs = (await db.execute(doc_stmt)).scalars().all()
 
-    # AI-generated summary of the knowledge added
     ai_summary = ""
     if chunks:
         sample = "\n".join(c.summary or c.content[:300] for c in chunks[:10])
@@ -457,8 +424,6 @@ async def download_dept_report(
             {"role": "user", "content": f"Knowledge chunks:\n{sample}"},
         ]
         ai_summary = await ai_service.chat_complete(ai_msgs) or "No AI summary available."
-
-    # Build PDF
     pdf_bytes = _build_pdf(
         department=department or "All Departments",
         weeks=weeks,
@@ -494,7 +459,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
                             topMargin=2*cm, bottomMargin=2*cm)
 
     styles = getSampleStyleSheet()
-    # Custom styles
     title_style = ParagraphStyle("Title", parent=styles["Title"],
                                  fontSize=22, textColor=colors.HexColor("#1e40af"),
                                  spaceAfter=6)
@@ -514,7 +478,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
 
     story = []
 
-    # ── Header ──
     story.append(Paragraph("BOSS System", ParagraphStyle("Brand", parent=styles["Normal"],
                              fontSize=10, textColor=colors.HexColor("#6366f1"), spaceAfter=2)))
     story.append(Paragraph(f"Department Knowledge Report", title_style))
@@ -523,7 +486,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
     story.append(Paragraph(f"Generated: {date.today().strftime('%B %d, %Y')} &nbsp;·&nbsp; By: {generated_by}", small))
     story.append(HRFlowable(width="100%", thickness=1.5, color=colors.HexColor("#3b82f6"), spaceAfter=12))
 
-    # ── Stats summary ──
     comp_total = len(comp_records)
     comp_ok = sum(1 for c in comp_records if c.status == "compliant")
     comp_pct = round((comp_ok / comp_total * 100) if comp_total else 0)
@@ -550,7 +512,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
     story.append(stats_table)
     story.append(Spacer(1, 14))
 
-    # ── AI Summary ──
     story.append(Paragraph("AI-Generated Insights", h2))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#93c5fd"), spaceAfter=8))
     for line in ai_summary.split("\n"):
@@ -562,8 +523,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
         else:
             story.append(Paragraph(line, body))
     story.append(Spacer(1, 14))
-
-    # ── New Documents ──
     if new_docs:
         story.append(Paragraph(f"New Documents ({len(new_docs)})", h2))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#93c5fd"), spaceAfter=8))
@@ -588,7 +547,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
         story.append(doc_table)
         story.append(Spacer(1, 14))
 
-    # ── Compliance ──
     if comp_records:
         story.append(Paragraph("Compliance Status", h2))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#93c5fd"), spaceAfter=8))
@@ -612,7 +570,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
         story.append(c_table)
         story.append(Spacer(1, 14))
 
-    # ── Knowledge chunks ──
     if chunks:
         story.append(Paragraph(f"Knowledge Added ({len(chunks)} chunks)", h2))
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#93c5fd"), spaceAfter=8))
@@ -623,8 +580,6 @@ def _build_pdf(department, weeks, chunks, new_docs, comp_records, ai_summary, ge
                 Paragraph(f"{i}. {source_label} {preview}…" if len(ch.content or "") > 200 else f"{i}. {source_label} {preview}", body),
                 Spacer(1, 4),
             ]))
-
-    # ── Footer ──
     story.append(Spacer(1, 20))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#d1d5db")))
     story.append(Paragraph(f"BOSS System — Business Operating System &nbsp;·&nbsp; MindSync AI Consults &nbsp;·&nbsp; {date.today().strftime('%Y')}",

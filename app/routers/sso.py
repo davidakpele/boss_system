@@ -25,8 +25,6 @@ router = APIRouter(prefix="/auth/sso", tags=["sso"])
 
 _COLORS = ["#6366f1","#8b5cf6","#ec4899","#f59e0b","#10b981","#3b82f6","#ef4444","#14b8a6"]
 
-
-# ── Google ────────────────────────────────────────────────────────────────────
 GOOGLE_AUTH  = "https://accounts.google.com/o/oauth2/v2/auth"
 GOOGLE_TOKEN = "https://oauth2.googleapis.com/token"
 GOOGLE_INFO  = "https://www.googleapis.com/oauth2/v3/userinfo"
@@ -82,7 +80,6 @@ async def google_callback(
                             p.get("email", ""), p.get("name", ""), tokens)
 
 
-# ── Microsoft ─────────────────────────────────────────────────────────────────
 def _ms_auth():  return f"https://login.microsoftonline.com/{settings.MICROSOFT_TENANT_ID}/oauth2/v2.0/authorize"
 def _ms_token(): return f"https://login.microsoftonline.com/{settings.MICROSOFT_TENANT_ID}/oauth2/v2.0/token"
 MS_ME = "https://graph.microsoft.com/v1.0/me"
@@ -138,10 +135,7 @@ async def microsoft_callback(
     return await _sso_login(request, db, "microsoft", p.get("id", ""),
                             email, p.get("displayName", email), tokens)
 
-
-# ── Shared handler ─────────────────────────────────────────────────────────────
 async def _sso_login(request, db, provider, provider_uid, email, name, tokens):
-    # 1. Try existing OAuth link
     oauth = (await db.execute(
         select(OAuthAccount).where(
             OAuthAccount.provider == provider,
@@ -153,10 +147,8 @@ async def _sso_login(request, db, provider, provider_uid, email, name, tokens):
     if oauth:
         user = (await db.execute(select(User).where(User.id == oauth.user_id))).scalar_one_or_none()
     else:
-        # 2. Match by email
         user = (await db.execute(select(User).where(User.email == email))).scalar_one_or_none()
         if not user:
-            # 3. Auto-create
             count = (await db.execute(select(func.count(User.id)))).scalar()
             user = User(
                 full_name=name or email.split("@")[0],
@@ -170,7 +162,6 @@ async def _sso_login(request, db, provider, provider_uid, email, name, tokens):
             db.add(user)
             await db.flush()
 
-        # 4. Save OAuth link
         db.add(OAuthAccount(
             user_id=user.id,
             provider=provider,
@@ -195,10 +186,7 @@ async def _sso_login(request, db, provider, provider_uid, email, name, tokens):
 
     token = create_access_token({"sub": str(user.id)})
     resp = RedirectResponse("/dashboard", status_code=302)
-    # httpOnly cookie for page auth
-    resp.set_cookie("access_token", token, httponly=True,
-                    max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax")
-    # JS-readable cookie for WebSocket token
+    resp.set_cookie("access_token", token, httponly=True, max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax")
     resp.set_cookie("ws_token", token, httponly=False,
                     max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, samesite="lax")
     return resp

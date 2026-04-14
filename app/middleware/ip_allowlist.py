@@ -18,7 +18,7 @@ _TTL = 60   # seconds
 
 _EXEMPT = (
     "/auth/login", "/auth/register",
-    "/auth/sso/",                    # SSO callbacks MUST be reachable
+    "/auth/sso/",
     "/static/", "/uploads/",
     "/manifest.json", "/sw.js",
     "/health",
@@ -43,8 +43,6 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
         path = request.url.path
         if any(path.startswith(e) for e in _EXEMPT):
             return await call_next(request)
-
-        # Refresh cache
         now = time.monotonic()
         if now - _cache["ts"] > _TTL:
             try:
@@ -54,13 +52,10 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
                     _cache["ts"] = now
             except Exception as exc:
                 logger.error(f"IP allowlist cache error: {exc}")
-                # fail open — don't block on DB errors
-
+    
         ranges = _cache["ranges"]
         if not ranges:
-            return await call_next(request)   # no rules = allow all
-
-        # Determine client IP (X-Forwarded-For aware)
+            return await call_next(request)   
         xff = request.headers.get("X-Forwarded-For", "")
         client_ip = xff.split(",")[0].strip() if xff else (
             request.client.host if request.client else "127.0.0.1"
@@ -78,7 +73,7 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
                 except ValueError:
                     continue
         except ValueError:
-            pass  # unparseable IP — fall through to block
+            pass  
 
         return HTMLResponse("""<!DOCTYPE html>
 <html><head><title>Access Restricted — BOSS</title>

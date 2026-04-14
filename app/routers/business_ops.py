@@ -20,10 +20,6 @@ router = APIRouter(tags=["business_ops"])
 templates = Jinja2Templates(directory="app/templates")
 
 
-# ═══════════════════════════════════════════════
-#  TASK MANAGER
-# ═══════════════════════════════════════════════
-
 @router.get("/tasks", response_class=HTMLResponse)
 async def tasks_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -158,17 +154,11 @@ async def ai_suggest_priority(
     except Exception:
         return JSONResponse({"priority": task.priority, "reason": "Could not parse AI response"})
 
-
-# ═══════════════════════════════════════════════
-#  MEETING ROOM SCHEDULER
-# ═══════════════════════════════════════════════
-
 @router.get("/meetings", response_class=HTMLResponse)
 async def meetings_page(
     request: Request, db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    # Meetings where user is organizer or attendee
     my_meeting_ids = (await db.execute(
         select(MeetingAttendee.meeting_id).where(MeetingAttendee.user_id == current_user.id)
     )).scalars().all()
@@ -185,8 +175,6 @@ async def meetings_page(
 
     all_users = (await db.execute(select(User).where(User.is_active == True).order_by(User.full_name))).scalars().all()
     channels = (await db.execute(select(Channel).where(Channel.channel_type == "department"))).scalars().all()
-
-    # Enrich with attendee data
     enriched = []
     for m in meetings:
         attendees = (await db.execute(
@@ -223,9 +211,7 @@ async def create_meeting(
     db.add(meeting)
     await db.flush()
 
-    # Add organizer as attendee
     db.add(MeetingAttendee(meeting_id=meeting.id, user_id=current_user.id, status="accepted"))
-    # Add other attendees
     for uid in attendee_ids.split(","):
         uid = uid.strip()
         if uid.isdigit() and int(uid) != current_user.id:
@@ -245,7 +231,6 @@ async def generate_meeting_agenda(
 
     context = f"Meeting: {meeting.title}\nDescription: {meeting.description or 'N/A'}"
 
-    # Pull recent channel messages if linked
     if meeting.channel_id:
         msgs = (await db.execute(
             select(Message, User.full_name)
@@ -307,11 +292,6 @@ async def delete_meeting(
     await db.commit()
     return JSONResponse({"status": "deleted"})
 
-
-# ═══════════════════════════════════════════════
-#  ANNOUNCEMENT BOARD
-# ═══════════════════════════════════════════════
-
 @router.get("/announcements", response_class=HTMLResponse)
 async def announcements_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -325,12 +305,10 @@ async def announcements_page(
         .order_by(Announcement.created_at.desc())
     )).scalars().all()
 
-    # Which ones has this user read?
     read_ids = set((await db.execute(
         select(AnnouncementRead.announcement_id).where(AnnouncementRead.user_id == current_user.id)
     )).scalars().all())
 
-    # Read counts
     enriched = []
     for ann in announcements:
         rc = (await db.execute(
@@ -408,10 +386,6 @@ async def unread_count(db: AsyncSession = Depends(get_db), current_user: User = 
     return JSONResponse({"unread": total - read})
 
 
-# ═══════════════════════════════════════════════
-#  EMPLOYEE DIRECTORY
-# ═══════════════════════════════════════════════
-
 @router.get("/directory", response_class=HTMLResponse)
 async def directory_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -430,7 +404,6 @@ async def directory_page(
     stmt = stmt.order_by(User.department, User.full_name)
     users = (await db.execute(stmt)).scalars().all()
 
-    # Load reporting lines
     lines = {r.employee_id: r.manager_id for r in (await db.execute(select(ReportingLine))).scalars().all()}
     manager_map = {}
     for uid, mid in lines.items():
@@ -443,7 +416,6 @@ async def directory_page(
         select(User.department).distinct().where(User.department != None)
     )).scalars().all()
 
-    # Group by department
     by_dept = {}
     for u in users:
         d = u.department or "General"
@@ -473,24 +445,17 @@ async def set_manager(
     await db.commit()
     return JSONResponse({"status": "updated"})
 
-
-# ═══════════════════════════════════════════════
-#  LEAVE / ABSENCE TRACKER
-# ═══════════════════════════════════════════════
-
 @router.get("/leave", response_class=HTMLResponse)
 async def leave_page(
     request: Request, db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    # My requests
     my_requests = (await db.execute(
         select(LeaveRequest)
         .where(LeaveRequest.user_id == current_user.id)
         .order_by(LeaveRequest.created_at.desc())
     )).scalars().all()
 
-    # Pending requests (managers/admins see all)
     pending = []
     if current_user.role in ("super_admin", "admin", "manager"):
         pending_rows = (await db.execute(
@@ -501,7 +466,6 @@ async def leave_page(
         )).all()
         pending = [{"req": r, "name": n, "dept": d, "color": c} for r, n, d, c in pending_rows]
 
-    # Calendar: who's off this week
     today = date.today()
     week_start = today - timedelta(days=today.weekday())
     week_end = week_start + timedelta(days=6)

@@ -20,9 +20,6 @@ AVATAR_COLORS = [
     "#10b981", "#3b82f6", "#ef4444", "#14b8a6",
 ]
 
-
-# ─────────────── USERS ───────────────
-
 @router.get("/users", response_class=HTMLResponse)
 async def users_list(
     request: Request,
@@ -86,9 +83,6 @@ async def toggle_user(
         user.is_active = not user.is_active
         await db.commit()
     return JSONResponse({"is_active": user.is_active if user else False})
-
-
-# ─────────────── ONBOARDING ───────────────
 
 @router.get("/onboarding", response_class=HTMLResponse)
 async def onboarding_page(
@@ -197,8 +191,6 @@ async def complete_step(
     return JSONResponse({"completed": True, "onboarding_complete": all_done})
 
 
-# ─────────────── COMPLIANCE ───────────────
-
 @router.get("/compliance", response_class=HTMLResponse)
 async def compliance_page(
     request: Request,
@@ -253,9 +245,6 @@ async def update_compliance_status(
         await db.commit()
     return JSONResponse({"status": "updated"})
 
-
-# ─────────────── RISK MANAGEMENT ───────────────
-
 @router.get("/risk-management", response_class=HTMLResponse)
 async def risk_page(
     request: Request,
@@ -294,8 +283,6 @@ async def create_risk(
     return JSONResponse({"status": "created"})
 
 
-# ─────────────── AUDIT LOGS ───────────────
-
 @router.get("/audit-logs", response_class=HTMLResponse)
 async def audit_logs(
     request: Request,
@@ -318,8 +305,6 @@ async def audit_logs(
         context={"user": current_user, "logs": logs, "page": "audit"}
     )
 
-
-# ─────────────── SETTINGS ───────────────
 
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page(

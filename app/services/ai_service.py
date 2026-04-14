@@ -42,9 +42,6 @@ class AIService:
             logger.error(f"Embedding error: {e}")
             return None
 
-    # ──────────────────────────────────────────────
-    #  HEALTH CHECK
-    # ──────────────────────────────────────────────
     async def check_ollama_health(self) -> bool:
         try:
             async with httpx.AsyncClient(timeout=5.0) as client:
@@ -53,9 +50,6 @@ class AIService:
         except Exception:
             return False
 
-    # ──────────────────────────────────────────────
-    #  RETRIEVAL  (vector-first, keyword fallback)
-    # ──────────────────────────────────────────────
     async def retrieve_context(
         self,
         query: str,
@@ -70,15 +64,12 @@ class AIService:
         falls back to keyword scoring otherwise.
         Returns chunks with a 'chunk_id' field for citation linking.
         """
-        # Role-based access
         if user_role in ("super_admin", "admin", "manager"):
             allowed_levels = [AccessLevel.all_staff, AccessLevel.restricted, AccessLevel.confidential]
         elif user_role == "staff":
             allowed_levels = [AccessLevel.all_staff, AccessLevel.restricted]
         else:
             allowed_levels = [AccessLevel.all_staff]
-
-        # Fetch chunks (limit to 200 for scoring)
         stmt = select(KnowledgeChunk).limit(200)
         chunks = (await db.execute(stmt)).scalars().all()
 
@@ -88,14 +79,12 @@ class AIService:
         query_vec = self.embed(query)
 
         if query_vec is not None:
-            # ── Vector similarity ──
             q = np.array(query_vec)
             scored = []
             for chunk in chunks:
                 if chunk.embedding:
                     try:
                         cv = np.array(json.loads(chunk.embedding))
-                        # cosine similarity
                         denom = (np.linalg.norm(q) * np.linalg.norm(cv))
                         sim = float(np.dot(q, cv) / denom) if denom > 0 else 0.0
                         scored.append((sim, chunk))
@@ -104,7 +93,6 @@ class AIService:
             scored.sort(key=lambda x: x[0], reverse=True)
             top = scored[:max_chunks]
         else:
-            # ── Keyword fallback ──
             keywords = [w.lower() for w in query.split() if len(w) > 3] or query.lower().split()
             scored = []
             for chunk in chunks:
@@ -128,9 +116,6 @@ class AIService:
             for s, c in top
         ]
 
-    # ──────────────────────────────────────────────
-    #  PROMPT BUILDER
-    # ──────────────────────────────────────────────
     async def build_prompt(
         self,
         user_message: str,
@@ -160,9 +145,6 @@ class AIService:
         messages.append({"role": "user", "content": user_message})
         return messages
 
-    # ──────────────────────────────────────────────
-    #  STREAMING CHAT
-    # ──────────────────────────────────────────────
     async def chat_stream(self, messages: List[dict]) -> AsyncGenerator[str, None]:
         payload = {
             "model": self.model,
@@ -204,9 +186,6 @@ class AIService:
             logger.error(f"Ollama complete error: {e}")
             return ""
 
-    # ──────────────────────────────────────────────
-    #  KNOWLEDGE EXTRACTION FROM CHAT
-    # ──────────────────────────────────────────────
     async def extract_knowledge_from_message(self, message: str, db: AsyncSession) -> Optional[str]:
         if len(message) < 50:
             return None
@@ -227,9 +206,6 @@ class AIService:
             return result
         return None
 
-    # ──────────────────────────────────────────────
-    #  COMPLIANCE EXTRACTION
-    # ──────────────────────────────────────────────
     async def extract_compliance_from_document(self, content: str) -> List[dict]:
         msgs = [
             {
@@ -250,9 +226,6 @@ class AIService:
         except Exception:
             return []
 
-    # ──────────────────────────────────────────────
-    #  SUMMARIZE TEXT
-    # ──────────────────────────────────────────────
     async def summarize_text(self, text: str) -> str:
         msgs = [
             {"role": "system", "content": "Summarize the following text in 1-2 sentences for a business knowledge base. Be concise."},
@@ -260,9 +233,6 @@ class AIService:
         ]
         return await self.chat_complete(msgs)
 
-    # ──────────────────────────────────────────────
-    #  AUTO MEETING SUMMARY
-    # ──────────────────────────────────────────────
     async def generate_meeting_summary(self, messages: List[dict], channel_name: str) -> Optional[str]:
         """
         Given a list of {sender_name, content} dicts from a channel,
@@ -273,7 +243,7 @@ class AIService:
 
         conversation = "\n".join(
             f"{m['sender_name']}: {m['content']}"
-            for m in messages[-60:]   # last 60 messages max
+            for m in messages[-60:]  
         )
         prompt_msgs = [
             {
@@ -293,9 +263,6 @@ class AIService:
         result = await self.chat_complete(prompt_msgs)
         return result if result and len(result) > 40 else None
 
-    # ──────────────────────────────────────────────
-    #  SMART ONBOARDING ASSISTANT
-    # ──────────────────────────────────────────────
     async def onboarding_chat(
         self,
         user_message: str,
@@ -351,9 +318,7 @@ class AIService:
 
         async for chunk in self.chat_stream(messages):
             yield chunk
-    # ──────────────────────────────────────────────
-    #  AI RISK DETECTION
-    # ──────────────────────────────────────────────
+
     async def detect_risks_from_text(self, text: str, source_label: str) -> List[dict]:
         """
         Scan text (document or chat) for potential business risks.
@@ -392,9 +357,6 @@ class AIService:
             logger.error(f"Risk detection parse error: {e}")
         return []
 
-    # ──────────────────────────────────────────────
-    #  EMBED AND STORE KNOWLEDGE CHUNK
-    # ──────────────────────────────────────────────
     async def embed_and_store_chunk(self, chunk_content: str) -> Optional[str]:
         """Return JSON-encoded embedding string for storage in the DB."""
         vec = self.embed(chunk_content)
@@ -424,8 +386,6 @@ class AIService:
         ]
         return await self.chat_complete(msgs)
 
-    # ── Document Q&A with Citations ──────────────────────────────────────────
-
     async def answer_with_citations(
         self, question: str, db, document_id: int = None
     ) -> dict:
@@ -436,21 +396,17 @@ class AIService:
         from sqlalchemy import select
         from app.models import KnowledgeChunk, Document
         import numpy as np
-
-        # Embed the question
+        
         try:
             q_embedding = self.embedding_model.encode([question])[0]
         except Exception:
             q_embedding = None
 
-        # Fetch candidate chunks
         stmt = select(KnowledgeChunk)
         if document_id:
             stmt = stmt.where(KnowledgeChunk.document_id == document_id)
         stmt = stmt.limit(200)
         all_chunks = (await db.execute(stmt)).scalars().all()
-
-        # Score chunks
         scored = []
         for ch in all_chunks:
             if q_embedding is not None and ch.embedding:
@@ -462,7 +418,6 @@ class AIService:
                 except Exception:
                     score = 0.0
             else:
-                # Keyword fallback
                 kw = question.lower().split()
                 score = sum(1 for k in kw if k in (ch.content or "").lower()) / max(len(kw), 1)
             scored.append((score, ch))
@@ -470,7 +425,6 @@ class AIService:
         scored.sort(key=lambda x: x[0], reverse=True)
         top = scored[:6]
 
-        # Build context with labelled source IDs
         context_parts = []
         citations_meta = []
         for i, (score, ch) in enumerate(top, 1):
@@ -501,15 +455,12 @@ class AIService:
         ]
         answer = await self.chat_complete(msgs)
 
-        # Match [SOURCE N] references in answer to actual chunks
         import re
         cited_indices = set(int(m) - 1 for m in re.findall(r'\[SOURCE (\d+)\]', answer)
                             if 0 <= int(m) - 1 < len(citations_meta))
         active_citations = [citations_meta[i] for i in sorted(cited_indices)]
 
         return {"answer": answer, "citations": active_citations}
-
-    # ── Auto-Tagging ─────────────────────────────────────────────────────────
 
     async def generate_tags(self, text: str, existing_tags: list = None) -> dict:
         """
@@ -549,8 +500,6 @@ class AIService:
         except Exception:
             pass
         return {"topics": [], "keywords": [], "category": "General", "sentiment": "neutral"}
-
-    # ── Sentiment Analysis ───────────────────────────────────────────────────
 
     async def analyse_channel_sentiment(self, messages: list[str], channel_name: str = "") -> dict:
         """
@@ -595,7 +544,6 @@ class AIService:
             pass
         return {"score": 0.0, "label": "neutral", "themes": [], "summary": raw[:300], "morale_indicators": {}}
 
-    # ── Meeting Intelligence ─────────────────────────────────────────────────
 
     async def analyse_meeting_transcript(self, transcript: str, title: str = "") -> dict:
         """
