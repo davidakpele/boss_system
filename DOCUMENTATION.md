@@ -543,53 +543,124 @@ whatsapp_sessions     — per-contact conversation history (JSON)
 - Types: `info` · `success` · `warning` · `error` · `message` · `hr`
 - Fires web push simultaneously when a notification is created
 
+## 18. Communication
 
-## 18. ⚙️ Platform & Infrastructure
-- **Multi-Tenant Architecture** — run BOSS for multiple companies, full data isolation
-- **White Labelling** — replace all BOSS branding with client's logo and colours
-- **Automated Database Backups** — scheduled pg_dump with configurable retention
-- **Health Check Dashboard** — DB status, Ollama status, disk, memory, active WebSockets
-- **Email Digest** — daily/weekly summary of activity emailed to managers
-- **Changelog & Version Notes** — in-app changelog after each update
-- **Dark / Light Mode Toggle** — currently dark only; add light mode
-- **Keyboard Shortcuts** — `G D` dashboard, `G M` messages, `Cmd+K` global search
-- **Global Search** — one bar searching messages, docs, tasks, users, knowledge simultaneously
-- **Drag-and-Drop File Uploads** — drop files anywhere on page
-- **Audit Trail Export** — download full audit log as CSV/PDF for compliance
-- **Rate Limiting** — protect API endpoints from abuse
-- **Webhook Receiver** — accept events from external systems into BOSS
+| # | Feature | Status |
+|---|---------|--------|
+| 1 | **Email Integration (SMTP)** | ✅ Built |
+| 2 | **Message Reactions** | ✅ Built |
+| 3 | **Message Search** | ✅ Built |
+| 4 | **Voice Notes** | ✅ Built |
+| 5 | **Read Receipts** | ✅ Built |
+| 6 | **Message Threads** | ✅ Built |
+| 7 | **@Mentions** | ✅ Built |
+| 8 | **Scheduled Messages** | ✅ Built |
+| 9 | **Message Pinning** | ✅ Built |
+| 10 | **Message Edit** | ✅ Built |
+| 11 | **Group Video/Audio Calls** | ✅ Built |
+| 12 | **Screen Sharing** | ✅ Built |
 
-## 🔥 **NEW: Messaging, AI & Security Enhancements (v2.1)**
+### Feature Details
 
-### 💬 Messaging & Collaboration (Upgraded)
+**1. Email Integration (SMTP)**
+Full SMTP email service at `app/services/email_service.py`. Branded HTML email shell with BOSS header injected on every outbound email. Ready-made senders for: HR emails (interview invites, offer letters, rejection), @mention notifications, daily digest for managers, and system alerts with severity levels (info / warning / critical). Works with Gmail, Office 365, Mailgun, Sendinblue. Configured via `.env`:
+```
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@gmail.com
+SMTP_PASSWORD=your_app_password
+SMTP_FROM_NAME=BOSS System
+```
 
-A next-generation communication layer designed for high-performance teams:
+**2. Message Reactions**
+Emoji picker opens anchored to the reaction `+` button or via the ⋯ message menu. Single global picker instance repositioned per message — no DOM clutter. Reactions aggregate by emoji with a count badge. Clicking your own reaction toggles it off. All changes broadcast via WebSocket so every participant sees updates in real time without a page refresh. Stored in `message_reactions` table.
 
-* **Message Reactions (Emoji)**
-  React to messages with emojis — persisted in the database and synced instantly via WebSockets.
+**3. Message Search**
+Search bar in the chat header (magnifying glass icon). Debounced 350ms — queries `GET /messages/search?channel_id=&q=` as you type. Results appear in a panel above the input with sender name, timestamp, and highlighted match text. Clicking a result scrolls the message list to that exact message and highlights it for 2 seconds. Supports ILIKE partial matching.
 
-* **Message Search**
-  Powerful full-text search across conversations with highlighted matches and jump-to navigation.
+**4. Voice Notes**
+Click the microphone button → browser requests mic permission → records via `MediaRecorder` API. Animated recording bar shows elapsed time (max 2 minutes). Send or cancel. Audio stored as `.webm` / `.ogg` / `.mp4` depending on browser support, served from `/static/uploads/voice/`. Rendered inline with a waveform visualisation (SVG bars), play/pause button, and a live time counter. Stored in `messages` table with `message_type="voice"` and `voice_duration`.
 
-* **Voice Notes**
-  Record and send audio messages directly from the browser using the MediaRecorder API.
+**5. Read Receipts**
+Every message sent triggers a `read` WebSocket frame from recipients when they scroll to or view the message. Each receipt stored in `message_read_receipts`. The sender sees small avatar thumbnails beneath their sent messages showing who has read it. Handled entirely via WebSocket — no HTTP polling.
 
-* **Read Receipts**
+**6. Message Threads**
+Click ⋯ → Thread on any message. A slide-in side panel shows the parent message and all replies in a separate thread stream. Thread reply count badge updates in real time as new replies arrive. Thread replies are stored with `is_thread_reply=True` and `thread_id` referencing the parent message. Thread and main channel streams are fully independent.
 
-  * ✓ Delivered
-  * ✓✓ Read (blue)
-    Tracked per user, per message in real time.
+**7. @Mentions**
+Type `@` in the message input to trigger an autocomplete dropdown showing matching users. Select with keyboard (↑↓ Enter) or click. Mention stored in `mentions` table. Mentioned user receives: an instant WebSocket push notification, a badge count on the `@` button in the left panel, and a dedicated Mentions panel listing all recent mentions with jump-to links. Batch mark-all-read on panel open.
 
-* **Message Threads**
-  Keep channels clean by replying in structured side-panel threads.
+**8. Scheduled Messages**
+Clock icon in the chat header → type message → pick date/time → Schedule. Stored in `scheduled_messages` table. A background asyncio worker in `main.py` polls every 30 seconds, delivers due messages as real WebSocket broadcasts (indistinguishable from live messages), marks them sent, and stores the delivery time. Future-date validation prevents scheduling in the past.
 
-* **@Mentions & Smart Notifications**
-  Tag users with `@name` to trigger:
+**9. Message Pinning**
+Click ⋯ → Pin on any message. Stored in `pinned_messages` table. The 📌 button in the chat header shows a count badge of pinned messages. Clicking opens a panel listing all pins with sender avatar, content preview, and a "View" button that scrolls to the original message. Pin/unpin events broadcast via WebSocket so all participants see the change instantly.
 
-  * Instant notification badges
-  * Message highlights
-  * Real-time alerts (in-app + push)
+**10. Message Edit**
+Click ⋯ → Edit on your own messages (admins cannot edit others'). The current message text fills the input area and an "Editing" indicator bar appears. Submitting sends `POST /messages/{id}/edit`. The edit is broadcast via WebSocket — all participants see the updated text with an "(edited)" label appended. Full edit history stored in `message_edits` table with old content, new content, editor, and timestamp. Accessible via `GET /messages/{id}/edit-history`.
 
+**11. Group Video/Audio Calls**
+📞 / 📹 buttons in the chat header. Uses WebRTC peer-to-peer — audio/video travels directly between browsers, only call signaling (offer/answer/ICE) goes through the BOSS WebSocket. Caller sees a "Calling…" modal. All other channel members get an incoming call banner (bottom-right slide-up) with the caller's name and Accept/Decline buttons. WebSocket signaling handles: `call_start`, `call_offer`, `call_answer`, `ice_candidate`, `call_reject`, `call_end`. STUN servers: `stun.l.google.com:19302` (free, no account needed).
+
+**12. Screen Sharing**
+Available during an active call via the 🖥️ button. Uses `getDisplayMedia()` — user picks a window, tab, or entire screen. Replaces the video track in all active peer connections so remote participants see the screen immediately. The local preview updates to show the shared screen. One click restores the camera. Button turns red while sharing. The `onended` event (user clicks "Stop sharing" in the browser bar) also triggers cleanup automatically.
+
+---
+
+## 19. Platform & Infrastructure
+
+| # | Feature | Status |
+|---|---------|--------|
+| 76 | **Multi-Tenant Architecture** | ✅ Built |
+| 77 | **White Labelling** | ✅ Built |
+| 78 | **Automated Database Backups** | ✅ Built |
+| 79 | **Health Check Dashboard** | ✅ Built |
+| 80 | **Email Digest** | ✅ Built |
+| 81 | **Changelog & Version Notes** | ✅ Built |
+| 82 | **Dark / Light Mode Toggle** | ✅ Built |
+| 83 | **Keyboard Shortcuts** | ✅ Built |
+| 84 | **Global Search** | ✅ Built |
+| 85 | **Drag-and-Drop File Uploads** | ✅ Built |
+| 86 | **Audit Trail Export** | ✅ Built |
+| 87 | **Rate Limiting** | ✅ Built |
+
+### Feature Details
+
+**76. Multi-Tenant Architecture**
+`Tenant` model with slug-based organisation identifiers, plan tiers (starter / pro / enterprise), user limits, and active/inactive toggle. Each tenant has isolated settings via `TenantSetting` key-value table. Super-admin dashboard at `/tenants` for creating, editing, and managing all organisations. Full CRUD: create with name + slug + plan + max users, toggle active status, edit all branding fields.
+
+**77. White Labelling**
+Per-tenant brand fields: `brand_name`, `brand_logo_url`, `brand_favicon`, `primary_color` (accent), `sidebar_color`, and `custom_css` injected on every page. Edit via Tenants dashboard → Edit Brand modal. Colour pickers for accent and sidebar. Custom CSS field allows arbitrary overrides. Changes take effect on next page load without server restart.
+
+**78. Automated Database Backups**
+`pg_dump | gzip` runs daily at 2am UTC via an asyncio background task started in the `lifespan` context. Manual trigger from the Health dashboard. Downloads available as `.sql.gz` via `GET /platform/backup/{id}/download`. All runs logged in `backup_logs` table with status, file size, duration, and error message. Auto-prunes files older than 30 days. Triggered-by field distinguishes `scheduler` vs `manual`.
+
+**79. Health Check Dashboard**
+Live dashboard at `/platform` refreshing every 10 seconds via `GET /platform/health`. Six metric cards: Database (connected + latency in ms), AI Engine (Ollama online/offline + model name), Disk (used / total GB with progress bar), Memory (used / total GB with progress bar), WebSockets (active connections), Uploads directory (total MB). Table row counts for every major model. Overall system status dot (green / red). Backup log panel alongside.
+
+**80. Email Digest**
+Daily digest sender at `email_service.send_daily_digest()`. Accepts a `stats` dict with labelled metric rows. Rendered as a clean HTML table with BOSS branding. Designed to be called from a scheduler (e.g., daily at 8am) passing counts for messages, tasks completed, new hires, accounting records, etc. Configurable per-manager delivery.
+
+**81. Changelog & Version Notes**
+In-app changelog at `/platform/changelog`. Super-admins publish versioned entries with type badge: 🟢 Feature / 🔵 Bug Fix / 🟡 Improvement / 🔴 Security. Each entry has version string, title, and markdown-style body (bullet lists, headings supported). Users see a `NEW` badge on unread entries. Read status tracked per-user in `changelog_reads`. Unread count available via `GET /platform/changelog/unread-count` for topbar badge.
+
+**82. Dark / Light Mode Toggle**
+Moon/sun toggle button in the topbar. Switches all CSS custom properties (`--bg`, `--text`, `--border`, etc.) instantly via JavaScript. Preference saved to `localStorage` and restored on every page load — no flash of wrong theme. Light mode uses white/zinc palette; dark mode uses a deep navy/slate palette. Both modes fully supported across all pages.
+
+**83. Keyboard Shortcuts**
+`G` + letter navigation (1.2 second window): `D` Dashboard, `M` Messages, `A` Ask BOSS, `T` Tasks, `B` Command Centre, `R` Analytics, `S` Settings, `P` System Health. `Ctrl+K` / `Cmd+K` opens Global Search overlay. `Esc` closes search or modals. `?` opens the shortcuts reference modal. All shortcuts disabled when typing in inputs/textareas. Implemented via `keydown` event listener on `document`.
+
+**84. Global Search**
+`Ctrl+K` / `Cmd+K` opens a full-screen overlay with a search input. Searches five collections simultaneously: Messages (content + sender), Documents (title + content), Users (name + email), Tasks (title + description), Knowledge chunks (content + summary). Results show type icon, title, subtitle, and colour-coded type label. Arrow keys navigate, Enter opens the result's page. Match text highlighted in yellow. Quick-nav shortcuts shown on first open. Debounced 250ms. Backend: `GET /search?q=`.
+
+**85. Drag-and-Drop File Uploads**
+Page-wide drop zone — drag any file anywhere on the browser window. A full-screen overlay with a cloud upload icon appears while dragging. On drop, files are routed by current page: Messages page → `handleFileSelect()` attaches to message input; Documents page → triggers the file input's change event. Works with multiple files. Visual feedback via the overlay disappearing on drop. Implemented as a document-level `dragenter` / `dragleave` / `drop` listener.
+
+**86. Audit Trail Export**
+`GET /platform/audit/export?format=csv&days=90` or `?format=pdf`. CSV exports all columns (timestamp, user, email, action, resource type, resource ID, IP address, details) for up to 10,000 rows — suitable for spreadsheet analysis and compliance submissions. PDF export uses ReportLab with a styled two-tone table, BOSS header, generation timestamp, and record count. PDF limited to 500 rows with a note to use CSV for full data. Both available from the Audit Logs page action buttons.
+
+**87. Rate Limiting**
+In-memory sliding window middleware at `app/middleware/rate_limiter.py`. No Redis dependency. Per-path limits: login (10/min), registration (5/min), WhatsApp send (30/min), AI endpoints (20/min), search (60/min). Violators blocked for 5 minutes. Every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Window` headers. Static files and health endpoints are exempt. Block duration and per-path limits configurable in `RATE_RULES` dict.
 ---
 
 ### 🧠 AI-Powered Intelligence (Expanded)

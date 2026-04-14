@@ -107,6 +107,8 @@ Here's a comprehensive list of everything that would make BOSS a world-class ent
 74. **Push Notification Preferences** — choose exactly what triggers alerts
 75. **Mobile Camera Upload** — take photo → attach to document/inventory
 
+
+
 ---
 
 ## 🌍 Localisation

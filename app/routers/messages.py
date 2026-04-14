@@ -1,4 +1,6 @@
-# src/app/routers/messages.py  — FIXED VERSION
+# src/app/routers/messages.py 
+from datetime import datetime, timezone, timedelta
+from http.client import HTTPException
 import os
 import re
 import uuid
@@ -776,7 +778,70 @@ async def websocket_endpoint(
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
-
+            elif msg_type == "call_start":
+                # Broadcast incoming call notification to ALL users in channel
+                # so they see the ringing UI
+                await manager.broadcast_to_channel(channel_id, {
+                    "type": "call_start",
+                    "call_type": data.get("call_type", "audio"),
+                    "caller_id": user.id,
+                    "caller_name": user.full_name,
+                    "caller_color": user.avatar_color,
+                    "channel_id": channel_id,
+                }, exclude_user=user.id)
+ 
+            elif msg_type == "call_offer":
+                # Forward WebRTC offer to a specific user
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "call_offer",
+                        "offer": data.get("offer"),
+                        "from_user_id": user.id,
+                        "from_user_name": user.full_name,
+                        "channel_id": channel_id,
+                    })
+ 
+            elif msg_type == "call_answer":
+                # Forward WebRTC answer back to caller
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "call_answer",
+                        "answer": data.get("answer"),
+                        "from_user_id": user.id,
+                        "from_user_name": user.full_name,
+                    })
+ 
+            elif msg_type == "ice_candidate":
+                # Forward ICE candidate for NAT traversal
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "ice_candidate",
+                        "candidate": data.get("candidate"),
+                        "from_user_id": user.id,
+                    })
+ 
+            elif msg_type == "call_end":
+                # Notify everyone in channel that call ended
+                await manager.broadcast_to_channel(channel_id, {
+                    "type": "call_end",
+                    "ended_by": user.full_name,
+                    "channel_id": channel_id,
+                }, exclude_user=user.id)
+ 
+            elif msg_type == "call_reject":
+                # Notify caller that someone rejected the call
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "call_rejected",
+                        "rejected_by": user.full_name,
+                        "rejected_by_id": user.id,
+                    })
+                    
+                    
     except WebSocketDisconnect:
         manager.disconnect_from_channel(websocket, channel_id, user.id)
         await manager.broadcast_to_channel(channel_id, {
@@ -787,3 +852,232 @@ async def websocket_endpoint(
     except Exception as e:
         logger.error(f"WS error for user {user.id}: {e}")
         manager.disconnect_from_channel(websocket, channel_id, user.id)
+
+
+@router.post("/schedule")
+async def schedule_message(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import ScheduledMessage
+ 
+    body = await request.json()
+    channel_id   = body.get("channel_id")
+    content      = (body.get("content") or "").strip()
+    scheduled_at = body.get("scheduled_at", "")
+ 
+    if not channel_id or not content or not scheduled_at:
+        return JSONResponse(
+            {"error": "channel_id, content and scheduled_at required"},
+            status_code=400
+        )
+ 
+    # Robust ISO parse — handles both "2024-01-15T14:30" and "2024-01-15T14:30:00Z"
+    try:
+        clean = scheduled_at.replace("Z", "+00:00")
+        sched_dt = datetime.fromisoformat(clean)
+        # Strip timezone info for DB storage (store as UTC naive)
+        if sched_dt.tzinfo is not None:
+            sched_dt = sched_dt.replace(tzinfo=None)
+    except (ValueError, AttributeError):
+        try:
+            sched_dt = datetime.strptime(scheduled_at[:16], "%Y-%m-%dT%H:%M")
+        except ValueError:
+            return JSONResponse({"error": "Invalid date format"}, status_code=400)
+ 
+    if sched_dt <= datetime.utcnow():
+        return JSONResponse({"error": "Scheduled time must be in the future"}, status_code=400)
+ 
+    sm = ScheduledMessage(
+        channel_id=channel_id,
+        sender_id=current_user.id,
+        content=content,
+        scheduled_at=sched_dt,
+    )
+    db.add(sm)
+    await db.commit()
+    await db.refresh(sm)
+ 
+    return JSONResponse({
+        "id": sm.id,
+        "scheduled_at": sm.scheduled_at.isoformat(),
+        "content": sm.content,
+    })
+    
+
+ 
+@router.get("/scheduled")
+async def list_scheduled(
+    channel_id: int = Query(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import ScheduledMessage
+    rows = (await db.execute(
+        select(ScheduledMessage)
+        .where(
+            ScheduledMessage.channel_id == channel_id,
+            ScheduledMessage.sender_id == current_user.id,
+            ScheduledMessage.sent == False,
+            ScheduledMessage.cancelled == False,
+        )
+        .order_by(ScheduledMessage.scheduled_at.asc())
+    )).scalars().all()
+    return JSONResponse([{
+        "id": s.id, "content": s.content,
+        "scheduled_at": s.scheduled_at.isoformat(),
+    } for s in rows])
+ 
+ 
+@router.delete("/scheduled/{sm_id}")
+async def cancel_scheduled(
+    sm_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import ScheduledMessage
+    sm = (await db.execute(
+        select(ScheduledMessage).where(
+            ScheduledMessage.id == sm_id,
+            ScheduledMessage.sender_id == current_user.id,
+        )
+    )).scalar_one_or_none()
+    if not sm: raise HTTPException(404)
+    sm.cancelled = True
+    await db.commit()
+    return JSONResponse({"status": "cancelled"})
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  9. PINNED MESSAGES
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+@router.post("/{message_id}/pin")
+async def pin_message(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import PinnedMessage
+    msg = (await db.execute(select(Message).where(Message.id == message_id))).scalar_one_or_none()
+    if not msg: raise HTTPException(404)
+ 
+    existing = (await db.execute(
+        select(PinnedMessage).where(
+            PinnedMessage.message_id == message_id,
+            PinnedMessage.channel_id == msg.channel_id,
+        )
+    )).scalar_one_or_none()
+ 
+    if existing:
+        await db.delete(existing)
+        await db.commit()
+        action = "unpinned"
+    else:
+        db.add(PinnedMessage(
+            channel_id=msg.channel_id,
+            message_id=message_id,
+            pinned_by=current_user.id,
+        ))
+        await db.commit()
+        action = "pinned"
+ 
+    await manager.broadcast_to_channel(msg.channel_id, {
+        "type": "pin_update",
+        "message_id": message_id,
+        "action": action,
+        "pinned_by": current_user.full_name,
+    })
+    return JSONResponse({"status": action})
+ 
+ 
+@router.get("/channel/{channel_id}/pinned")
+async def get_pinned(
+    channel_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import PinnedMessage
+    rows = (await db.execute(
+        select(PinnedMessage, Message, User.full_name.label("sender_name"), User.avatar_color)
+        .join(Message, PinnedMessage.message_id == Message.id)
+        .join(User, Message.sender_id == User.id)
+        .where(PinnedMessage.channel_id == channel_id)
+        .order_by(PinnedMessage.pinned_at.desc())
+        .limit(20)
+    )).all()
+    return JSONResponse([{
+        "id": pin.id,
+        "message_id": msg.id,
+        "content": msg.content,
+        "sender_name": name,
+        "avatar_color": color,
+        "pinned_at": pin.pinned_at.isoformat() if pin.pinned_at else "",
+    } for pin, msg, name, color in rows])
+ 
+ 
+# ══════════════════════════════════════════════════════════════════════════════
+#  10. MESSAGE EDIT
+# ══════════════════════════════════════════════════════════════════════════════
+ 
+@router.post("/{message_id}/edit")
+async def edit_message(
+    message_id: int,
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import MessageEdit
+    body = await request.json()
+    new_content = (body.get("content") or "").strip()
+    if not new_content:
+        return JSONResponse({"error": "Content cannot be empty"}, status_code=400)
+ 
+    msg = (await db.execute(select(Message).where(Message.id == message_id))).scalar_one_or_none()
+    if not msg: raise HTTPException(404)
+    if msg.sender_id != current_user.id:
+        return JSONResponse({"error": "You can only edit your own messages"}, status_code=403)
+    if msg.is_deleted:
+        return JSONResponse({"error": "Cannot edit a deleted message"}, status_code=400)
+ 
+    # Save edit history
+    db.add(MessageEdit(
+        message_id=message_id,
+        old_content=msg.content or "",
+        new_content=new_content,
+        edited_by=current_user.id,
+    ))
+ 
+    old_content = msg.content
+    msg.content = new_content
+    msg.edited_at = datetime.utcnow()
+    await db.commit()
+ 
+    await manager.broadcast_to_channel(msg.channel_id, {
+        "type": "message_edited",
+        "message_id": message_id,
+        "new_content": new_content,
+        "edited_by": current_user.full_name,
+        "edited_at": msg.edited_at.isoformat(),
+    })
+    return JSONResponse({"status": "edited", "new_content": new_content})
+ 
+ 
+@router.get("/{message_id}/edit-history")
+async def edit_history(
+    message_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import MessageEdit
+    rows = (await db.execute(
+        select(MessageEdit)
+        .where(MessageEdit.message_id == message_id)
+        .order_by(MessageEdit.edited_at.desc())
+    )).scalars().all()
+    return JSONResponse([{
+        "old_content": r.old_content,
+        "new_content": r.new_content,
+        "edited_at": r.edited_at.isoformat() if r.edited_at else "",
+    } for r in rows])
