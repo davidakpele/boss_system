@@ -103,5 +103,7 @@ def get_file_type(filename: str) -> str:
         "doc": "docx",
         "csv": "csv",
         "txt": "txt",
+        "xls": "excel",
+        "xlsx": "excel",
     }
     return mapping.get(ext, "unknown")
