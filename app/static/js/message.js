@@ -65,7 +65,7 @@ async function loadScheduled() {
     return `<div style="display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--border);">
       <div style="flex:1;">
         <div style="font-size:13px;color:var(--text);margin-bottom:3px;">${escHtml(s.content)}</div>
-        <div style="font-size:11px;color:var(--text3);font-family:monospace;">📅 ${dt}</div>
+        <div style="font-size:11px;color:var(--text3);font-family:monospace;"><i class="fa-solid fa-calendar-days" style="margin-right:4px;"></i>${dt}</div>
       </div>
       <button class="btn btn-ghost btn-xs" onclick="cancelScheduled(${s.id}, this)" style="color:var(--red);flex-shrink:0;">
         <i class="fa-solid fa-xmark"></i>
@@ -94,7 +94,7 @@ function openScheduledPanel() {
 async function pinMessage(msgId) {
   const r = await fetch(`/messages/${msgId}/pin`, { method: 'POST' });
   const d = await r.json();
-  toast(d.status === 'pinned' ? '📌 Message pinned' : 'Unpinned', 'success');
+  toast(d.status === 'pinned' ? 'Message pinned' : 'Unpinned', 'success');
 }
  
 async function loadPinned() {
@@ -127,7 +127,7 @@ function openPinnedPanel() {
 // Handle pin_update from WebSocket
 function applyPinUpdate(data) {
   toast(data.action === 'pinned'
-    ? `📌 ${data.pinned_by} pinned a message`
+    ? `${data.pinned_by} pinned a message`
     : `${data.pinned_by} unpinned a message`, 'info');
   loadPinned();
 }
@@ -153,7 +153,7 @@ function startEdit(msgId) {
   input.style.height = Math.min(input.scrollHeight, 120) + 'px';
  
   // Show edit indicator
-  document.getElementById('replyBarSender').textContent = '✏️ Editing message';
+  document.getElementById('replyBarSender').textContent = 'Editing message';
   document.getElementById('replyBarText').textContent = current.slice(0, 80);
   document.getElementById('replyBar').classList.add('visible');
 }
@@ -292,7 +292,7 @@ function showIncomingCall(data) {
     min-width:280px;border:1px solid rgba(255,255,255,.1);
     animation:slideUp .25s cubic-bezier(0.34,1.56,0.64,1);`;
  
-  const icon   = data.call_type === 'video' ? '📹' : '🎙️';
+  const icon   = data.call_type === 'video' ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-microphone"></i>';
   const label  = data.call_type === 'video' ? 'Video Call' : 'Audio Call';
  
   banner.innerHTML = `
@@ -612,34 +612,44 @@ async function endCall() {
   cleanupCall();
 }
 
-function cleanupCall() {
+function cleanupCall(finalStatus) {
+  // Capture state before wiping — used for the inline call event bubble
+  const _type   = currentCallType || 'audio';
+  const _status = finalStatus || (callSeconds > 0 ? 'answered' : 'missed');
+  const _dur    = callSeconds > 0
+    ? `${String(Math.floor(callSeconds/60)).padStart(2,'0')}:${String(callSeconds%60).padStart(2,'0')}`
+    : null;
+
   Object.values(peerConnections).forEach(pc => { try { pc.close(); } catch(e){} });
   peerConnections = {};
- 
+
   localStream?.getTracks().forEach(t => t.stop());
   localStream = null;
   screenStream?.getTracks().forEach(t => t.stop());
   screenStream = null;
- 
+
   stopRinging();
   stopCallTimer();
   clearTimeout(missedCallTimer);
- 
+
   callActive           = false;
   currentCallUuid      = null;
   currentCallType      = null;
   currentCallChannelId = null;
   isConference         = false;
- 
+
   document.getElementById('callModal')?.classList.remove('open');
   document.getElementById('incomingCallBanner')?.remove();
   document.getElementById('remoteVideos').innerHTML = '';
+
+  // Show inline call event bubble (WhatsApp / Telegram style)
+  appendCallEvent({ type: _type, status: _status, duration: _dur });
 }
  
 function showCallUI(type) {
   const modal = document.getElementById('callModal');
   if (!modal) return;
-  document.getElementById('callTypeLabel').textContent = type === 'video' ? '📹 Video Call' : '🎙️ Audio Call';
+  document.getElementById('callTypeLabel').textContent = type === 'video' ? 'Video Call' : 'Audio Call';
   document.getElementById('videoToggleBtn').style.display = type === 'video' ? 'flex' : 'none';
   document.getElementById('screenShareBtn').style.display = type === 'video' ? 'flex' : 'none';
   document.getElementById('localVideo').style.display = type === 'video' ? 'block' : 'none';
@@ -650,7 +660,7 @@ function showCallUI(type) {
 function handleCallSignal(data) {
   switch(data.type) {
     case 'call_start':
-      toast(`📞 ${data.caller_name} started a ${data.call_type} call. Click to join.`, 'info', 8000);
+      toast(`${data.caller_name} started a ${data.call_type} call. Click to join.`, 'info', 8000);
       callType = data.call_type;
       showCallUI(data.call_type);
       joinCall(data.caller_id, null);
@@ -890,6 +900,7 @@ async function openDM(userId, name, color, isOnline) {
     currentChatMeta = { id: data.channel_id, name };
     data.messages.forEach(m => appendMessage(m, false));
     scrollBottom(); connectWS(data.channel_id);
+    loadInlineCallHistory();   // ← render past call events inline
     markLastRead();
   } catch(e) { toast('Could not open conversation: ' + e.message, 'error'); setWsStatus('disconnected'); }
 }
@@ -915,6 +926,7 @@ async function openChannel(channelId, name, dept, createdBy) {
     const msgs = await resp.json();
     msgs.forEach(m => appendMessage(m, false));
     scrollBottom();
+    loadInlineCallHistory();   // ← render past call events inline
   } catch(e) { console.error('History error', e); }
   connectWS(channelId);
   markLastRead();
@@ -1950,12 +1962,21 @@ function endCall() {
   stopRinging();
   stopCallTimer();
  
+  const _type   = currentCallType || callType || 'audio';
+  const _status = callSeconds > 0 ? 'answered' : 'missed';
+  const _dur    = callSeconds > 0
+    ? `${String(Math.floor(callSeconds/60)).padStart(2,'0')}:${String(callSeconds%60).padStart(2,'0')}`
+    : null;
+
   callActive    = false;
   callChannelId = null;
   callType      = null;
  
   document.getElementById('callModal')?.classList.remove('open');
   document.getElementById('incomingCallBanner')?.remove();
+
+  // Inline call event bubble
+  appendCallEvent({ type: _type, status: _status, duration: _dur });
   toast('Call ended', 'info');
 }
  
@@ -1966,7 +1987,7 @@ function showCallUI(type, state) {
   const isVideo = type === 'video';
  
   const el = (id) => document.getElementById(id);
-  if (el('callTypeLabel'))   el('callTypeLabel').textContent   = isVideo ? '📹 Video Call' : '🎙️ Audio Call';
+  if (el('callTypeLabel'))   el('callTypeLabel').textContent   = isVideo ? 'Video Call' : 'Audio Call';
   if (el('callStatusLabel')) el('callStatusLabel').textContent = state === 'calling' ? 'Calling…' : 'Connecting…';
   if (el('callStatusDot'))   el('callStatusDot').style.background = state === 'calling' ? 'var(--yellow)' : '#25d366';
   if (el('videoToggleBtn'))  el('videoToggleBtn').style.display  = isVideo ? 'flex' : 'none';
@@ -2020,7 +2041,7 @@ function handleCallSignal(data) {
     case 'call_rejected':
       stopRinging();
       toast(`${data.rejected_by} declined the call`, 'info');
-      if (!isConference && Object.keys(peerConnections).length === 0) cleanupCall();
+      if (!isConference && Object.keys(peerConnections).length === 0) cleanupCall('rejected');
       break;
  
     case 'call_terminated':
@@ -2029,7 +2050,7 @@ function handleCallSignal(data) {
         stopRinging();
         document.getElementById('incomingCallBanner')?.remove();
         if (callActive) toast(`Call ended by ${data.ended_by}`, 'info');
-        cleanupCall();
+        cleanupCall('answered');
       }
       break;
  
@@ -2044,6 +2065,8 @@ function handleCallSignal(data) {
       stopRinging();
       document.getElementById('incomingCallBanner')?.remove();
       toast('Missed call', 'info');
+      // Show inline missed-call bubble for the recipient
+      appendCallEvent({ type: currentCallType || data.call_type || 'audio', status: 'missed' });
       break;
   }
 }
@@ -2060,42 +2083,139 @@ window.handleWsMessage = function(data) {
   if (typeof _prevHandler === 'function') _prevHandler(data);
 };
 
-async function openCallHistory() {
-  openModal('callHistoryModal');
-  const list = document.getElementById('callHistoryList');
-  list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin"></i></div>';
-  const r = await fetch('/calls/history?limit=50');
-  const calls = await r.json();
-  if (!calls.length) {
-    list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:13px;">No call history yet</div>';
-    return;
-  }
-  list.innerHTML = calls.map(c => {
-    const others = c.participants.map(p => p.name).join(', ') || 'Unknown';
-    const dt = c.started_at ? new Date(c.started_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
-    const statusIcon = {
-      answered: '📞',
-      missed:   '📵',
-      rejected: '🚫',
-      ended:    '📞',
-    }[c.my_status] || '📞';
-    const statusColor = ['missed','rejected'].includes(c.my_status) ? 'var(--red)' : 'var(--green)';
-    const typeIcon = c.call_type === 'video' ? '📹' : '🎙️';
-    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
-      <div style="font-size:22px;flex-shrink:0;">${statusIcon}</div>
-      <div style="flex:1;min-width:0;">
-        <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-          ${typeIcon} ${escHtml(others)}
-        </div>
-        <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">
-          ${dt}${c.duration ? ` · ${c.duration}` : ''}
-          ${c.is_conference ? ' · Conference' : ''}
-        </div>
+// ── INLINE CALL EVENTS (WhatsApp/Telegram style) ─────────────────────────────
+
+/**
+ * Renders a call event as a centred system bubble in the message list.
+ * Called both when a call ends locally AND when the server pushes a
+ * `call_event` WebSocket message to all participants.
+ *
+ * @param {object} opts
+ *   type      – 'audio'|'video'
+ *   status    – 'answered'|'missed'|'rejected'|'outgoing'
+ *   duration  – optional human-readable string e.g. "2:34"
+ *   with      – display name of the other party (or group label)
+ *   timestamp – ISO string; defaults to now
+ */
+function appendCallEvent({ type = 'audio', status, duration, with: withName, timestamp } = {}) {
+  const list = document.getElementById('messagesList');
+  if (!list) return;
+
+  const isVideo  = type === 'video';
+  const isMissed = status === 'missed' || status === 'rejected';
+  const isOut    = status === 'outgoing';
+
+  const labelMap = {
+    answered: isVideo ? 'Video call'          : 'Voice call',
+    outgoing: isVideo ? 'Outgoing video call' : 'Outgoing voice call',
+    missed:   isVideo ? 'Missed video call'   : 'Missed voice call',
+    rejected: isVideo ? 'Declined video call' : 'Declined voice call',
+  };
+  const label = labelMap[status] || (isVideo ? 'Video call' : 'Voice call');
+
+  // FA icon classes
+  const callIconClass  = isVideo ? 'fa-solid fa-video' : 'fa-solid fa-phone';
+  const arrowIconClass = isOut
+    ? 'fa-solid fa-arrow-up-right'
+    : isMissed
+      ? 'fa-solid fa-phone-missed'
+      : 'fa-solid fa-arrow-down-left';
+
+  const accentColor = isMissed ? '#ef4444' : '#25d366';
+  const bgColor     = isMissed ? 'rgba(239,68,68,0.08)'   : 'rgba(37,211,102,0.08)';
+  const borderColor = isMissed ? 'rgba(239,68,68,0.20)'   : 'rgba(37,211,102,0.20)';
+
+  const time = timestamp
+    ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const subtext = duration
+    ? duration
+    : isMissed ? 'Tap to call back' : '';
+
+  const div = document.createElement('div');
+  div.className = 'call-event-bubble';
+  div.style.cssText = 'display:flex;align-items:center;justify-content:flex-start;margin:8px 0;padding:0;';
+  div.innerHTML = `
+    <div style="
+      display:inline-flex; align-items:center; gap:12px;
+      background:${bgColor};
+      border:1px solid ${borderColor};
+      border-radius:14px; padding:10px 16px;
+      min-width:220px; max-width:320px;
+    ">
+      <!-- Call type icon circle with arrow badge -->
+      <div style="
+        width:42px; height:42px; border-radius:50%;
+        background:${accentColor}1A;
+        border:1.5px solid ${accentColor}44;
+        display:flex; align-items:center; justify-content:center;
+        flex-shrink:0; position:relative;
+      ">
+        <i class="${callIconClass}" style="color:${accentColor};font-size:15px;"></i>
+        <span style="
+          position:absolute; bottom:-3px; right:-3px;
+          width:16px; height:16px; border-radius:50%;
+          background:var(--bg,#fff);
+          border:1px solid ${borderColor};
+          display:flex; align-items:center; justify-content:center;
+        ">
+          <i class="${arrowIconClass}" style="color:${accentColor};font-size:7px;"></i>
+        </span>
       </div>
-      <div style="font-size:11px;font-weight:700;color:${statusColor};text-transform:uppercase;
-           font-family:monospace;flex-shrink:0;">${c.my_status}</div>
+
+      <!-- Label + subtext -->
+      <div style="flex:1;min-width:0;">
+        <div style="
+          font-size:13.5px; font-weight:600;
+          color:var(--text,#111); letter-spacing:-0.1px;
+          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+        ">${escHtml(label)}</div>
+        ${subtext ? `<div style="
+          font-size:11px; color:var(--text3,#888); margin-top:2px;
+        ">${escHtml(subtext)}</div>` : ''}
+      </div>
+
+      <!-- Timestamp -->
+      <div style="
+        font-size:10px; color:var(--text3,#888);
+        font-family:monospace; flex-shrink:0; margin-left:4px;
+      ">${time}</div>
     </div>`;
-  }).join('');
+
+  list.appendChild(div);
+  list.scrollTop = list.scrollHeight;
+}
+
+/**
+ * Load and render historical call events inline in the current chat.
+ * Call this after history messages are loaded (e.g. at end of openChannel/openDM).
+ */
+async function loadInlineCallHistory() {
+  if (!currentChannelId) return;
+  try {
+    const r = await fetch(`/calls/history?channel_id=${currentChannelId}&limit=100`);
+    if (!r.ok) return;
+    const calls = await r.json();
+    calls.forEach(c => {
+      const others = (c.participants || []).map(p => p.name).join(', ') || 'Unknown';
+      appendCallEvent({
+        type:      c.call_type,
+        status:    c.my_status,
+        duration:  c.duration || null,
+        with:      others,
+        timestamp: c.started_at,
+      });
+    });
+  } catch(e) {
+    // silently ignore — call history is non-critical
+  }
+}
+
+// Keep openCallHistory as a no-op so existing HTML buttons don't throw errors.
+// Remove the callHistoryModal trigger from your HTML when convenient.
+function openCallHistory() {
+  /* replaced by inline call events — see appendCallEvent() */
 }
 
 // Extend endCall to stop timer

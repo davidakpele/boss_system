@@ -536,6 +536,22 @@
 .date-divider::before, .date-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 .date-divider span { font-size: 10.5px; font-weight: 600; color: var(--text3); padding: 2px 10px; font-family: var(--msg-mono); letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; }
 
+/* ── CALL EVENT BUBBLES (WhatsApp style) ── */
+.call-event-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 8px 0;
+  padding: 0;
+  animation: bubblePop 0.18s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+.call-event-bubble > div {
+  transition: box-shadow 0.15s;
+}
+.call-event-bubble > div:hover {
+  box-shadow: 0 2px 12px rgba(0,0,0,0.09);
+}
+
 .join-btn { padding: 3px 10px; border-radius: 5px; border: 1px solid var(--border); background: var(--bg2); color: var(--text); font-size: 11.5px; font-weight: 600; cursor: pointer; flex-shrink: 0; transition: background 0.12s; }
 .join-btn:hover { background: var(--text); color: #fff; border-color: var(--text); }
 
@@ -776,9 +792,6 @@
       <button class="hdr-icon-btn" onclick="startCall('video')" title="Video call">
         <i class="fa-solid fa-video"></i>
       </button>
-        <button class="hdr-icon-btn" onclick="openCallHistory()" title="Call history">
-          <i class="fa-solid fa-clock-rotate-left"></i>
-        </button>
       <button class="hdr-icon-btn" onclick="toggleSearch()" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
       <button class="hdr-icon-btn" id="editChBtn" style="display:none;" onclick="openEditChannel()" title="Edit"><i class="fa-solid fa-sliders"></i></button>
     </div>
@@ -1010,7 +1023,7 @@
       <div id="audioCallIcon"
         style="width:80px;height:80px;border-radius:50%;background:#27272a;
                display:flex;align-items:center;justify-content:center;font-size:32px;">
-        🎙️
+        <i class="fa-solid fa-microphone" style="color:#a1a1aa;font-size:30px;"></i>
       </div>
     </div>
  
@@ -1056,15 +1069,6 @@
   </div>
 </div>
 
-<div class="modal-overlay" id="callHistoryModal">
-  <div class="modal" style="max-width:480px;">
-    <div class="modal-title">
-      <span>📞 Call History</span>
-      <span class="modal-close" onclick="closeModal('callHistoryModal')"><i class="fa-solid fa-xmark"></i></span>
-    </div>
-    <div id="callHistoryList" style="max-height:420px;overflow-y:auto;"></div>
-  </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
