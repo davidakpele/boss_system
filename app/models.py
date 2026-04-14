@@ -811,3 +811,69 @@ class RateLimitBucket(Base):
     hits        = Column(Integer, default=1)
     window_start= Column(DateTime(timezone=True), server_default=func.now())
     blocked_until = Column(DateTime(timezone=True), nullable=True)
+    
+    
+class ScheduledMessage(Base):
+    """Write now, deliver later."""
+    __tablename__ = "scheduled_messages"
+    id           = Column(Integer, primary_key=True, index=True)
+    channel_id   = Column(Integer, ForeignKey("channels.id"), nullable=False)
+    sender_id    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    content      = Column(Text, nullable=False)
+    scheduled_at = Column(DateTime(timezone=True), nullable=False)
+    sent         = Column(Boolean, default=False)
+    sent_at      = Column(DateTime(timezone=True), nullable=True)
+    cancelled    = Column(Boolean, default=False)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    channel = relationship("Channel")
+    sender  = relationship("User")
+ 
+ 
+class PinnedMessage(Base):
+    """Pinned messages per channel."""
+    __tablename__ = "pinned_messages"
+    id          = Column(Integer, primary_key=True, index=True)
+    channel_id  = Column(Integer, ForeignKey("channels.id"), nullable=False)
+    message_id  = Column(Integer, ForeignKey("messages.id"), nullable=False)
+    pinned_by   = Column(Integer, ForeignKey("users.id"), nullable=False)
+    pinned_at   = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    channel = relationship("Channel")
+    message = relationship("Message")
+    pinner  = relationship("User")
+ 
+ 
+class MessageEdit(Base):
+    """Full edit history for every message change."""
+    __tablename__ = "message_edits"
+    id           = Column(Integer, primary_key=True, index=True)
+    message_id   = Column(Integer, ForeignKey("messages.id"), nullable=False)
+    old_content  = Column(Text, nullable=False)
+    new_content  = Column(Text, nullable=False)
+    edited_by    = Column(Integer, ForeignKey("users.id"), nullable=False)
+    edited_at    = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    message = relationship("Message")
+    editor  = relationship("User")
+ 
+ 
+class EmailQueue(Base):
+    """SMTP email queue — workers drain this table."""
+    __tablename__ = "email_queue"
+    id           = Column(Integer, primary_key=True, index=True)
+    to_email     = Column(String(300), nullable=False)
+    to_name      = Column(String(200), nullable=True)
+    subject      = Column(String(500), nullable=False)
+    html_body    = Column(Text, nullable=False)
+    text_body    = Column(Text, nullable=True)
+    status       = Column(String(20), default="pending")   # pending|sent|failed
+    attempts     = Column(Integer, default=0)
+    last_error   = Column(Text, nullable=True)
+    send_at      = Column(DateTime(timezone=True), server_default=func.now())
+    sent_at      = Column(DateTime(timezone=True), nullable=True)
+    created_at   = Column(DateTime(timezone=True), server_default=func.now())
+    # context fields
+    category     = Column(String(50), nullable=True)   # hr | notification | digest | alert
+    related_id   = Column(Integer, nullable=True)
+ 

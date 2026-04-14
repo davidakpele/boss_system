@@ -65,6 +65,18 @@ class Settings(BaseSettings):
     LOGIN_ATTEMPT_RETAIN_DAYS: int = 30
     MESSAGE_RETAIN_DAYS: int = 730
     
+    # SMTP Email
+    SMTP_HOST:        str  = ""                        # e.g. smtp.gmail.com
+    SMTP_PORT:        int  = 587                       # 587 (TLS) or 465 (SSL)
+    SMTP_USER:        str  = ""                        # your email address
+    SMTP_PASSWORD:    str  = ""                        # app password
+    SMTP_FROM_EMAIL:  str  = ""                        # sender address
+    SMTP_FROM_NAME:   str  = "BOSS System"             # sender display name
+ 
+    @property
+    def smtp_enabled(self) -> bool:
+        return bool(self.SMTP_HOST and self.SMTP_USER and self.SMTP_PASSWORD)
+    
     class Config:
         env_file = ".env"
         extra = "ignore"
