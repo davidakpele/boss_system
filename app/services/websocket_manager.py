@@ -114,6 +114,10 @@ class WebSocketManager:
             return []
         return list({uid for _, uid, _ in self.channel_connections[channel_id]})
  
+    def get_all_online_user_ids(self) -> list[int]:
+        """Return deduplicated list of all currently connected user IDs."""
+        return list(self.user_connections.keys())
+
     def is_user_online(self, user_id: int) -> bool:
         return user_id in self.user_connections and bool(self.user_connections[user_id])
  

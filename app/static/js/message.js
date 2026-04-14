@@ -1,4 +1,21 @@
+let localStream      = null;
+let screenStream     = null;
+let peerConnections  = {};   // { userId: RTCPeerConnection }
+let currentCallUuid  = null;
+let currentCallType  = null;
+let currentCallChannelId = null;
+let callChannelId = null;
+let callActive       = false;
+let isConference     = false;
+let missedCallTimer  = null;
+let ringAudio        = null;
+let callTimerInterval= null;
+let callSeconds      = 0;
 
+const ICE_SERVERS = { iceServers: [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+]};
 
 function openScheduleModal() {
   const content = document.getElementById('msgInput').value.trim();
@@ -197,116 +214,147 @@ window.handleWsMessage = function(data) {
  
 
 async function startCall(type) {
-  if (!currentChannelId) { toast('Open a channel or DM first', 'error'); return; }
+  if (!currentChannelId) { toast('Open a chat first', 'error'); return; }
   if (callActive)         { toast('Already in a call', 'error'); return; }
  
-  callType      = type;
-  callChannelId = currentChannelId;
-  callActive    = true;
+  // Collect other users in this channel as targets
+  const targetIds = ALL_USERS.map(u => u.id);   // all users visible in the channel
+  isConference = targetIds.length > 1;
  
+  // 1. Register the call in the DB → get call_uuid
+  const startResp = await fetch('/calls/start', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      channel_id:      currentChannelId,
+      call_type:       type,
+      target_user_ids: targetIds,
+    }),
+  });
+  if (!startResp.ok) { toast('Could not start call', 'error'); return; }
+  const callData = await startResp.json();
+ 
+  currentCallUuid       = callData.call_uuid;
+  currentCallType       = type;
+  currentCallChannelId  = currentChannelId;
+  callActive            = true;
+ 
+  // 2. Get local media
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
       video: type === 'video',
     });
   } catch(e) {
-    toast('Camera/Microphone access denied', 'error');
+    toast('Camera / Microphone access denied', 'error');
     callActive = false;
     return;
   }
  
-  // Show the call UI in "calling…" state
+  // 3. Show call UI
   showCallUI(type, 'calling');
- 
-  // Start ringing on caller's side (outgoing ring tone)
   startRinging('outgoing');
  
-  // Signal everyone in the channel
+  // 4. Signal everyone in the channel
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
-      type:        'call_start',
-      call_type:   type,
-      channel_id:  callChannelId,
-      caller_name: ME.name,
+      type:         'call_start',
+      call_type:    type,
+      call_uuid:    currentCallUuid,
+      channel_id:   currentChannelId,
+      caller_name:  ME.name,
       caller_color: ME.color,
+      target_ids:   targetIds,
+      is_conference: isConference,
     }));
   }
  
-  // Auto-cancel if nobody answers in 45 seconds
-  setTimeout(() => {
+  // 5. Mark missed after 45s if nobody answers
+  missedCallTimer = setTimeout(async () => {
     if (callActive && Object.keys(peerConnections).length === 0) {
+      await fetch(`/calls/${currentCallUuid}/missed`, { method: 'POST' });
+      ws?.send(JSON.stringify({ type: 'call_missed', call_uuid: currentCallUuid }));
       toast('No answer', 'info');
-      endCall();
+      cleanupCall();
     }
   }, 45000);
 }
  
 
 function showIncomingCall(data) {
-  // Remove any existing incoming call banner
   document.getElementById('incomingCallBanner')?.remove();
  
   const banner = document.createElement('div');
   banner.id = 'incomingCallBanner';
   banner.style.cssText = `
     position:fixed;bottom:24px;right:24px;z-index:9999;
-    background:var(--sidebar-bg);color:#fff;
-    border-radius:16px;padding:18px 20px;
-    box-shadow:0 8px 40px rgba(0,0,0,0.5);
-    min-width:280px;max-width:320px;
-    animation:slideUp .25s cubic-bezier(0.34,1.56,0.64,1);
-    border:1px solid rgba(255,255,255,0.1);`;
+    background:#0d1117;color:#fff;border-radius:16px;
+    padding:18px 20px;box-shadow:0 8px 40px rgba(0,0,0,.6);
+    min-width:280px;border:1px solid rgba(255,255,255,.1);
+    animation:slideUp .25s cubic-bezier(0.34,1.56,0.64,1);`;
+ 
+  const icon   = data.call_type === 'video' ? '📹' : '🎙️';
+  const label  = data.call_type === 'video' ? 'Video Call' : 'Audio Call';
  
   banner.innerHTML = `
-    <style>@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+    <style>
+      @keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}
+      .ring-pulse{animation:rdot 1s infinite}
+    </style>
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
-      <div style="width:42px;height:42px;border-radius:50%;background:${data.caller_color||'#6366f1'};
-           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">
+      <div style="width:44px;height:44px;border-radius:50%;
+           background:${data.caller_color||'#6366f1'};display:flex;
+           align-items:center;justify-content:center;font-weight:700;
+           font-size:15px;flex-shrink:0;border:2px solid rgba(255,255,255,.2);">
         ${getInitials(data.caller_name)}
       </div>
       <div>
         <div style="font-weight:700;font-size:14px;">${escHtml(data.caller_name)}</div>
-        <div style="font-size:12px;color:#a1a1aa;">
-          Incoming ${data.call_type === 'video' ? '📹 Video' : '🎙️ Audio'} Call…
-        </div>
+        <div style="font-size:12px;color:#a1a1aa;">${icon} Incoming ${label}…</div>
       </div>
     </div>
     <div style="display:flex;gap:10px;">
-      <button onclick="rejectCall(${data.caller_id})"
-        style="flex:1;padding:10px;border-radius:10px;border:none;background:#dc2626;
-               color:#fff;font-weight:700;cursor:pointer;font-size:13px;">
+      <button onclick="rejectCall('${data.call_uuid}', ${data.caller_id})"
+        style="flex:1;padding:10px;border-radius:10px;border:none;
+               background:#dc2626;color:#fff;font-weight:700;cursor:pointer;font-size:13px;">
         <i class="fa-solid fa-phone-slash"></i> Decline
       </button>
-      <button onclick="acceptCall(${data.caller_id}, '${data.call_type}')"
-        style="flex:1;padding:10px;border-radius:10px;border:none;background:#25d366;
-               color:#fff;font-weight:700;cursor:pointer;font-size:13px;">
+      <button onclick="acceptCall('${data.call_uuid}', '${data.call_type}', ${data.caller_id})"
+        style="flex:1;padding:10px;border-radius:10px;border:none;
+               background:#25d366;color:#fff;font-weight:700;cursor:pointer;font-size:13px;">
         <i class="fa-solid fa-phone"></i> Accept
       </button>
     </div>`;
  
   document.body.appendChild(banner);
- 
-  // Ring on receiver's side
   startRinging('incoming');
  
-  // Auto-dismiss after 45 seconds
-  setTimeout(() => {
+  // Auto-dismiss if caller gives up
+  banner._timer = setTimeout(() => {
     banner.remove();
     stopRinging();
-  }, 45000);
+  }, 46000);
 }
+
  
-async function acceptCall(callerId, type) {
+async function acceptCall(callUuid, type, callerId) {
   document.getElementById('incomingCallBanner')?.remove();
   stopRinging();
+  clearTimeout(missedCallTimer);
+  
+  console.log(callUuid);
+
+  currentCallUuid      = callUuid;
+  currentCallType      = type;
+  currentCallChannelId = currentChannelId;
+  callActive           = true;
+  isConference         = false;  // updated once we see actual participant count
  
-  callType   = type;
-  callActive = true;
+  // Register answer in DB
+  await fetch(`/calls/${callUuid}/answer`, { method: 'POST' });
  
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: type === 'video',
+      audio: true, video: type === 'video',
     });
   } catch(e) {
     toast('Media access denied', 'error');
@@ -314,7 +362,7 @@ async function acceptCall(callerId, type) {
     return;
   }
  
-  showCallUI(type, 'connected');
+  showCallUI(type, 'connecting');
   startCallTimer();
  
   // Create peer connection and send offer to caller
@@ -322,43 +370,42 @@ async function acceptCall(callerId, type) {
 }
 
  
-function rejectCall(callerId) {
+async function rejectCall(callUuid, callerId) {
   document.getElementById('incomingCallBanner')?.remove();
   stopRinging();
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({
-      type: 'call_reject',
-      target_user_id: callerId,
-    }));
-  }
+ 
+  await fetch(`/calls/${callUuid}/reject`, { method: 'POST' });
+ 
+  ws?.send(JSON.stringify({
+    type:           'call_reject',
+    call_uuid:      callUuid,
+    target_user_id: callerId,
+  }));
 }
+ 
 
-async function createPeerConnection(remoteUserId, createOffer) {
+
+async function createPeerConnection(remoteUserId, sendOffer) {
   const pc = new RTCPeerConnection(ICE_SERVERS);
   peerConnections[remoteUserId] = pc;
  
-  // Add local tracks
-  if (localStream) {
-    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-  }
+  localStream?.getTracks().forEach(t => pc.addTrack(t, localStream));
  
-  // When remote track arrives → show in UI
   pc.ontrack = (e) => {
     addRemoteStream(remoteUserId, e.streams[0]);
-    // Call is live — update UI status
     document.getElementById('callStatusLabel').textContent = 'Connected';
     document.getElementById('callStatusDot').style.background = '#25d366';
     stopRinging();
-    startCallTimer();
+    if (!callTimerInterval) startCallTimer();
   };
  
-  // ICE candidates → forward via WS
   pc.onicecandidate = (e) => {
-    if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({
+    if (e.candidate) {
+      ws?.send(JSON.stringify({
         type:           'ice_candidate',
         candidate:      e.candidate,
         target_user_id: remoteUserId,
+        call_uuid:      currentCallUuid,
       }));
     }
   };
@@ -366,21 +413,32 @@ async function createPeerConnection(remoteUserId, createOffer) {
   pc.onconnectionstatechange = () => {
     if (['disconnected','failed','closed'].includes(pc.connectionState)) {
       removeRemoteStream(remoteUserId);
+      delete peerConnections[remoteUserId];
+      // If no peers left and this is 1:1 → end the call
+      if (!isConference && Object.keys(peerConnections).length === 0 && callActive) {
+        toast('Call disconnected', 'info');
+        cleanupCall();
+      }
     }
   };
  
-  if (createOffer) {
-    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' });
+  if (sendOffer) {
+    const offer = await pc.createOffer({
+      offerToReceiveAudio: true,
+      offerToReceiveVideo: currentCallType === 'video',
+    });
     await pc.setLocalDescription(offer);
-    ws.send(JSON.stringify({
+    ws?.send(JSON.stringify({
       type:           'call_offer',
       offer:          pc.localDescription,
       target_user_id: remoteUserId,
+      call_uuid:      currentCallUuid,
     }));
   }
  
   return pc;
 }
+
 
 async function joinCall(remoteUserId, offer) {
   if (!localStream) {
@@ -525,19 +583,57 @@ function toggleVideo() {
   }
 }
  
-function endCall() {
-  Object.values(peerConnections).forEach(pc => pc.close());
-  peerConnections = {};
-  if (localStream) { localStream.getTracks().forEach(t => t.stop()); localStream = null; }
-  if (screenStream) { screenStream.getTracks().forEach(t => t.stop()); screenStream = null; }
-  callActive = false;
-  callChannelId = null;
+async function endCall() {
+  if (!currentCallUuid) { cleanupCall(); return; }
  
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'call_end', channel_id: currentChannelId }));
+  // Ask DB: does this terminate the call or just remove me?
+  const resp = await fetch(`/calls/${currentCallUuid}/end`, { method: 'POST' });
+  const data = resp.ok ? await resp.json() : { action: 'ended' };
+ 
+  if (data.action === 'ended') {
+    // 1:1 or last person → kill it for everyone via WS
+    ws?.send(JSON.stringify({
+      type:         'call_end',
+      call_uuid:    currentCallUuid,
+      is_conference: isConference,
+      channel_id:   currentCallChannelId,
+    }));
+  } else {
+    // Conference — just leave, others continue
+    ws?.send(JSON.stringify({
+      type:         'call_end',
+      call_uuid:    currentCallUuid,
+      is_conference: true,
+      channel_id:   currentCallChannelId,
+    }));
+    toast('You left the call. Others are still connected.', 'info');
   }
-  closeModal('callModal');
-  toast('Call ended', 'info');
+ 
+  cleanupCall();
+}
+
+function cleanupCall() {
+  Object.values(peerConnections).forEach(pc => { try { pc.close(); } catch(e){} });
+  peerConnections = {};
+ 
+  localStream?.getTracks().forEach(t => t.stop());
+  localStream = null;
+  screenStream?.getTracks().forEach(t => t.stop());
+  screenStream = null;
+ 
+  stopRinging();
+  stopCallTimer();
+  clearTimeout(missedCallTimer);
+ 
+  callActive           = false;
+  currentCallUuid      = null;
+  currentCallType      = null;
+  currentCallChannelId = null;
+  isConference         = false;
+ 
+  document.getElementById('callModal')?.classList.remove('open');
+  document.getElementById('incomingCallBanner')?.remove();
+  document.getElementById('remoteVideos').innerHTML = '';
 }
  
 function showCallUI(type) {
@@ -1710,55 +1806,43 @@ async function handleCallOffer(data) {
   await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  ws.send(JSON.stringify({
+  ws?.send(JSON.stringify({
     type:           'call_answer',
     answer:         pc.localDescription,
     target_user_id: data.from_user_id,
+    call_uuid:      data.call_uuid,
   }));
 }
  
 async function handleCallAnswer(data) {
   const pc = peerConnections[data.from_user_id];
-  if (pc) {
-    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-  }
+  if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
 }
  
+
 async function handleIceCandidate(data) {
   const pc = peerConnections[data.from_user_id];
   if (pc && data.candidate) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-    } catch(e) {
-      // Ignore — sometimes candidates arrive before remote desc
-    }
+    try { await pc.addIceCandidate(new RTCIceCandidate(data.candidate)); } catch(e) {}
   }
 }
  
 function addRemoteStream(userId, stream) {
   const container = document.getElementById('remoteVideos');
   if (!container) return;
-  let vid = document.getElementById(`rv-${userId}`);
-  if (!vid) {
-    const wrapper = document.createElement('div');
-    wrapper.id = `rvw-${userId}`;
-    wrapper.style.cssText = 'position:relative;';
-    vid = document.createElement('video');
-    vid.id   = `rv-${userId}`;
-    vid.autoplay = true;
-    vid.playsInline = true;
-    vid.style.cssText = 'width:280px;max-width:100%;border-radius:12px;background:#111;';
-    wrapper.appendChild(vid);
-    container.appendChild(wrapper);
+  if (!document.getElementById(`rv-${userId}`)) {
+    const vid = document.createElement('video');
+    vid.id = `rv-${userId}`;
+    vid.autoplay = true; vid.playsInline = true;
+    vid.style.cssText = 'width:260px;border-radius:10px;background:#111;object-fit:cover;';
+    container.appendChild(vid);
+    document.getElementById('audioCallIcon')?.remove();
   }
-  vid.srcObject = stream;
-  // If video-only, hide the audio icon
-  document.getElementById('audioCallIcon')?.remove();
+  document.getElementById(`rv-${userId}`).srcObject = stream;
 }
  
 function removeRemoteStream(userId) {
-  document.getElementById(`rvw-${userId}`)?.remove();
-  delete peerConnections[userId];
+  document.getElementById(`rv-${userId}`)?.remove();
 }
  
  
@@ -1766,45 +1850,24 @@ function removeRemoteStream(userId) {
  
 function startRinging(direction) {
   stopRinging();
-  // Create oscillator-based ring tone (no external file needed)
   try {
     const ctx  = new (window.AudioContext || window.webkitAudioContext)();
-    const gain = ctx.createGain();
-    gain.gain.setValueAtTime(0.3, ctx.currentTime);
-    gain.connect(ctx.destination);
- 
-    ringAudio = { ctx, gain, oscillators: [], stop: function() {
-      this.oscillators.forEach(o => { try { o.stop(); } catch(e){} });
-      this.ctx.close();
-    }};
- 
-    const playTone = (startTime, duration) => {
+    const gain = ctx.createGain(); gain.gain.value = 0.25; gain.connect(ctx.destination);
+    const oscs = [];
+    for (let i = 0; i < 20; i++) {
       const osc = ctx.createOscillator();
       osc.type = direction === 'incoming' ? 'sine' : 'triangle';
-      osc.frequency.setValueAtTime(direction === 'incoming' ? 440 : 480, startTime);
-      if (direction === 'incoming') {
-        osc.frequency.setValueAtTime(480, startTime + 0.1);
-        osc.frequency.setValueAtTime(440, startTime + 0.2);
-      }
+      osc.frequency.value = direction === 'incoming' ? 440 : 520;
       osc.connect(gain);
-      osc.start(startTime);
-      osc.stop(startTime + duration);
-      ringAudio.oscillators.push(osc);
-    };
- 
-    // Ring pattern: tone + pause, repeat every 2 seconds
-    for (let i = 0; i < 20; i++) {
-      playTone(ctx.currentTime + i * 2, direction === 'incoming' ? 0.8 : 1.2);
+      osc.start(ctx.currentTime + i * 2);
+      osc.stop(ctx.currentTime + i * 2 + (direction === 'incoming' ? 0.8 : 1.0));
+      oscs.push(osc);
     }
-  } catch(e) {
-    // AudioContext not supported — silently skip
-  }
+    ringAudio = { ctx, oscs, stop() { oscs.forEach(o => { try{o.stop();}catch(e){} }); ctx.close(); }};
+  } catch(e) {}
 }
  
-function stopRinging() {
-  try { ringAudio?.stop(); } catch(e) {}
-  ringAudio = null;
-}
+function stopRinging() { try { ringAudio?.stop(); } catch(e) {} ringAudio = null; }
  
  
 // ── SCREEN SHARING ────────────────────────────────────────────────────────────
@@ -1812,45 +1875,35 @@ function stopRinging() {
 async function startScreenShare() {
   if (!callActive) { toast('Start a call first', 'error'); return; }
   try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
-    const screenTrack = screenStream.getVideoTracks()[0];
- 
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+    const track = screenStream.getVideoTracks()[0];
     Object.values(peerConnections).forEach(pc => {
-      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) sender.replaceTrack(screenTrack);
+      const s = pc.getSenders().find(s => s.track?.kind === 'video');
+      if (s) s.replaceTrack(track);
     });
- 
-    const localVid = document.getElementById('localVideo');
-    if (localVid) localVid.srcObject = screenStream;
- 
+    const lv = document.getElementById('localVideo');
+    if (lv) lv.srcObject = screenStream;
     const btn = document.getElementById('screenShareBtn');
-    btn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
+    btn.innerHTML = '<i class="fa-solid fa-stop"></i>';
     btn.style.background = 'var(--red)';
     btn.onclick = stopScreenShare;
- 
-    toast('Screen sharing started', 'success');
-    screenTrack.onended = stopScreenShare;
-  } catch(e) {
-    if (e.name !== 'NotAllowedError') toast('Screen share failed', 'error');
-  }
+    track.onended = stopScreenShare;
+    toast('Screen sharing', 'success');
+  } catch(e) { if (e.name !== 'NotAllowedError') toast('Screen share failed', 'error'); }
 }
  
 async function stopScreenShare() {
-  if (!screenStream) return;
-  screenStream.getTracks().forEach(t => t.stop());
+  screenStream?.getTracks().forEach(t => t.stop());
   screenStream = null;
- 
-  const camTrack = localStream?.getVideoTracks()[0];
-  if (camTrack) {
+  const cam = localStream?.getVideoTracks()[0];
+  if (cam) {
     Object.values(peerConnections).forEach(pc => {
-      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
-      if (sender) sender.replaceTrack(camTrack);
+      const s = pc.getSenders().find(s => s.track?.kind === 'video');
+      if (s) s.replaceTrack(cam);
     });
   }
- 
-  const localVid = document.getElementById('localVideo');
-  if (localVid && localStream) localVid.srcObject = localStream;
- 
+  const lv = document.getElementById('localVideo');
+  if (lv && localStream) lv.srcObject = localStream;
   const btn = document.getElementById('screenShareBtn');
   btn.innerHTML = '<i class="fa-solid fa-desktop"></i>';
   btn.style.background = '';
@@ -1860,27 +1913,21 @@ async function stopScreenShare() {
 // ── CALL CONTROLS ─────────────────────────────────────────────────────────────
  
 function toggleMute() {
-  const audio = localStream?.getAudioTracks()[0];
-  if (!audio) return;
-  audio.enabled = !audio.enabled;
+  const t = localStream?.getAudioTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled;
   const btn = document.getElementById('muteBtn');
-  btn.innerHTML = audio.enabled
-    ? '<i class="fa-solid fa-microphone"></i>'
-    : '<i class="fa-solid fa-microphone-slash"></i>';
-  btn.style.background = audio.enabled ? '' : 'var(--red)';
-  btn.style.color       = audio.enabled ? '' : '#fff';
+  btn.innerHTML = t.enabled ? '<i class="fa-solid fa-microphone"></i>' : '<i class="fa-solid fa-microphone-slash"></i>';
+  btn.style.background = t.enabled ? '' : 'var(--red)';
+  btn.style.color       = t.enabled ? '' : '#fff';
 }
  
 function toggleVideo() {
-  const video = localStream?.getVideoTracks()[0];
-  if (!video) return;
-  video.enabled = !video.enabled;
+  const t = localStream?.getVideoTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled;
   const btn = document.getElementById('videoToggleBtn');
-  btn.innerHTML = video.enabled
-    ? '<i class="fa-solid fa-video"></i>'
-    : '<i class="fa-solid fa-video-slash"></i>';
-  btn.style.background = video.enabled ? '' : 'var(--red)';
-  btn.style.color       = video.enabled ? '' : '#fff';
+  btn.innerHTML = t.enabled ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-video-slash"></i>';
+  btn.style.background = t.enabled ? '' : 'var(--red)';
+  btn.style.color       = t.enabled ? '' : '#fff';
 }
  
 function endCall() {
@@ -1914,41 +1961,21 @@ function endCall() {
  
  
 // ── CALL UI ───────────────────────────────────────────────────────────────────
- 
 function showCallUI(type, state) {
-  const modal = document.getElementById('callModal');
-  if (!modal) return;
- 
+  const modal = document.getElementById('callModal'); if (!modal) return;
   const isVideo = type === 'video';
  
-  const typeLabel   = document.getElementById('callTypeLabel');
-  const statusLabel = document.getElementById('callStatusLabel');
-  const statusDot   = document.getElementById('callStatusDot');
-  const videoBtn    = document.getElementById('videoToggleBtn');
-  const screenBtn   = document.getElementById('screenShareBtn');
-  const localVid    = document.getElementById('localVideo');
-  const audioIcon   = document.getElementById('audioCallIcon');
- 
-  if (typeLabel)   typeLabel.textContent   = isVideo ? '📹 Video Call' : '🎙️ Audio Call';
-  if (statusLabel) statusLabel.textContent = state === 'calling' ? 'Calling…' : 'Connecting…';
-  if (statusDot)   statusDot.style.background = state === 'calling' ? 'var(--yellow)' : '#25d366';
- 
-  // Show/hide video controls
-  if (videoBtn)  videoBtn.style.display  = isVideo ? 'flex' : 'none';
-  if (screenBtn) screenBtn.style.display = isVideo ? 'flex' : 'none';
- 
-  // Local video preview
-  if (localVid) {
-    localVid.style.display = isVideo ? 'block' : 'none';
-    if (isVideo && localStream) {
-      localVid.srcObject = localStream;
-      localVid.play().catch(() => {});
-    }
+  const el = (id) => document.getElementById(id);
+  if (el('callTypeLabel'))   el('callTypeLabel').textContent   = isVideo ? '📹 Video Call' : '🎙️ Audio Call';
+  if (el('callStatusLabel')) el('callStatusLabel').textContent = state === 'calling' ? 'Calling…' : 'Connecting…';
+  if (el('callStatusDot'))   el('callStatusDot').style.background = state === 'calling' ? 'var(--yellow)' : '#25d366';
+  if (el('videoToggleBtn'))  el('videoToggleBtn').style.display  = isVideo ? 'flex' : 'none';
+  if (el('screenShareBtn'))  el('screenShareBtn').style.display  = isVideo ? 'flex' : 'none';
+  if (el('localVideo')) {
+    el('localVideo').style.display = isVideo ? 'block' : 'none';
+    if (isVideo && localStream) { el('localVideo').srcObject = localStream; el('localVideo').play().catch(()=>{}); }
   }
- 
-  // Audio-only icon
-  if (audioIcon) audioIcon.style.display = isVideo ? 'none' : 'flex';
- 
+  if (el('audioCallIcon')) el('audioCallIcon').style.display = isVideo ? 'none' : 'flex';
   modal.classList.add('open');
 }
  
@@ -1956,76 +1983,120 @@ function showCallUI(type, state) {
 // ── CALL TIMER ────────────────────────────────────────────────────────────────
  
 function startCallTimer() {
-  callSeconds = 0;
-  clearInterval(callTimerInterval);
+  callSeconds = 0; clearInterval(callTimerInterval);
   callTimerInterval = setInterval(() => {
     callSeconds++;
-    const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
-    const s = String(callSeconds % 60).padStart(2, '0');
-    const el = document.getElementById('callTimer');
-    if (el) el.textContent = `${m}:${s}`;
+    const m = String(Math.floor(callSeconds/60)).padStart(2,'0');
+    const s = String(callSeconds%60).padStart(2,'0');
+    const el = document.getElementById('callTimer'); if (el) el.textContent = `${m}:${s}`;
   }, 1000);
 }
  
-function stopCallTimer() {
-  clearInterval(callTimerInterval);
-  callSeconds = 0;
-  const el = document.getElementById('callTimer');
-  if (el) el.textContent = '00:00';
-}
+function stopCallTimer() { clearInterval(callTimerInterval); callTimerInterval = null; callSeconds = 0; }
  
  
 // ── WS CALL SIGNAL HANDLER ───────────────────────────────────────────────────
  
 function handleCallSignal(data) {
   switch(data.type) {
+ 
     case 'call_start':
-      // Someone is calling — show ringing banner
-      showIncomingCall(data);
+      // Don't show banner to yourself
+      if (data.caller_id !== ME.id) showIncomingCall(data);
       break;
  
     case 'call_offer':
-      // Offer from caller after we accepted
-      handleCallOffer(data);
+      if (data.from_user_id !== ME.id) handleCallOffer(data);
       break;
  
     case 'call_answer':
-      // Answer from receiver
       handleCallAnswer(data);
       break;
  
     case 'ice_candidate':
-      handleIceCandidate(data);
+      if (data.from_user_id !== ME.id) handleIceCandidate(data);
       break;
  
     case 'call_rejected':
       stopRinging();
       toast(`${data.rejected_by} declined the call`, 'info');
-      if (Object.keys(peerConnections).length === 0) endCall();
+      if (!isConference && Object.keys(peerConnections).length === 0) cleanupCall();
       break;
  
-    case 'call_end':
+    case 'call_terminated':
+      // 1:1 ended by other party — close for everyone
+      if (data.call_uuid === currentCallUuid || !currentCallUuid) {
+        stopRinging();
+        document.getElementById('incomingCallBanner')?.remove();
+        if (callActive) toast(`Call ended by ${data.ended_by}`, 'info');
+        cleanupCall();
+      }
+      break;
+ 
+    case 'call_participant_left':
+      // Conference — someone left but call continues
+      toast(`${data.user_name} left the call`, 'info');
+      removeRemoteStream(data.user_id);
+      delete peerConnections[data.user_id];
+      break;
+ 
+    case 'call_missed':
       stopRinging();
       document.getElementById('incomingCallBanner')?.remove();
-      if (callActive) {
-        toast(`${data.ended_by || 'Call'} ended`, 'info');
-        endCall();
-      }
+      toast('Missed call', 'info');
       break;
   }
 }
  
+ 
 // Patch the global WS handler to include call signals
-const _prevWsHandler = window.handleWsMessage;
+const _prevHandler = window.handleWsMessage;
 window.handleWsMessage = function(data) {
-  const callTypes = ['call_start','call_offer','call_answer','ice_candidate','call_rejected','call_end'];
-  if (callTypes.includes(data.type)) {
-    handleCallSignal(data);
-    return;
-  }
-  if (typeof _prevWsHandler === 'function') _prevWsHandler(data);
+  const callTypes = [
+    'call_start','call_offer','call_answer','ice_candidate',
+    'call_rejected','call_terminated','call_participant_left','call_missed',
+  ];
+  if (callTypes.includes(data.type)) { handleCallSignal(data); return; }
+  if (typeof _prevHandler === 'function') _prevHandler(data);
 };
 
+async function openCallHistory() {
+  openModal('callHistoryModal');
+  const list = document.getElementById('callHistoryList');
+  list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);"><i class="fa-solid fa-spinner fa-spin"></i></div>';
+  const r = await fetch('/calls/history?limit=50');
+  const calls = await r.json();
+  if (!calls.length) {
+    list.innerHTML = '<div style="padding:32px;text-align:center;color:var(--text3);font-size:13px;">No call history yet</div>';
+    return;
+  }
+  list.innerHTML = calls.map(c => {
+    const others = c.participants.map(p => p.name).join(', ') || 'Unknown';
+    const dt = c.started_at ? new Date(c.started_at).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+    const statusIcon = {
+      answered: '📞',
+      missed:   '📵',
+      rejected: '🚫',
+      ended:    '📞',
+    }[c.my_status] || '📞';
+    const statusColor = ['missed','rejected'].includes(c.my_status) ? 'var(--red)' : 'var(--green)';
+    const typeIcon = c.call_type === 'video' ? '📹' : '🎙️';
+    return `<div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:22px;flex-shrink:0;">${statusIcon}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+          ${typeIcon} ${escHtml(others)}
+        </div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:2px;">
+          ${dt}${c.duration ? ` · ${c.duration}` : ''}
+          ${c.is_conference ? ' · Conference' : ''}
+        </div>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:${statusColor};text-transform:uppercase;
+           font-family:monospace;flex-shrink:0;">${c.my_status}</div>
+    </div>`;
+  }).join('');
+}
 
 // Extend endCall to stop timer
 const _origEndCall = endCall;
