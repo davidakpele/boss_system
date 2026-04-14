@@ -553,28 +553,49 @@ function toggleVideo() {
 }
  
 async function endCall() {
-  if (!currentCallUuid) { cleanupCall(); return; }
- 
+  if (!currentCallUuid) {
+    cleanupCall();
+    return;
+  }
+
   const resp = await fetch(`/calls/${currentCallUuid}/end`, { method: 'POST' });
   const data = resp.ok ? await resp.json() : { action: 'ended' };
- 
+
+  const otherName = Object.keys(peerConnections || {}).length > 0
+    ? (ALL_USERS.find(u => peerConnections[u.id])?.name || 'Someone')
+    : 'Someone';
+
+  const formattedDuration = `${Math.floor(callSeconds / 60)}:${String(callSeconds % 60).padStart(2, '0')}`;
+
   if (data.action === 'ended') {
     ws?.send(JSON.stringify({
-      type:         'call_end',
-      call_uuid:    currentCallUuid,
+      type: 'call_end',
+      call_uuid: currentCallUuid,
       is_conference: isConference,
-      channel_id:   currentCallChannelId,
+      channel_id: currentCallChannelId,
     }));
+
+    if (callSeconds > 0) {
+      appendCallEvent({
+        type: currentCallType || 'audio',
+        status: 'outgoing',
+        duration: formattedDuration,
+        with: otherName,
+        timestamp: new Date().toISOString(),
+        isOutgoing: true,
+      });
+    }
   } else {
     ws?.send(JSON.stringify({
-      type:         'call_end',
-      call_uuid:    currentCallUuid,
+      type: 'call_end',
+      call_uuid: currentCallUuid,
       is_conference: true,
-      channel_id:   currentCallChannelId,
+      channel_id: currentCallChannelId,
     }));
+
     toast('You left the call. Others are still connected.', 'info');
   }
- 
+
   cleanupCall();
 }
 
@@ -622,31 +643,83 @@ function showCallUI(type) {
  
 function handleCallSignal(data) {
   switch(data.type) {
+ 
     case 'call_start':
-      toast(`${data.caller_name} started a ${data.call_type} call. Click to join.`, 'info', 8000);
-      callType = data.call_type;
-      showCallUI(data.call_type);
-      joinCall(data.caller_id, null);
+      if (data.caller_id !== ME.id) showIncomingCall(data);
       break;
+ 
     case 'call_offer':
-      joinCall(data.from_user_id, data.offer);
+      if (data.from_user_id !== ME.id) handleCallOffer(data);
       break;
+ 
     case 'call_answer':
-      if (peerConnections[data.from_user_id]) {
-        peerConnections[data.from_user_id].setRemoteDescription(new RTCSessionDescription(data.answer));
-      }
+      handleCallAnswer(data);
       break;
+ 
     case 'ice_candidate':
-      if (peerConnections[data.from_user_id]) {
-        peerConnections[data.from_user_id].addIceCandidate(new RTCIceCandidate(data.candidate));
+      if (data.from_user_id !== ME.id) handleIceCandidate(data);
+      break;
+ 
+    case 'call_rejected':
+      stopRinging();
+      toast(`${data.rejected_by} declined the call`, 'info');
+      // Append "Declined" event inline at current position
+      appendCallEvent({
+        type:      currentCallType || 'audio',
+        status:    'rejected',
+        with:      data.rejected_by,
+        timestamp: new Date().toISOString(),
+        isOutgoing: true,
+      });
+      if (!isConference && Object.keys(peerConnections).length === 0) cleanupCall();
+      break;
+ 
+    case 'call_terminated':
+      // Other party ended the 1:1 call — append event inline
+      if (data.call_uuid === currentCallUuid || !currentCallUuid) {
+        stopRinging();
+        document.getElementById('incomingCallBanner')?.remove();
+        if (callActive) {
+          toast(`Call ended by ${data.ended_by}`, 'info');
+          // Append answered call event inline
+          appendCallEvent({
+            type:      currentCallType || 'audio',
+            status:    'answered',
+            duration:  callSeconds > 0
+              ? `${Math.floor(callSeconds/60)}:${String(callSeconds%60).padStart(2,'0')}`
+              : null,
+            with:      data.ended_by,
+            timestamp: new Date().toISOString(),
+            isOutgoing: false,
+          });
+        }
+        cleanupCall();
       }
       break;
-    case 'call_end':
-      toast('Call ended', 'info');
-      endCall();
+ 
+    case 'call_participant_left':
+      // Conference — someone left, others continue
+      toast(`${data.user_name} left the call`, 'info');
+      removeRemoteStream(data.user_id);
+      delete peerConnections[data.user_id];
+      break;
+ 
+    case 'call_missed':
+      stopRinging();
+      document.getElementById('incomingCallBanner')?.remove();
+      // Append missed call inline
+      appendCallEvent({
+        type:      data.call_type || 'audio',
+        status:    'missed',
+        with:      data.caller_name || 'Someone',
+        timestamp: new Date().toISOString(),
+        isOutgoing: false,
+      });
+      toast('Missed call', 'info');
       break;
   }
 }
+ 
 
 const _origWsHandler2 = window.handleWsMessage;
 window.handleWsMessage = function(data) {
@@ -831,53 +904,137 @@ async function openDM(userId, name, color, isOnline) {
   setActive(`dm-item-${userId}`);
   currentChatType = 'dm';
   const av = document.getElementById('hdrAv');
-  av.className = 'hdr-av'; av.style.background = color; av.style.borderRadius = '50%';
+  av.className = 'hdr-av';
+  av.style.background   = color;
+  av.style.borderRadius = '50%';
   av.textContent = getInitials(name);
   document.getElementById('hdrName').textContent = name;
   document.getElementById('hdrStatus').innerHTML = isOnline
-    ? `<div class="dot-on"></div> Online` : `<div class="dot-off"></div> Offline`;
+    ? `<div class="dot-on"></div> Online`
+    : `<div class="dot-off"></div> Offline`;
   document.getElementById('editChBtn').style.display = 'none';
   document.getElementById('msgInput').placeholder = `Message ${name}… (@ to mention)`;
+ 
   showChatUI(); clearMessages(); clearReply(); setWsStatus('connecting'); closeThread();
+ 
   try {
-    const resp = await fetch(`/messages/dm/${userId}/init`);
-    const data = await resp.json();
+    // Fetch messages and call history in parallel
+    const [msgResp, callResp] = await Promise.all([
+      fetch(`/messages/dm/${userId}/init`),
+      fetch(`/calls/history?channel_id=0&limit=1`), // placeholder — updated below
+    ]);
+ 
+    const data = await msgResp.json();
     currentChannelId = data.channel_id;
-    currentChatMeta = { id: data.channel_id, name };
-    data.messages.forEach(m => appendMessage(m, false));
+    currentChatMeta  = { id: data.channel_id, name };
+ 
+    // Now fetch calls with the correct channel_id
+    const callData = await fetch(`/calls/history?channel_id=${data.channel_id}&limit=100`);
+    const calls    = callData.ok ? await callData.json() : [];
+ 
+    // Merge messages + calls and render in time order
+    renderMergedTimeline(data.messages, calls);
+ 
     scrollBottom();
     connectWS(data.channel_id);
-    loadInlineCallHistory(data.channel_id);
     markLastRead();
-  } catch(e) { toast('Could not open conversation: ' + e.message, 'error'); setWsStatus('disconnected'); }
+  } catch(e) {
+    toast('Could not open conversation: ' + e.message, 'error');
+    setWsStatus('disconnected');
+  }
 }
 
 async function openChannel(channelId, name, dept, createdBy) {
   setActive(`ch-item-${channelId}`); closeLeftPanel();
   currentChatType = 'channel'; currentChannelId = channelId;
   currentChatMeta = { id: channelId, name, dept, created_by: createdBy };
+ 
   const av = document.getElementById('hdrAv');
   av.className = 'hdr-av ch-av'; av.style.background = ''; av.style.borderRadius = '6px';
   av.innerHTML = '<i class="fa-solid fa-hashtag"></i>';
   document.getElementById('hdrName').textContent = '# ' + name;
+ 
   const depts = (dept || '').split(',').filter(d => d.trim());
   document.getElementById('hdrStatus').innerHTML = depts.length
     ? depts.map(d => `<span class="dept-tag">${d.trim()}</span>`).join(' ')
     : `<span style="color:var(--text3);font-size:11px;font-family:var(--msg-mono);">General</span>`;
+ 
   const canEdit = ['super_admin','admin'].includes(ME.role) || createdBy === ME.id;
   document.getElementById('editChBtn').style.display = canEdit ? 'flex' : 'none';
   document.getElementById('msgInput').placeholder = `Message #${name}… (@ to mention)`;
+ 
   showChatUI(); clearMessages(); clearReply(); setWsStatus('connecting'); closeThread();
+ 
   try {
-    const resp = await fetch(`/messages/channel/${channelId}/history`);
-    const msgs = await resp.json();
-    msgs.forEach(m => appendMessage(m, false));
+    // Fetch messages and calls in parallel
+    const [msgResp, callResp] = await Promise.all([
+      fetch(`/messages/channel/${channelId}/history`),
+      fetch(`/calls/history?channel_id=${channelId}&limit=100`),
+    ]);
+ 
+    const msgs  = msgResp.ok  ? await msgResp.json()  : [];
+    const calls = callResp.ok ? await callResp.json() : [];
+ 
+    renderMergedTimeline(msgs, calls);
     scrollBottom();
-    loadInlineCallHistory(channelId);
-  } catch(e) { console.error('History error', e); }
+  } catch(e) {
+    console.error('History error', e);
+  }
+ 
   connectWS(channelId);
   markLastRead();
 }
+
+function renderMergedTimeline(messages, calls) {
+  // Tag each item with its timestamp for sorting
+  const msgItems = (messages || []).map(m => ({
+    kind:      'message',
+    timestamp: m.created_at ? new Date(m.created_at).getTime() : 0,
+    data:      m,
+  }));
+ 
+  const callItems = (calls || []).map(c => ({
+    kind:      'call',
+    timestamp: c.started_at ? new Date(c.started_at).getTime() : 0,
+    data:      c,
+  }));
+ 
+  // Merge and sort chronologically
+  const timeline = [...msgItems, ...callItems].sort((a, b) => a.timestamp - b.timestamp);
+ 
+  // Render each item in order
+  timeline.forEach(item => {
+    if (item.kind === 'message') {
+      appendMessage(item.data, false);
+    } else {
+      const c = item.data;
+      const others = (c.participants || []).map(p => p.name).join(', ') || 'Someone';
+      const isOutgoing = c.role === 'caller';
+ 
+      // Determine status from the caller's perspective
+      let status;
+      if (c.my_status === 'answered' || c.status === 'answered' || c.status === 'ended') {
+        status = isOutgoing ? 'outgoing' : 'answered';
+      } else if (c.my_status === 'missed') {
+        status = 'missed';
+      } else if (c.my_status === 'rejected') {
+        status = isOutgoing ? 'outgoing' : 'rejected';
+      } else {
+        status = isOutgoing ? 'outgoing' : 'missed';
+      }
+ 
+      appendCallEvent({
+        type:      c.call_type,
+        status,
+        duration:  c.duration  || null,
+        with:      others,
+        timestamp: c.started_at,
+        isOutgoing,
+      });
+    }
+  });
+}
+ 
 
 function connectWS(channelId) {
   if (ws) { ws.onclose = null; ws.close(); ws = null; }
@@ -1992,13 +2149,13 @@ window.handleWsMessage = function(data) {
  *   with      – display name of the other party (or group label)
  *   timestamp – ISO string; defaults to now
  */
-function appendCallEvent({ type = 'audio', status, duration, with: withName, timestamp } = {}) {
+function appendCallEvent({ type = 'audio', status, duration, with: withName, timestamp, isOutgoing } = {}) {
   const list = document.getElementById('messagesList');
   if (!list) return;
 
   const isVideo  = type === 'video';
   const isMissed = status === 'missed' || status === 'rejected';
-  const isOut    = status === 'outgoing';
+  const isOut    = status === 'outgoing' || isOutgoing === true;
 
   const labelMap = {
     answered: isVideo ? 'Video call'          : 'Voice call',
@@ -2015,92 +2172,105 @@ function appendCallEvent({ type = 'audio', status, duration, with: withName, tim
       ? 'fa-solid fa-phone-missed'
       : 'fa-solid fa-arrow-down-left';
 
-  const accentColor = isMissed ? '#ef4444' : '#25d366';
-  const bgColor     = isMissed ? 'rgba(239,68,68,0.08)'   : 'rgba(37,211,102,0.08)';
-  const borderColor = isMissed ? 'rgba(239,68,68,0.20)'   : 'rgba(37,211,102,0.20)';
+  const accentColor = isMissed ? '#ef4444' : (isOut ? '#2563eb' : '#25d366');
+  const bgColor     = isMissed ? 'rgba(239,68,68,0.07)'   : (isOut ? 'rgba(37,99,235,0.07)'  : 'rgba(37,211,102,0.07)');
+  const borderColor = isMissed ? 'rgba(239,68,68,0.18)'   : (isOut ? 'rgba(37,99,235,0.18)'  : 'rgba(37,211,102,0.18)');
 
   const time = timestamp
     ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const subtext = duration
-    ? duration
-    : isMissed ? 'Tap to call back' : '';
+  const subtext = duration ? duration : isMissed ? 'Tap to call back' : '';
 
-  const div = document.createElement('div');
-  div.className = 'call-event-bubble';
-  div.style.cssText = 'display:flex;align-items:center;justify-content:flex-start;margin:8px 0;padding:0;';
-  div.innerHTML = `
+  // Avatar initials for the other party / self
+  const avatarInitials = isOut ? getInitials(ME.name) : getInitials(withName || '?');
+  const avatarColor    = isOut ? ME.color : '#6366f1';
+
+  const wrap = document.createElement('div');
+  wrap.className = 'call-event-bubble';
+  // Align right for outgoing (caller), left for incoming (recipient) — like chat messages
+  wrap.style.cssText = `
+    display:flex;
+    flex-direction:row;
+    align-items:flex-end;
+    gap:8px;
+    margin:6px 0;
+    padding:0;
+    justify-content:${isOut ? 'flex-end' : 'flex-start'};`;
+
+  // Avatar element — shown on left for incoming, right for outgoing
+  const avatarHtml = `<div style="
+    width:32px;height:32px;border-radius:50%;flex-shrink:0;
+    background:${avatarColor};display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:700;color:#fff;
+  ">${avatarInitials}</div>`;
+
+  const bubbleHtml = `
     <div style="
-      display:inline-flex; align-items:center; gap:12px;
+      display:inline-flex; align-items:center; gap:10px;
       background:${bgColor};
       border:1px solid ${borderColor};
-      border-radius:14px; padding:10px 16px;
-      min-width:220px; max-width:320px;
+      border-radius:${isOut ? '14px 4px 14px 14px' : '4px 14px 14px 14px'};
+      padding:10px 16px;
+      min-width:210px; max-width:300px;
+      cursor:default;
     ">
-      <!-- Call type icon circle with arrow badge -->
+      <!-- Icon circle -->
       <div style="
-        width:42px; height:42px; border-radius:50%;
-        background:${accentColor}1A;
+        width:36px;height:36px;border-radius:50%;
+        background:${accentColor}18;
         border:1.5px solid ${accentColor}44;
-        display:flex; align-items:center; justify-content:center;
-        flex-shrink:0; position:relative;
+        display:flex;align-items:center;justify-content:center;
+        flex-shrink:0;position:relative;
       ">
-        <i class="${callIconClass}" style="color:${accentColor};font-size:15px;"></i>
+        <i class="${callIconClass}" style="color:${accentColor};font-size:13px;"></i>
         <span style="
-          position:absolute; bottom:-3px; right:-3px;
-          width:16px; height:16px; border-radius:50%;
+          position:absolute;bottom:-3px;right:-3px;
+          width:14px;height:14px;border-radius:50%;
           background:var(--bg,#fff);
           border:1px solid ${borderColor};
-          display:flex; align-items:center; justify-content:center;
+          display:flex;align-items:center;justify-content:center;
         ">
-          <i class="${arrowIconClass}" style="color:${accentColor};font-size:7px;"></i>
+          <i class="${arrowIconClass}" style="color:${accentColor};font-size:6px;"></i>
         </span>
       </div>
-
-      <!-- Label + subtext -->
+      <!-- Text -->
       <div style="flex:1;min-width:0;">
-        <div style="
-          font-size:13.5px; font-weight:600;
-          color:var(--text,#111); letter-spacing:-0.1px;
-          white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-        ">${escHtml(label)}</div>
-        ${subtext ? `<div style="
-          font-size:11px; color:var(--text3,#888); margin-top:2px;
-        ">${escHtml(subtext)}</div>` : ''}
+        <div style="font-size:13px;font-weight:600;color:var(--text,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(label)}</div>
+        ${subtext ? `<div style="font-size:11px;color:var(--text3,#888);margin-top:1px;">${escHtml(subtext)}</div>` : ''}
       </div>
-
-      <!-- Timestamp -->
-      <div style="
-        font-size:10px; color:var(--text3,#888);
-        font-family:monospace; flex-shrink:0; margin-left:4px;
-      ">${time}</div>
+      <!-- Time -->
+      <div style="font-size:10px;color:var(--text3,#888);font-family:monospace;flex-shrink:0;">${time}</div>
     </div>`;
 
-  list.appendChild(div);
-  list.scrollTop = list.scrollHeight;
+  wrap.innerHTML = isOut
+    ? bubbleHtml + avatarHtml
+    : avatarHtml + bubbleHtml;
+
+  // Insert BEFORE the typing indicator so live events also appear in the right place
+  const typing = document.getElementById('typingBar');
+  if (typing && typing.parentNode === list) {
+    list.insertBefore(wrap, typing);
+  } else {
+    list.appendChild(wrap);
+  }
 }
 
-async function loadInlineCallHistory(channelId) {
-  if (!channelId) return;
-  try {
-    const r = await fetch(`/calls/history?channel_id=${channelId}&limit=100`);
-    if (!r.ok) return;
-    const calls = await r.json();
-    if (currentChannelId !== channelId) return;
-
-    calls.forEach(c => {
-      const others = (c.participants || []).map(p => p.name).join(', ') || 'Unknown';
-      appendCallEvent({
-        type:      c.call_type,
-        status:    c.my_status,
-        duration:  c.duration || null,
-        with:      others,
-        timestamp: c.started_at,
-      });
-    });
-  } catch(e) {
+function appendLiveCallEvent(callUuid, type, status, durationS, otherName) {
+  let duration = null;
+  if (durationS) {
+    const m = Math.floor(durationS / 60);
+    const s = durationS % 60;
+    duration = `${m}:${String(s).padStart(2, '0')}`;
   }
+  appendCallEvent({
+    type,
+    status,
+    duration,
+    with: otherName || 'Someone',
+    timestamp: new Date().toISOString(),
+    isOutgoing: false,
+  });
 }
 
 function openCallHistory() {
