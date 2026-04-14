@@ -899,8 +899,9 @@ async function openDM(userId, name, color, isOnline) {
     currentChannelId = data.channel_id;
     currentChatMeta = { id: data.channel_id, name };
     data.messages.forEach(m => appendMessage(m, false));
-    scrollBottom(); connectWS(data.channel_id);
-    loadInlineCallHistory();   // ← render past call events inline
+    scrollBottom();
+    connectWS(data.channel_id);
+    loadInlineCallHistory(data.channel_id);
     markLastRead();
   } catch(e) { toast('Could not open conversation: ' + e.message, 'error'); setWsStatus('disconnected'); }
 }
@@ -926,7 +927,7 @@ async function openChannel(channelId, name, dept, createdBy) {
     const msgs = await resp.json();
     msgs.forEach(m => appendMessage(m, false));
     scrollBottom();
-    loadInlineCallHistory();   // ← render past call events inline
+    loadInlineCallHistory(channelId);
   } catch(e) { console.error('History error', e); }
   connectWS(channelId);
   markLastRead();
@@ -1578,8 +1579,6 @@ function appendMessage(msg, scroll=true) {
   }
 
   list.appendChild(wrap);
-
-  // Wire up all action buttons via event delegation on the wrap (no inline JS)
   wireMessageActions(wrap, msg, color);
 
   if (msg.reactions && msg.reactions.length) {
@@ -1590,9 +1589,7 @@ function appendMessage(msg, scroll=true) {
   if (scroll) { scrollBottom(); markRead(msg.id); }
 }
 
-// Wire all interactive elements on a message wrap via addEventListener (no innerHTML onclick)
 function wireMessageActions(wrap, msg, color) {
-  // Trigger button → open/close menu
   const trigger = wrap.querySelector('.msg-action-trigger');
   const menuId  = `menu-${msg.id}`;
   if (trigger) {
@@ -1602,7 +1599,6 @@ function wireMessageActions(wrap, msg, color) {
     });
   }
 
-  // Menu items
   wrap.querySelectorAll('.msg-action-menu-item').forEach(btn => {
     btn.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -1614,7 +1610,6 @@ function wireMessageActions(wrap, msg, color) {
         const w = document.querySelector(`[data-msg-id="${mid}"]`);
         setReply(mid, w?.dataset.senderName || '', w?.dataset.preview || '');
       } else if (action === 'react') {
-        // Open picker anchored to the trigger button (visible in DOM)
         openEmojiPicker(mid, trigger || this);
       } else if (action === 'thread') {
         const threadBtn = wrap.querySelector('.thread-btn');
@@ -1628,8 +1623,6 @@ function wireMessageActions(wrap, msg, color) {
       }
     });
   });
-
-  // Thread button
   const threadBtn = wrap.querySelector('.thread-btn');
   if (threadBtn) {
     threadBtn.addEventListener('click', function(e) {
@@ -1650,7 +1643,6 @@ function openThreadById(btn) {
   openThread(msgId, content, sender, color, count);
 }
 
-// ── FILE BUBBLE ──
 function absoluteUrl(url) {
   if (!url) return '';
   if (url.startsWith('http')) return url;
@@ -1857,9 +1849,7 @@ function removeRemoteStream(userId) {
   document.getElementById(`rv-${userId}`)?.remove();
 }
  
- 
-// ── RINGING ───────────────────────────────────────────────────────────────────
- 
+
 function startRinging(direction) {
   stopRinging();
   try {
@@ -1881,9 +1871,7 @@ function startRinging(direction) {
  
 function stopRinging() { try { ringAudio?.stop(); } catch(e) {} ringAudio = null; }
  
- 
-// ── SCREEN SHARING ────────────────────────────────────────────────────────────
- 
+
 async function startScreenShare() {
   if (!callActive) { toast('Start a call first', 'error'); return; }
   try {
@@ -1921,8 +1909,6 @@ async function stopScreenShare() {
   btn.style.background = '';
   btn.onclick = startScreenShare;
 }
- 
-// ── CALL CONTROLS ─────────────────────────────────────────────────────────────
  
 function toggleMute() {
   const t = localStream?.getAudioTracks()[0]; if (!t) return;
@@ -1975,13 +1961,11 @@ function endCall() {
   document.getElementById('callModal')?.classList.remove('open');
   document.getElementById('incomingCallBanner')?.remove();
 
-  // Inline call event bubble
   appendCallEvent({ type: _type, status: _status, duration: _dur });
   toast('Call ended', 'info');
 }
  
- 
-// ── CALL UI ───────────────────────────────────────────────────────────────────
+
 function showCallUI(type, state) {
   const modal = document.getElementById('callModal'); if (!modal) return;
   const isVideo = type === 'video';
@@ -2000,9 +1984,7 @@ function showCallUI(type, state) {
   modal.classList.add('open');
 }
  
- 
-// ── CALL TIMER ────────────────────────────────────────────────────────────────
- 
+
 function startCallTimer() {
   callSeconds = 0; clearInterval(callTimerInterval);
   callTimerInterval = setInterval(() => {
@@ -2015,14 +1997,11 @@ function startCallTimer() {
  
 function stopCallTimer() { clearInterval(callTimerInterval); callTimerInterval = null; callSeconds = 0; }
  
- 
-// ── WS CALL SIGNAL HANDLER ───────────────────────────────────────────────────
- 
+
 function handleCallSignal(data) {
   switch(data.type) {
  
     case 'call_start':
-      // Don't show banner to yourself
       if (data.caller_id !== ME.id) showIncomingCall(data);
       break;
  
@@ -2045,7 +2024,6 @@ function handleCallSignal(data) {
       break;
  
     case 'call_terminated':
-      // 1:1 ended by other party — close for everyone
       if (data.call_uuid === currentCallUuid || !currentCallUuid) {
         stopRinging();
         document.getElementById('incomingCallBanner')?.remove();
@@ -2055,7 +2033,6 @@ function handleCallSignal(data) {
       break;
  
     case 'call_participant_left':
-      // Conference — someone left but call continues
       toast(`${data.user_name} left the call`, 'info');
       removeRemoteStream(data.user_id);
       delete peerConnections[data.user_id];
@@ -2065,14 +2042,12 @@ function handleCallSignal(data) {
       stopRinging();
       document.getElementById('incomingCallBanner')?.remove();
       toast('Missed call', 'info');
-      // Show inline missed-call bubble for the recipient
       appendCallEvent({ type: currentCallType || data.call_type || 'audio', status: 'missed' });
       break;
   }
 }
  
- 
-// Patch the global WS handler to include call signals
+
 const _prevHandler = window.handleWsMessage;
 window.handleWsMessage = function(data) {
   const callTypes = [
@@ -2082,8 +2057,6 @@ window.handleWsMessage = function(data) {
   if (callTypes.includes(data.type)) { handleCallSignal(data); return; }
   if (typeof _prevHandler === 'function') _prevHandler(data);
 };
-
-// ── INLINE CALL EVENTS (WhatsApp/Telegram style) ─────────────────────────────
 
 /**
  * Renders a call event as a centred system bubble in the message list.
@@ -2191,12 +2164,14 @@ function appendCallEvent({ type = 'audio', status, duration, with: withName, tim
  * Load and render historical call events inline in the current chat.
  * Call this after history messages are loaded (e.g. at end of openChannel/openDM).
  */
-async function loadInlineCallHistory() {
-  if (!currentChannelId) return;
+async function loadInlineCallHistory(channelId) {
+  if (!channelId) return;
   try {
-    const r = await fetch(`/calls/history?channel_id=${currentChannelId}&limit=100`);
+    const r = await fetch(`/calls/history?channel_id=${channelId}&limit=100`);
     if (!r.ok) return;
     const calls = await r.json();
+    if (currentChannelId !== channelId) return;
+
     calls.forEach(c => {
       const others = (c.participants || []).map(p => p.name).join(', ') || 'Unknown';
       appendCallEvent({
@@ -2208,14 +2183,10 @@ async function loadInlineCallHistory() {
       });
     });
   } catch(e) {
-    // silently ignore — call history is non-critical
   }
 }
 
-// Keep openCallHistory as a no-op so existing HTML buttons don't throw errors.
-// Remove the callHistoryModal trigger from your HTML when convenient.
 function openCallHistory() {
-  /* replaced by inline call events — see appendCallEvent() */
 }
 
 // Extend endCall to stop timer
