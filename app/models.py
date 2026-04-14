@@ -877,3 +877,37 @@ class EmailQueue(Base):
     category     = Column(String(50), nullable=True)   # hr | notification | digest | alert
     related_id   = Column(Integer, nullable=True)
  
+ 
+class CallRecord(Base):
+    """Every call attempt — answered, missed, or rejected."""
+    __tablename__ = "call_records"
+ 
+    id           = Column(Integer, primary_key=True, index=True)
+    call_uuid    = Column(String(36), unique=True, index=True, nullable=False)  # shared across all participants
+    channel_id   = Column(Integer, ForeignKey("channels.id"), nullable=False)
+    call_type    = Column(String(10), nullable=False)   # audio | video
+    status       = Column(String(20), nullable=False)   # answered | missed | rejected | ongoing
+    is_conference= Column(Boolean, default=False)       # True when 3+ participants joined
+    started_at   = Column(DateTime(timezone=True), server_default=func.now())
+    answered_at  = Column(DateTime(timezone=True), nullable=True)
+    ended_at     = Column(DateTime(timezone=True), nullable=True)
+    duration_s   = Column(Integer, nullable=True)       # seconds, None if missed/rejected
+ 
+    channel      = relationship("Channel")
+    participants = relationship("CallParticipant", back_populates="call")
+ 
+ 
+class CallParticipant(Base):
+    """One row per user per call — tracks their individual status."""
+    __tablename__ = "call_participants"
+ 
+    id          = Column(Integer, primary_key=True, index=True)
+    call_id     = Column(Integer, ForeignKey("call_records.id"), nullable=False)
+    user_id     = Column(Integer, ForeignKey("users.id"), nullable=False)
+    role        = Column(String(10), default="caller")  # caller | callee
+    status      = Column(String(20), default="ringing") # ringing | answered | missed | rejected | left
+    joined_at   = Column(DateTime(timezone=True), nullable=True)
+    left_at     = Column(DateTime(timezone=True), nullable=True)
+ 
+    call = relationship("CallRecord", back_populates="participants")
+    user = relationship("User")

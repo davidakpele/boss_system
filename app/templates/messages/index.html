@@ -512,7 +512,7 @@
 .mention-name { font-size: 12.5px; font-weight: 600; color: var(--text); }
 .mention-dept { font-size: 10.5px; color: var(--text3); font-family: var(--msg-mono); }
 
-.send-btn { width: 34px; height: 34px; background: var(--text); border: none; border-radius: 6px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; transition: opacity 0.15s, transform 0.12s; }
+.send-btn { width: 34px; height: 34px; background: var(--bg2); border: none; border-radius: 6px; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px; flex-shrink: 0; transition: opacity 0.15s, transform 0.12s; }
 .send-btn:hover { opacity: 0.8; }
 .send-btn:active { transform: scale(0.93); }
 .send-btn:disabled { opacity: 0.3; cursor: default; }
@@ -630,7 +630,7 @@
 .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
 .btn-cancel { padding: 8px 18px; border-radius: 6px; border: 1px solid var(--border); background: var(--bg2); color: var(--text2); font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--msg-font); }
 .btn-cancel:hover { background: var(--bg3); }
-.btn-primary { padding: 8px 18px; border-radius: 6px; border: none; background: var(--text); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--msg-font); display: flex; align-items: center; gap: 6px; margin: auto; }
+.btn-primary { padding: 8px 18px; border-radius: 6px; border: none; background: var(--bg3); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--msg-font); display: flex; align-items: center; gap: 6px; margin: auto; }
 .btn-primary:hover { opacity: 0.8; }
 
 /* Mobile */
@@ -764,21 +764,21 @@
         <span id="pinnedCountBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--accent);
           color:#fff;font-size:9px;font-weight:700;border-radius:10px;padding:1px 4px;min-width:14px;text-align:center;">0</span>
       </button>
-    
-      Schedule button:
+      
       <button class="hdr-icon-btn" onclick="openScheduleModal()" title="Schedule message">
         <i class="fa-solid fa-clock"></i>
       </button>
     
-      Audio call button:
       <button class="hdr-icon-btn" onclick="startCall('audio')" title="Audio call">
         <i class="fa-solid fa-phone"></i>
       </button>
     
-      Video call button:
       <button class="hdr-icon-btn" onclick="startCall('video')" title="Video call">
         <i class="fa-solid fa-video"></i>
       </button>
+        <button class="hdr-icon-btn" onclick="openCallHistory()" title="Call history">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+        </button>
       <button class="hdr-icon-btn" onclick="toggleSearch()" title="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
       <button class="hdr-icon-btn" id="editChBtn" style="display:none;" onclick="openEditChannel()" title="Edit"><i class="fa-solid fa-sliders"></i></button>
     </div>
@@ -985,11 +985,9 @@
   <div class="modal" style="max-width:660px;padding:0;overflow:hidden;border-radius:14px;">
  
     <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;
-                padding:14px 20px;background:#0d1117;color:#fff;flex-shrink:0;">
+    <div style="display:flex;align-items:center;justify-content:space-between; padding:14px 20px;background:#0d1117;color:#fff;flex-shrink:0;">
       <div style="display:flex;align-items:center;gap:10px;">
-        <div id="callStatusDot" style="width:8px;height:8px;border-radius:50%;
-             background:var(--yellow);animation:rdot 1s infinite;flex-shrink:0;"></div>
+        <div id="callStatusDot" style="width:8px;height:8px;border-radius:50%; background:var(--yellow);animation:rdot 1s infinite;flex-shrink:0;"></div>
         <span style="font-weight:700;font-size:14px;" id="callTypeLabel">Call</span>
         <span style="font-size:12px;color:#71717a;" id="callStatusLabel">Calling…</span>
       </div>
@@ -1057,40 +1055,33 @@
     </div>
   </div>
 </div>
+
+<div class="modal-overlay" id="callHistoryModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">
+      <span>📞 Call History</span>
+      <span class="modal-close" onclick="closeModal('callHistoryModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div id="callHistoryList" style="max-height:420px;overflow-y:auto;"></div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
-const ME = {
-  id: {{ user.id }},
-  name: "{{ user.full_name }}",
-  color: "{{ user.avatar_color }}",
-  role: "{{ user.role.value }}"
-};
 
-const ALL_USERS = [
-  {% for u in all_users %}
-  { id: {{ u.id }}, name: "{{ u.full_name }}", color: "{{ u.avatar_color }}", dept: "{{ u.department or '' }}" },
-  {% endfor %}
-];
-let localStream     = null;
-let screenStream    = null;
-let peerConnections = {};
-let callChannelId   = null;
-let callType        = null;
-let callActive      = false;
-let ringAudio       = null;
-let callTimerInterval = null;
-let callSeconds     = 0;
- 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ]
-};
+  const ME = {
+    id: {{ user.id }},
+    name: "{{ user.full_name }}",
+    color: "{{ user.avatar_color }}",
+    role: "{{ user.role.value }}"
+  };
 
+  const ALL_USERS = [
+    {% for u in all_users %}
+    { id: {{ u.id }}, name: "{{ u.full_name }}", color: "{{ u.avatar_color }}", dept: "{{ u.department or '' }}" },
+    {% endfor %}
+  ];
 </script>
 <script src="{{ url_for('static', path='js/message.js') }}"></script>
 <script>

@@ -779,67 +779,101 @@ async def websocket_endpoint(
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
             elif msg_type == "call_start":
-                # Broadcast incoming call notification to ALL users in channel
-                # so they see the ringing UI
                 await manager.broadcast_to_channel(channel_id, {
-                    "type": "call_start",
-                    "call_type": data.get("call_type", "audio"),
-                    "caller_id": user.id,
-                    "caller_name": user.full_name,
+                    "type":         "call_start",
+                    "call_type":    data.get("call_type", "audio"),
+                    "call_uuid":    data.get("call_uuid", ""),
+                    "caller_id":    user.id,
+                    "caller_name":  user.full_name,
                     "caller_color": user.avatar_color,
-                    "channel_id": channel_id,
+                    "channel_id":   channel_id,
+                    "target_ids":   data.get("target_ids", []),
                 }, exclude_user=user.id)
  
             elif msg_type == "call_offer":
-                # Forward WebRTC offer to a specific user
                 target_user_id = data.get("target_user_id")
                 if target_user_id:
                     await manager.send_to_user(int(target_user_id), {
-                        "type": "call_offer",
-                        "offer": data.get("offer"),
-                        "from_user_id": user.id,
-                        "from_user_name": user.full_name,
-                        "channel_id": channel_id,
+                        "type":          "call_offer",
+                        "offer":         data.get("offer"),
+                        "from_user_id":  user.id,
+                        "from_user_name":user.full_name,
+                        "call_uuid":     data.get("call_uuid", ""),
+                        "channel_id":    channel_id,
                     })
  
             elif msg_type == "call_answer":
-                # Forward WebRTC answer back to caller
                 target_user_id = data.get("target_user_id")
                 if target_user_id:
                     await manager.send_to_user(int(target_user_id), {
-                        "type": "call_answer",
-                        "answer": data.get("answer"),
-                        "from_user_id": user.id,
-                        "from_user_name": user.full_name,
+                        "type":          "call_answer",
+                        "answer":        data.get("answer"),
+                        "from_user_id":  user.id,
+                        "from_user_name":user.full_name,
+                        "call_uuid":     data.get("call_uuid", ""),
                     })
  
             elif msg_type == "ice_candidate":
-                # Forward ICE candidate for NAT traversal
                 target_user_id = data.get("target_user_id")
                 if target_user_id:
                     await manager.send_to_user(int(target_user_id), {
-                        "type": "ice_candidate",
-                        "candidate": data.get("candidate"),
-                        "from_user_id": user.id,
+                        "type":          "ice_candidate",
+                        "candidate":     data.get("candidate"),
+                        "from_user_id":  user.id,
+                        "call_uuid":     data.get("call_uuid", ""),
                     })
  
             elif msg_type == "call_end":
-                # Notify everyone in channel that call ended
-                await manager.broadcast_to_channel(channel_id, {
-                    "type": "call_end",
-                    "ended_by": user.full_name,
-                    "channel_id": channel_id,
-                }, exclude_user=user.id)
+                # ── Core logic ─────────────────────────────────────────────
+                # Ask the call router whether this terminates the call
+                # or just removes this participant (conference scenario)
+                call_uuid = data.get("call_uuid", "")
+                is_conference = data.get("is_conference", False)
+ 
+                # Count active peers in THIS channel's WS connections
+                # (excludes the user who just ended)
+                active_peers = [
+                    uid for uid in manager.get_online_users(channel_id)
+                    if uid != user.id
+                ]
+ 
+                if is_conference and len(active_peers) >= 2:
+                    # Conference — only notify this user's peers that they left
+                    # The call continues among remaining participants
+                    await manager.broadcast_to_channel(channel_id, {
+                        "type":       "call_participant_left",
+                        "user_id":    user.id,
+                        "user_name":  user.full_name,
+                        "call_uuid":  call_uuid,
+                        "remaining":  len(active_peers),
+                    }, exclude_user=user.id)
+                else:
+                    # 1:1 or last person — TERMINATE for everyone
+                    await manager.broadcast_to_channel(channel_id, {
+                        "type":      "call_terminated",
+                        "ended_by":  user.full_name,
+                        "call_uuid": call_uuid,
+                    })   # broadcast to ALL including sender so their UI also closes
  
             elif msg_type == "call_reject":
-                # Notify caller that someone rejected the call
                 target_user_id = data.get("target_user_id")
+                call_uuid      = data.get("call_uuid", "")
                 if target_user_id:
                     await manager.send_to_user(int(target_user_id), {
-                        "type": "call_rejected",
-                        "rejected_by": user.full_name,
+                        "type":           "call_rejected",
+                        "rejected_by":    user.full_name,
                         "rejected_by_id": user.id,
+                        "call_uuid":      call_uuid,
                     })
+ 
+            elif msg_type == "call_missed":
+                # Sent by the caller's 45s timeout to notify callees
+                call_uuid = data.get("call_uuid", "")
+                await manager.broadcast_to_channel(channel_id, {
+                    "type":      "call_missed",
+                    "call_uuid": call_uuid,
+                    "caller_id": user.id,
+                })
                     
                     
     except WebSocketDisconnect:
