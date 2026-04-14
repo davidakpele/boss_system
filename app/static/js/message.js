@@ -195,23 +195,10 @@ window.handleWsMessage = function(data) {
 //  11 & 12. GROUP AUDIO/VIDEO CALLS + SCREEN SHARING (WebRTC)
 // ══════════════════════════════════════════════════════════════════════════════
  
-let localStream       = null;
-let screenStream      = null;
-let peerConnections   = {};
-let callChannelId     = null;
-let callType          = null;   // 'audio' | 'video'
-let callActive        = false;
- 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ]
-};
- 
+
 async function startCall(type) {
-  if (!currentChannelId) { toast('Open a channel first', 'error'); return; }
-  if (callActive) { toast('Already in a call', 'error'); return; }
+  if (!currentChannelId) { toast('Open a channel or DM first', 'error'); return; }
+  if (callActive)         { toast('Already in a call', 'error'); return; }
  
   callType      = type;
   callChannelId = currentChannelId;
@@ -223,33 +210,178 @@ async function startCall(type) {
       video: type === 'video',
     });
   } catch(e) {
-    toast('Microphone/Camera access denied', 'error');
+    toast('Camera/Microphone access denied', 'error');
     callActive = false;
     return;
   }
  
-  // Show call UI
-  showCallUI(type);
+  // Show the call UI in "calling…" state
+  showCallUI(type, 'calling');
  
-  // Render local video/audio
-  const localVid = document.getElementById('localVideo');
-  if (localVid) {
-    localVid.srcObject = localStream;
-    localVid.muted = true;
-    localVid.play().catch(() => {});
-  }
+  // Start ringing on caller's side (outgoing ring tone)
+  startRinging('outgoing');
  
-  // Signal other participants via WebSocket
+  // Signal everyone in the channel
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
-      type: 'call_start',
-      call_type: type,
-      channel_id: callChannelId,
+      type:        'call_start',
+      call_type:   type,
+      channel_id:  callChannelId,
       caller_name: ME.name,
+      caller_color: ME.color,
+    }));
+  }
+ 
+  // Auto-cancel if nobody answers in 45 seconds
+  setTimeout(() => {
+    if (callActive && Object.keys(peerConnections).length === 0) {
+      toast('No answer', 'info');
+      endCall();
+    }
+  }, 45000);
+}
+ 
+
+function showIncomingCall(data) {
+  // Remove any existing incoming call banner
+  document.getElementById('incomingCallBanner')?.remove();
+ 
+  const banner = document.createElement('div');
+  banner.id = 'incomingCallBanner';
+  banner.style.cssText = `
+    position:fixed;bottom:24px;right:24px;z-index:9999;
+    background:var(--sidebar-bg);color:#fff;
+    border-radius:16px;padding:18px 20px;
+    box-shadow:0 8px 40px rgba(0,0,0,0.5);
+    min-width:280px;max-width:320px;
+    animation:slideUp .25s cubic-bezier(0.34,1.56,0.64,1);
+    border:1px solid rgba(255,255,255,0.1);`;
+ 
+  banner.innerHTML = `
+    <style>@keyframes slideUp{from{transform:translateY(30px);opacity:0}to{transform:translateY(0);opacity:1}}</style>
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <div style="width:42px;height:42px;border-radius:50%;background:${data.caller_color||'#6366f1'};
+           display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;flex-shrink:0;">
+        ${getInitials(data.caller_name)}
+      </div>
+      <div>
+        <div style="font-weight:700;font-size:14px;">${escHtml(data.caller_name)}</div>
+        <div style="font-size:12px;color:#a1a1aa;">
+          Incoming ${data.call_type === 'video' ? '📹 Video' : '🎙️ Audio'} Call…
+        </div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;">
+      <button onclick="rejectCall(${data.caller_id})"
+        style="flex:1;padding:10px;border-radius:10px;border:none;background:#dc2626;
+               color:#fff;font-weight:700;cursor:pointer;font-size:13px;">
+        <i class="fa-solid fa-phone-slash"></i> Decline
+      </button>
+      <button onclick="acceptCall(${data.caller_id}, '${data.call_type}')"
+        style="flex:1;padding:10px;border-radius:10px;border:none;background:#25d366;
+               color:#fff;font-weight:700;cursor:pointer;font-size:13px;">
+        <i class="fa-solid fa-phone"></i> Accept
+      </button>
+    </div>`;
+ 
+  document.body.appendChild(banner);
+ 
+  // Ring on receiver's side
+  startRinging('incoming');
+ 
+  // Auto-dismiss after 45 seconds
+  setTimeout(() => {
+    banner.remove();
+    stopRinging();
+  }, 45000);
+}
+ 
+async function acceptCall(callerId, type) {
+  document.getElementById('incomingCallBanner')?.remove();
+  stopRinging();
+ 
+  callType   = type;
+  callActive = true;
+ 
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({
+      audio: true,
+      video: type === 'video',
+    });
+  } catch(e) {
+    toast('Media access denied', 'error');
+    callActive = false;
+    return;
+  }
+ 
+  showCallUI(type, 'connected');
+  startCallTimer();
+ 
+  // Create peer connection and send offer to caller
+  await createPeerConnection(callerId, true);
+}
+
+ 
+function rejectCall(callerId) {
+  document.getElementById('incomingCallBanner')?.remove();
+  stopRinging();
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'call_reject',
+      target_user_id: callerId,
     }));
   }
 }
+
+async function createPeerConnection(remoteUserId, createOffer) {
+  const pc = new RTCPeerConnection(ICE_SERVERS);
+  peerConnections[remoteUserId] = pc;
  
+  // Add local tracks
+  if (localStream) {
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  }
+ 
+  // When remote track arrives → show in UI
+  pc.ontrack = (e) => {
+    addRemoteStream(remoteUserId, e.streams[0]);
+    // Call is live — update UI status
+    document.getElementById('callStatusLabel').textContent = 'Connected';
+    document.getElementById('callStatusDot').style.background = '#25d366';
+    stopRinging();
+    startCallTimer();
+  };
+ 
+  // ICE candidates → forward via WS
+  pc.onicecandidate = (e) => {
+    if (e.candidate && ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type:           'ice_candidate',
+        candidate:      e.candidate,
+        target_user_id: remoteUserId,
+      }));
+    }
+  };
+ 
+  pc.onconnectionstatechange = () => {
+    if (['disconnected','failed','closed'].includes(pc.connectionState)) {
+      removeRemoteStream(remoteUserId);
+    }
+  };
+ 
+  if (createOffer) {
+    const offer = await pc.createOffer({ offerToReceiveAudio: true, offerToReceiveVideo: callType === 'video' });
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({
+      type:           'call_offer',
+      offer:          pc.localDescription,
+      target_user_id: remoteUserId,
+    }));
+  }
+ 
+  return pc;
+}
+
 async function joinCall(remoteUserId, offer) {
   if (!localStream) {
     try {
@@ -1571,7 +1703,330 @@ function stopCallTimer() {
   clearInterval(_callTimerInterval);
   _callSeconds = 0;
 }
+
+
+async function handleCallOffer(data) {
+  const pc = await createPeerConnection(data.from_user_id, false);
+  await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  ws.send(JSON.stringify({
+    type:           'call_answer',
+    answer:         pc.localDescription,
+    target_user_id: data.from_user_id,
+  }));
+}
  
+async function handleCallAnswer(data) {
+  const pc = peerConnections[data.from_user_id];
+  if (pc) {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+  }
+}
+ 
+async function handleIceCandidate(data) {
+  const pc = peerConnections[data.from_user_id];
+  if (pc && data.candidate) {
+    try {
+      await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+    } catch(e) {
+      // Ignore — sometimes candidates arrive before remote desc
+    }
+  }
+}
+ 
+function addRemoteStream(userId, stream) {
+  const container = document.getElementById('remoteVideos');
+  if (!container) return;
+  let vid = document.getElementById(`rv-${userId}`);
+  if (!vid) {
+    const wrapper = document.createElement('div');
+    wrapper.id = `rvw-${userId}`;
+    wrapper.style.cssText = 'position:relative;';
+    vid = document.createElement('video');
+    vid.id   = `rv-${userId}`;
+    vid.autoplay = true;
+    vid.playsInline = true;
+    vid.style.cssText = 'width:280px;max-width:100%;border-radius:12px;background:#111;';
+    wrapper.appendChild(vid);
+    container.appendChild(wrapper);
+  }
+  vid.srcObject = stream;
+  // If video-only, hide the audio icon
+  document.getElementById('audioCallIcon')?.remove();
+}
+ 
+function removeRemoteStream(userId) {
+  document.getElementById(`rvw-${userId}`)?.remove();
+  delete peerConnections[userId];
+}
+ 
+ 
+// ── RINGING ───────────────────────────────────────────────────────────────────
+ 
+function startRinging(direction) {
+  stopRinging();
+  // Create oscillator-based ring tone (no external file needed)
+  try {
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.connect(ctx.destination);
+ 
+    ringAudio = { ctx, gain, oscillators: [], stop: function() {
+      this.oscillators.forEach(o => { try { o.stop(); } catch(e){} });
+      this.ctx.close();
+    }};
+ 
+    const playTone = (startTime, duration) => {
+      const osc = ctx.createOscillator();
+      osc.type = direction === 'incoming' ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(direction === 'incoming' ? 440 : 480, startTime);
+      if (direction === 'incoming') {
+        osc.frequency.setValueAtTime(480, startTime + 0.1);
+        osc.frequency.setValueAtTime(440, startTime + 0.2);
+      }
+      osc.connect(gain);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+      ringAudio.oscillators.push(osc);
+    };
+ 
+    // Ring pattern: tone + pause, repeat every 2 seconds
+    for (let i = 0; i < 20; i++) {
+      playTone(ctx.currentTime + i * 2, direction === 'incoming' ? 0.8 : 1.2);
+    }
+  } catch(e) {
+    // AudioContext not supported — silently skip
+  }
+}
+ 
+function stopRinging() {
+  try { ringAudio?.stop(); } catch(e) {}
+  ringAudio = null;
+}
+ 
+ 
+// ── SCREEN SHARING ────────────────────────────────────────────────────────────
+ 
+async function startScreenShare() {
+  if (!callActive) { toast('Start a call first', 'error'); return; }
+  try {
+    screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+    const screenTrack = screenStream.getVideoTracks()[0];
+ 
+    Object.values(peerConnections).forEach(pc => {
+      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) sender.replaceTrack(screenTrack);
+    });
+ 
+    const localVid = document.getElementById('localVideo');
+    if (localVid) localVid.srcObject = screenStream;
+ 
+    const btn = document.getElementById('screenShareBtn');
+    btn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop';
+    btn.style.background = 'var(--red)';
+    btn.onclick = stopScreenShare;
+ 
+    toast('Screen sharing started', 'success');
+    screenTrack.onended = stopScreenShare;
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') toast('Screen share failed', 'error');
+  }
+}
+ 
+async function stopScreenShare() {
+  if (!screenStream) return;
+  screenStream.getTracks().forEach(t => t.stop());
+  screenStream = null;
+ 
+  const camTrack = localStream?.getVideoTracks()[0];
+  if (camTrack) {
+    Object.values(peerConnections).forEach(pc => {
+      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+      if (sender) sender.replaceTrack(camTrack);
+    });
+  }
+ 
+  const localVid = document.getElementById('localVideo');
+  if (localVid && localStream) localVid.srcObject = localStream;
+ 
+  const btn = document.getElementById('screenShareBtn');
+  btn.innerHTML = '<i class="fa-solid fa-desktop"></i>';
+  btn.style.background = '';
+  btn.onclick = startScreenShare;
+}
+ 
+// ── CALL CONTROLS ─────────────────────────────────────────────────────────────
+ 
+function toggleMute() {
+  const audio = localStream?.getAudioTracks()[0];
+  if (!audio) return;
+  audio.enabled = !audio.enabled;
+  const btn = document.getElementById('muteBtn');
+  btn.innerHTML = audio.enabled
+    ? '<i class="fa-solid fa-microphone"></i>'
+    : '<i class="fa-solid fa-microphone-slash"></i>';
+  btn.style.background = audio.enabled ? '' : 'var(--red)';
+  btn.style.color       = audio.enabled ? '' : '#fff';
+}
+ 
+function toggleVideo() {
+  const video = localStream?.getVideoTracks()[0];
+  if (!video) return;
+  video.enabled = !video.enabled;
+  const btn = document.getElementById('videoToggleBtn');
+  btn.innerHTML = video.enabled
+    ? '<i class="fa-solid fa-video"></i>'
+    : '<i class="fa-solid fa-video-slash"></i>';
+  btn.style.background = video.enabled ? '' : 'var(--red)';
+  btn.style.color       = video.enabled ? '' : '#fff';
+}
+ 
+function endCall() {
+  // Notify others
+  if (ws && ws.readyState === WebSocket.OPEN && callChannelId) {
+    ws.send(JSON.stringify({ type: 'call_end', channel_id: callChannelId }));
+  }
+ 
+  // Cleanup
+  Object.entries(peerConnections).forEach(([id, pc]) => {
+    try { pc.close(); } catch(e) {}
+  });
+  peerConnections = {};
+ 
+  localStream?.getTracks().forEach(t => t.stop());
+  localStream = null;
+  screenStream?.getTracks().forEach(t => t.stop());
+  screenStream = null;
+ 
+  stopRinging();
+  stopCallTimer();
+ 
+  callActive    = false;
+  callChannelId = null;
+  callType      = null;
+ 
+  document.getElementById('callModal')?.classList.remove('open');
+  document.getElementById('incomingCallBanner')?.remove();
+  toast('Call ended', 'info');
+}
+ 
+ 
+// ── CALL UI ───────────────────────────────────────────────────────────────────
+ 
+function showCallUI(type, state) {
+  const modal = document.getElementById('callModal');
+  if (!modal) return;
+ 
+  const isVideo = type === 'video';
+ 
+  const typeLabel   = document.getElementById('callTypeLabel');
+  const statusLabel = document.getElementById('callStatusLabel');
+  const statusDot   = document.getElementById('callStatusDot');
+  const videoBtn    = document.getElementById('videoToggleBtn');
+  const screenBtn   = document.getElementById('screenShareBtn');
+  const localVid    = document.getElementById('localVideo');
+  const audioIcon   = document.getElementById('audioCallIcon');
+ 
+  if (typeLabel)   typeLabel.textContent   = isVideo ? '📹 Video Call' : '🎙️ Audio Call';
+  if (statusLabel) statusLabel.textContent = state === 'calling' ? 'Calling…' : 'Connecting…';
+  if (statusDot)   statusDot.style.background = state === 'calling' ? 'var(--yellow)' : '#25d366';
+ 
+  // Show/hide video controls
+  if (videoBtn)  videoBtn.style.display  = isVideo ? 'flex' : 'none';
+  if (screenBtn) screenBtn.style.display = isVideo ? 'flex' : 'none';
+ 
+  // Local video preview
+  if (localVid) {
+    localVid.style.display = isVideo ? 'block' : 'none';
+    if (isVideo && localStream) {
+      localVid.srcObject = localStream;
+      localVid.play().catch(() => {});
+    }
+  }
+ 
+  // Audio-only icon
+  if (audioIcon) audioIcon.style.display = isVideo ? 'none' : 'flex';
+ 
+  modal.classList.add('open');
+}
+ 
+ 
+// ── CALL TIMER ────────────────────────────────────────────────────────────────
+ 
+function startCallTimer() {
+  callSeconds = 0;
+  clearInterval(callTimerInterval);
+  callTimerInterval = setInterval(() => {
+    callSeconds++;
+    const m = String(Math.floor(callSeconds / 60)).padStart(2, '0');
+    const s = String(callSeconds % 60).padStart(2, '0');
+    const el = document.getElementById('callTimer');
+    if (el) el.textContent = `${m}:${s}`;
+  }, 1000);
+}
+ 
+function stopCallTimer() {
+  clearInterval(callTimerInterval);
+  callSeconds = 0;
+  const el = document.getElementById('callTimer');
+  if (el) el.textContent = '00:00';
+}
+ 
+ 
+// ── WS CALL SIGNAL HANDLER ───────────────────────────────────────────────────
+ 
+function handleCallSignal(data) {
+  switch(data.type) {
+    case 'call_start':
+      // Someone is calling — show ringing banner
+      showIncomingCall(data);
+      break;
+ 
+    case 'call_offer':
+      // Offer from caller after we accepted
+      handleCallOffer(data);
+      break;
+ 
+    case 'call_answer':
+      // Answer from receiver
+      handleCallAnswer(data);
+      break;
+ 
+    case 'ice_candidate':
+      handleIceCandidate(data);
+      break;
+ 
+    case 'call_rejected':
+      stopRinging();
+      toast(`${data.rejected_by} declined the call`, 'info');
+      if (Object.keys(peerConnections).length === 0) endCall();
+      break;
+ 
+    case 'call_end':
+      stopRinging();
+      document.getElementById('incomingCallBanner')?.remove();
+      if (callActive) {
+        toast(`${data.ended_by || 'Call'} ended`, 'info');
+        endCall();
+      }
+      break;
+  }
+}
+ 
+// Patch the global WS handler to include call signals
+const _prevWsHandler = window.handleWsMessage;
+window.handleWsMessage = function(data) {
+  const callTypes = ['call_start','call_offer','call_answer','ice_candidate','call_rejected','call_end'];
+  if (callTypes.includes(data.type)) {
+    handleCallSignal(data);
+    return;
+  }
+  if (typeof _prevWsHandler === 'function') _prevWsHandler(data);
+};
+
+
 // Extend endCall to stop timer
 const _origEndCall = endCall;
 window.endCall = function() { stopCallTimer(); _origEndCall(); };

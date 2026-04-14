@@ -1,5 +1,5 @@
 # src/app/routers/messages.py 
-import datetime
+from datetime import datetime, timezone, timedelta
 from http.client import HTTPException
 import os
 import re
@@ -778,7 +778,70 @@ async def websocket_endpoint(
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
-
+            elif msg_type == "call_start":
+                # Broadcast incoming call notification to ALL users in channel
+                # so they see the ringing UI
+                await manager.broadcast_to_channel(channel_id, {
+                    "type": "call_start",
+                    "call_type": data.get("call_type", "audio"),
+                    "caller_id": user.id,
+                    "caller_name": user.full_name,
+                    "caller_color": user.avatar_color,
+                    "channel_id": channel_id,
+                }, exclude_user=user.id)
+ 
+            elif msg_type == "call_offer":
+                # Forward WebRTC offer to a specific user
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "call_offer",
+                        "offer": data.get("offer"),
+                        "from_user_id": user.id,
+                        "from_user_name": user.full_name,
+                        "channel_id": channel_id,
+                    })
+ 
+            elif msg_type == "call_answer":
+                # Forward WebRTC answer back to caller
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "call_answer",
+                        "answer": data.get("answer"),
+                        "from_user_id": user.id,
+                        "from_user_name": user.full_name,
+                    })
+ 
+            elif msg_type == "ice_candidate":
+                # Forward ICE candidate for NAT traversal
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "ice_candidate",
+                        "candidate": data.get("candidate"),
+                        "from_user_id": user.id,
+                    })
+ 
+            elif msg_type == "call_end":
+                # Notify everyone in channel that call ended
+                await manager.broadcast_to_channel(channel_id, {
+                    "type": "call_end",
+                    "ended_by": user.full_name,
+                    "channel_id": channel_id,
+                }, exclude_user=user.id)
+ 
+            elif msg_type == "call_reject":
+                # Notify caller that someone rejected the call
+                target_user_id = data.get("target_user_id")
+                if target_user_id:
+                    await manager.send_to_user(int(target_user_id), {
+                        "type": "call_rejected",
+                        "rejected_by": user.full_name,
+                        "rejected_by_id": user.id,
+                    })
+                    
+                    
     except WebSocketDisconnect:
         manager.disconnect_from_channel(websocket, channel_id, user.id)
         await manager.broadcast_to_channel(channel_id, {
@@ -797,17 +860,34 @@ async def schedule_message(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
+    from app.models import ScheduledMessage
+ 
     body = await request.json()
     channel_id   = body.get("channel_id")
     content      = (body.get("content") or "").strip()
-    scheduled_at = body.get("scheduled_at")   # ISO string
+    scheduled_at = body.get("scheduled_at", "")
  
     if not channel_id or not content or not scheduled_at:
-        return JSONResponse({"error": "channel_id, content and scheduled_at required"}, status_code=400)
+        return JSONResponse(
+            {"error": "channel_id, content and scheduled_at required"},
+            status_code=400
+        )
  
-    from app.models import ScheduledMessage
-    from datetime import timezone
-    sched_dt = datetime.fromisoformat(scheduled_at.replace("Z", "+00:00"))
+    # Robust ISO parse — handles both "2024-01-15T14:30" and "2024-01-15T14:30:00Z"
+    try:
+        clean = scheduled_at.replace("Z", "+00:00")
+        sched_dt = datetime.fromisoformat(clean)
+        # Strip timezone info for DB storage (store as UTC naive)
+        if sched_dt.tzinfo is not None:
+            sched_dt = sched_dt.replace(tzinfo=None)
+    except (ValueError, AttributeError):
+        try:
+            sched_dt = datetime.strptime(scheduled_at[:16], "%Y-%m-%dT%H:%M")
+        except ValueError:
+            return JSONResponse({"error": "Invalid date format"}, status_code=400)
+ 
+    if sched_dt <= datetime.utcnow():
+        return JSONResponse({"error": "Scheduled time must be in the future"}, status_code=400)
  
     sm = ScheduledMessage(
         channel_id=channel_id,
@@ -818,12 +898,14 @@ async def schedule_message(
     db.add(sm)
     await db.commit()
     await db.refresh(sm)
+ 
     return JSONResponse({
         "id": sm.id,
         "scheduled_at": sm.scheduled_at.isoformat(),
         "content": sm.content,
     })
- 
+    
+
  
 @router.get("/scheduled")
 async def list_scheduled(

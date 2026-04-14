@@ -176,10 +176,15 @@ async def _scheduled_backup():
 
 async def _scheduled_message_worker():
     """Check every 30s for messages whose send time has arrived."""
+    import asyncio
+    import logging
+    from datetime import datetime                          # ← CLASS not module
+    from sqlalchemy import select
     from app.database import AsyncSessionLocal
     from app.models import ScheduledMessage, Message, User
     from app.services.websocket_manager import manager
-    from app.routers.messages import _serialize_message
+ 
+    logger = logging.getLogger("main")
  
     while True:
         await asyncio.sleep(30)
@@ -187,47 +192,55 @@ async def _scheduled_message_worker():
             now = datetime.utcnow()
             async with AsyncSessionLocal() as db:
                 due = (await db.execute(
-                    select(ScheduledMessage)
-                    .where(
-                        ScheduledMessage.sent == False,
+                    select(ScheduledMessage).where(
+                        ScheduledMessage.sent      == False,
                         ScheduledMessage.cancelled == False,
                         ScheduledMessage.scheduled_at <= now,
                     )
                 )).scalars().all()
  
                 for sm in due:
-                    # Create the real message
                     sender = (await db.execute(
                         select(User).where(User.id == sm.sender_id)
                     )).scalar_one_or_none()
                     if not sender:
+                        sm.cancelled = True
                         continue
  
                     msg = Message(
-                        channel_id=sm.channel_id,
-                        sender_id=sm.sender_id,
-                        content=sm.content,
-                        message_type="text",
-                        is_deleted=False,
-                        is_ai_extracted=False,
+                        channel_id    = sm.channel_id,
+                        sender_id     = sm.sender_id,
+                        content       = sm.content,
+                        message_type  = "text",
+                        is_deleted    = False,
+                        is_ai_extracted = False,
                     )
                     db.add(msg)
                     await db.flush()
  
-                    sm.sent = True
+                    sm.sent    = True
                     sm.sent_at = now
- 
                     await db.commit()
                     await db.refresh(msg)
  
-                    payload = {
-                        "type": "message",
-                        **_serialize_message(msg, sender.full_name, sender.avatar_color),
-                    }
-                    await manager.broadcast_to_channel(sm.channel_id, payload)
-                    logger.info(f"Delivered scheduled message {sm.id} to channel {sm.channel_id}")
+                    await manager.broadcast_to_channel(sm.channel_id, {
+                        "type":         "message",
+                        "id":           msg.id,
+                        "content":      msg.content,
+                        "sender_id":    msg.sender_id,
+                        "sender_name":  sender.full_name,
+                        "avatar_color": sender.avatar_color,
+                        "created_at":   msg.created_at.isoformat() if msg.created_at else "",
+                        "message_type": "text",
+                        "is_deleted":   False,
+                        "reply_to_id":  None,
+                        "thread_count": 0,
+                        "is_thread_reply": False,
+                        "reactions":    [],
+                    })
+                    logger.info(f"Delivered scheduled message {sm.id} → channel {sm.channel_id}")
  
         except Exception as e:
-            logger.error(f"Scheduled message worker error: {e}")
+            logger.error(f"Scheduled message worker error: {e}", exc_info=True)
 
 asyncio.create_task(_scheduled_message_worker())

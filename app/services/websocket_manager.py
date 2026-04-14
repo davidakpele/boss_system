@@ -1,94 +1,125 @@
 # src/services/websocket_manager.py
-from fastapi import WebSocket
-from typing import Dict, List, Set
+"""
+WebSocket connection manager.
+Supports:
+  - channel-based broadcast (messages, typing, reactions)
+  - user-targeted send (mentions, call signaling, notifications)
+"""
+import json
 import logging
-
+from fastapi import WebSocket
+ 
 logger = logging.getLogger(__name__)
-
-
-class ConnectionManager:
+ 
+ 
+class WebSocketManager:
     def __init__(self):
-        # channel_id -> list of {ws, user_id, user_name}
-        self.channel_connections: Dict[int, List[dict]] = {}
-        # user_id -> list of WebSockets (multiple tabs/channels)
-        self.user_connections: Dict[int, List[WebSocket]] = {}
-
-    async def connect_to_channel(self, websocket: WebSocket, channel_id: int, user_id: int, user_name: str):
+        # {channel_id: set of (websocket, user_id, user_name)}
+        self.channel_connections: dict[int, set] = {}
+        # {user_id: set of websockets} — for direct user targeting
+        self.user_connections: dict[int, set] = {}
+ 
+    async def connect_to_channel(
+        self,
+        websocket: WebSocket,
+        channel_id: int,
+        user_id: int,
+        user_name: str,
+    ):
         await websocket.accept()
-
+ 
         if channel_id not in self.channel_connections:
-            self.channel_connections[channel_id] = []
-        self.channel_connections[channel_id].append({
-            "ws": websocket,
-            "user_id": user_id,
-            "user_name": user_name,
-        })
-
-        # Support multiple connections per user (multiple tabs)
+            self.channel_connections[channel_id] = set()
+        self.channel_connections[channel_id].add((websocket, user_id, user_name))
+ 
         if user_id not in self.user_connections:
-            self.user_connections[user_id] = []
-        self.user_connections[user_id].append(websocket)
-
-        logger.info(f"User {user_name} ({user_id}) connected to channel {channel_id}")
-
-    def disconnect_from_channel(self, websocket: WebSocket, channel_id: int, user_id: int):
+            self.user_connections[user_id] = set()
+        self.user_connections[user_id].add(websocket)
+ 
+        logger.info(f"WS connected: user={user_id} channel={channel_id}")
+ 
+    def disconnect_from_channel(
+        self,
+        websocket: WebSocket,
+        channel_id: int,
+        user_id: int,
+    ):
         if channel_id in self.channel_connections:
-            self.channel_connections[channel_id] = [
-                c for c in self.channel_connections[channel_id]
-                if c["ws"] != websocket
-            ]
-
-        # Only remove this specific websocket from user connections
+            self.channel_connections[channel_id] = {
+                t for t in self.channel_connections[channel_id]
+                if t[0] is not websocket
+            }
+            if not self.channel_connections[channel_id]:
+                del self.channel_connections[channel_id]
+ 
         if user_id in self.user_connections:
-            self.user_connections[user_id] = [
-                ws for ws in self.user_connections[user_id]
-                if ws != websocket
-            ]
+            self.user_connections[user_id].discard(websocket)
             if not self.user_connections[user_id]:
                 del self.user_connections[user_id]
-
-    async def broadcast_to_channel(self, channel_id: int, message: dict, exclude_user: int = None):
+ 
+        logger.info(f"WS disconnected: user={user_id} channel={channel_id}")
+ 
+    async def broadcast_to_channel(
+        self,
+        channel_id: int,
+        payload: dict,
+        exclude_user: int | None = None,
+    ):
+        """Send payload to everyone in a channel."""
         if channel_id not in self.channel_connections:
             return
-        dead = []
-        for conn in self.channel_connections[channel_id]:
-            if exclude_user and conn["user_id"] == exclude_user:
+ 
+        dead = set()
+        for entry in list(self.channel_connections[channel_id]):
+            ws, uid, uname = entry
+            if exclude_user is not None and uid == exclude_user:
                 continue
             try:
-                await conn["ws"].send_json(message)
+                await ws.send_json(payload)
             except Exception:
-                dead.append(conn)
-        for d in dead:
+                dead.add(entry)
+ 
+        # Clean up dead connections
+        if dead:
+            self.channel_connections[channel_id] -= dead
+ 
+    async def send_to_user(self, user_id: int, payload: dict) -> bool:
+        """
+        Send payload directly to a specific user.
+        Used for: call signaling, @mention notifications, system alerts.
+        Returns True if at least one connection received it.
+        """
+        if user_id not in self.user_connections:
+            logger.debug(f"send_to_user: user {user_id} not connected")
+            return False
+ 
+        sent = False
+        dead = set()
+        for ws in list(self.user_connections[user_id]):
             try:
-                self.channel_connections[channel_id].remove(d)
-            except ValueError:
-                pass
-
-    async def send_to_user(self, user_id: int, message: dict):
-        """Send to ALL active connections for a user (multiple tabs)."""
-        sockets = self.user_connections.get(user_id, [])
-        dead = []
-        for ws in sockets:
-            try:
-                await ws.send_json(message)
-            except Exception:
-                dead.append(ws)
-        for ws in dead:
-            try:
-                self.user_connections[user_id].remove(ws)
-            except (ValueError, KeyError):
-                pass
-
-    def get_online_users_in_channel(self, channel_id: int) -> List[int]:
+                await ws.send_json(payload)
+                sent = True
+            except Exception as e:
+                logger.warning(f"send_to_user failed ws for user {user_id}: {e}")
+                dead.add(ws)
+ 
+        if dead:
+            self.user_connections[user_id] -= dead
+ 
+        return sent
+ 
+    def get_online_users(self, channel_id: int) -> list[int]:
+        """Return list of user IDs currently connected to a channel."""
         if channel_id not in self.channel_connections:
             return []
-        return [c["user_id"] for c in self.channel_connections[channel_id]]
-
-    def get_all_online_user_ids(self) -> Set[int]:
-        return set(self.user_connections.keys())
-
+        return list({uid for _, uid, _ in self.channel_connections[channel_id]})
+ 
     def is_user_online(self, user_id: int) -> bool:
-        return user_id in self.user_connections and len(self.user_connections[user_id]) > 0
-
-
-manager = ConnectionManager()
+        return user_id in self.user_connections and bool(self.user_connections[user_id])
+ 
+    @property
+    def total_connections(self) -> int:
+        return sum(len(conns) for conns in self.channel_connections.values())
+ 
+ 
+manager = WebSocketManager()
