@@ -26,9 +26,6 @@ router = APIRouter(tags=["bcc"])
 templates = Jinja2Templates(directory="app/templates")
 templates.env.filters["fromjson"] = lambda s: json.loads(s) if s else {}
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  BCC DASHBOARD
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/bcc", response_class=HTMLResponse)
 async def bcc_dashboard(
@@ -72,11 +69,6 @@ async def bcc_dashboard(
         "low_stock": low_stock, "open_jobs": open_jobs,
         "pending_apps": pending_apps, "recent_txns": recent_txns,
     })
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  ACCOUNTING
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/bcc/accounting", response_class=HTMLResponse)
 async def accounting_page(
@@ -198,9 +190,6 @@ async def export_csv(
                              headers={"Content-Disposition": "attachment; filename=accounting_export.csv"})
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-#  INVENTORY
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/bcc/inventory", response_class=HTMLResponse)
 async def inventory_page(
@@ -332,10 +321,6 @@ async def get_movements(item_id: int, db: AsyncSession = Depends(get_db),
         "created_at": m.created_at.isoformat() if m.created_at else "",
     } for m in mvs])
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  HR — JOB POSTINGS
-# ═══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/bcc/hr", response_class=HTMLResponse)
 async def hr_page(
@@ -469,8 +454,7 @@ async def job_detail(
 ):
     job = (await db.execute(select(JobPosting).where(JobPosting.id == job_id))).scalar_one_or_none()
     if not job: raise HTTPException(404)
- 
-    # Stage filter from query param
+    
     stage_filter = request.query_params.get("stage")
  
     stmt = select(JobApplication).where(JobApplication.job_id == job_id)
@@ -479,7 +463,6 @@ async def job_detail(
     stmt = stmt.order_by(JobApplication.ai_score.desc().nullslast(), JobApplication.created_at.desc())
     apps = (await db.execute(stmt)).scalars().all()
  
-    # Count per stage for the tabs
     counts = {}
     for status in ApplicationStatus:
         c = (await db.execute(
@@ -495,10 +478,6 @@ async def job_detail(
         "statuses": [s.value for s in ApplicationStatus],
     })
     
-# ═══════════════════════════════════════════════════════════════════════════════
-#  HR — APPLICATIONS
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/bcc/hr/jobs/{job_id}/apply")
 async def submit_application(
     job_id: int, request: Request,
@@ -514,7 +493,6 @@ async def submit_application(
     if cv_file and cv_file.filename:
         upload_dir = Path(settings.UPLOAD_DIR) / "cvs"
         upload_dir.mkdir(parents=True, exist_ok=True)
-        # keep original extension
         ext = Path(cv_file.filename).suffix.lower()
         fname = f"{uuid.uuid4()}{ext}"
         save_path = upload_dir / fname
@@ -546,13 +524,11 @@ async def delete_application(
 ):
     app = (await db.execute(select(JobApplication).where(JobApplication.id == app_id))).scalar_one_or_none()
     if not app: raise HTTPException(404)
-    # remove CV file from disk
     if app.cv_path:
         try:
             Path(app.cv_path).unlink(missing_ok=True)
         except Exception:
             pass
-    # delete related HR notifications first to avoid FK violation
     notifs = (await db.execute(
         select(HRNotification).where(HRNotification.application_id == app_id)
     )).scalars().all()
@@ -598,22 +574,16 @@ async def ai_screen_application(
 
     cv_content = app.cv_text or app.cover_letter or "No CV text available"
 
-    # ── Sanitize CV text before embedding in prompt ──────────────────────────
-    # Strip control characters and normalise whitespace so raw CV formatting
-    # (tables, columns, bullets, special chars) cannot break JSON output.
     import re, unicodedata
 
     def sanitize_cv(text: str) -> str:
-        # Normalise unicode (handles fancy quotes, dashes, ligatures, etc.)
         text = unicodedata.normalize("NFKD", text)
-        # Replace non-printable / control chars (except newline/tab) with space
         text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]', ' ', text)
-        # Collapse runs of whitespace / blank lines
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r'[ \t]{2,}', ' ', text)
         return text.strip()
 
-    safe_cv = sanitize_cv(cv_content)[:4000]  # hard cap keeps tokens manageable
+    safe_cv = sanitize_cv(cv_content)[:4000] 
 
     msgs = [
         {
@@ -655,12 +625,10 @@ async def ai_screen_application(
 
     result = await ai_service.chat_complete(msgs)
 
-    # ── Robust JSON extraction ────────────────────────────────────────────────
     def extract_json(raw: str) -> dict:
         """Try multiple strategies to extract a valid JSON object from the response."""
         import json, re
 
-        # Strategy 1: strip common wrappers and parse directly
         cleaned = raw.strip()
         for fence in ("```json", "```"):
             cleaned = cleaned.replace(fence, "")
@@ -669,8 +637,6 @@ async def ai_screen_application(
             return json.loads(cleaned)
         except json.JSONDecodeError:
             pass
-
-        # Strategy 2: find the first {...} block (handles extra prose before/after)
         match = re.search(r'\{[\s\S]*\}', cleaned)
         if match:
             try:
@@ -678,9 +644,8 @@ async def ai_screen_application(
             except json.JSONDecodeError:
                 pass
 
-        # Strategy 3: fix common AI mistakes — trailing commas, single quotes
-        attempt = re.sub(r',\s*([}\]])', r'\1', cleaned)   # trailing commas
-        attempt = attempt.replace("'", '"')                  # single → double quotes
+        attempt = re.sub(r',\s*([}\]])', r'\1', cleaned)  
+        attempt = attempt.replace("'", '"')
         match2 = re.search(r'\{[\s\S]*\}', attempt)
         if match2:
             try:
@@ -688,7 +653,6 @@ async def ai_screen_application(
             except json.JSONDecodeError:
                 pass
 
-        # Strategy 4: key-by-key regex scrape as last resort
         def scrape(key, default):
             m = re.search(rf'"{key}"\s*:\s*"([^"]*)"', raw)
             return m.group(1) if m else default
@@ -804,11 +768,6 @@ async def generate_hr_message(
 
     return JSONResponse({"message": result, "type": msg_type})
 
-
-# ═══════════════════════════════════════════════════════════════════════════════
-#  INTERNAL NOTIFICATIONS
-# ═══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/notifications")
 async def get_notifications(
     db: AsyncSession = Depends(get_db), current_user: User = Depends(require_user),
@@ -855,14 +814,12 @@ async def mark_all_read(db: AsyncSession = Depends(get_db), current_user: User =
     await db.commit()
     return JSONResponse({"status": "done"})
 
-
-# ── Helper: create internal notification from anywhere ────────────────────────
 async def create_notification(db, user_id: int, title: str, body: str,
                                type: str = "info", link: str = ""):
     db.add(InternalNotification(
         user_id=user_id, title=title, body=body, type=type, link=link,
     ))
-    # Also try web push
+
     try:
         from app.routers.push import notify_user
         await notify_user(user_id=user_id, title=title, body=body, url=link or "/", db=db)

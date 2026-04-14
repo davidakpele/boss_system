@@ -14,9 +14,7 @@ logger = logging.getLogger(__name__)
  
 class WebSocketManager:
     def __init__(self):
-        # {channel_id: set of (websocket, user_id, user_name)}
         self.channel_connections: dict[int, set] = {}
-        # {user_id: set of websockets} — for direct user targeting
         self.user_connections: dict[int, set] = {}
  
     async def connect_to_channel(
@@ -79,7 +77,6 @@ class WebSocketManager:
             except Exception:
                 dead.add(entry)
  
-        # Clean up dead connections
         if dead:
             self.channel_connections[channel_id] -= dead
  

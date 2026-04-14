@@ -36,10 +36,6 @@ router = APIRouter(prefix="/ai", tags=["ai-features"])
 templates = Jinja2Templates(directory="app/templates")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  1. WRITING ASSISTANT
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/writing/assist")
 async def writing_assist(
     request: Request,
@@ -57,11 +53,6 @@ async def writing_assist(
 
     result = await ai_service.improve_text(text, action, lang)
     return JSONResponse({"result": result, "action": action})
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  2. DOCUMENT Q&A WITH CITATIONS
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/documents/{doc_id}/qa")
 async def document_qa(
@@ -96,11 +87,6 @@ async def knowledge_qa(
     result = await ai_service.answer_with_citations(question, db)
     return JSONResponse(result)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  3. AUTO-TAGGING
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/documents/{doc_id}/auto-tag")
 async def auto_tag_document(
     doc_id: int,
@@ -117,16 +103,13 @@ async def auto_tag_document(
     )).scalars().all()
 
     tag_data = await ai_service.generate_tags(text, list(existing))
-
-    # Delete old AI tags, preserve manual
     await db.execute(
         DocumentTag.__table__.delete().where(
             DocumentTag.document_id == doc_id,
             DocumentTag.source == "ai"
         )
     )
-
-    # Save new tags
+    
     for topic in tag_data["topics"]:
         db.add(DocumentTag(document_id=doc_id, tag=topic, tag_type="topic", source="ai"))
     for kw in tag_data["keywords"]:
@@ -134,8 +117,6 @@ async def auto_tag_document(
     db.add(DocumentTag(document_id=doc_id, tag=tag_data["category"], tag_type="category", source="ai"))
     db.add(DocumentTag(document_id=doc_id, tag=tag_data["sentiment"], tag_type="sentiment", source="ai",
                        confidence=0.8))
-
-    # Update doc tags JSON field if it exists
     if hasattr(doc, "tags"):
         all_tags = tag_data["topics"] + tag_data["keywords"] + [tag_data["category"]]
         doc.tags = all_tags
@@ -152,8 +133,6 @@ async def bulk_tag_knowledge(
     """Auto-tag up to 50 untagged knowledge chunks."""
     if current_user.role not in (UserRole.super_admin, UserRole.admin):
         raise HTTPException(status_code=403)
-
-    # Find chunks with no tags yet
     tagged_chunk_ids = (await db.execute(
         select(DocumentTag.chunk_id).where(DocumentTag.chunk_id != None)
     )).scalars().all()
@@ -220,11 +199,6 @@ async def delete_tag(
         await db.commit()
     return JSONResponse({"status": "deleted"})
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  4. SENTIMENT ANALYSIS
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/sentiment", response_class=HTMLResponse)
 async def sentiment_page(
     request: Request,
@@ -237,8 +211,6 @@ async def sentiment_page(
     channels = (await db.execute(
         select(Channel).where(Channel.channel_type == "department").order_by(Channel.name)
     )).scalars().all()
-
-    # Latest snapshot per channel
     recent_logs = (await db.execute(
         select(SentimentLog).order_by(SentimentLog.created_at.desc()).limit(30)
     )).scalars().all()
@@ -292,7 +264,6 @@ async def analyse_sentiment(
 
     result = await ai_service.analyse_channel_sentiment([m for m in msgs if m], ch_name)
 
-    # Save snapshot
     log = SentimentLog(
         channel_id=channel_id,
         period_date=date.today(),
@@ -333,11 +304,6 @@ async def sentiment_data(
         "sample_size": l.sample_size,
     } for l in logs])
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  5. MEETING INTELLIGENCE
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/meeting", response_class=HTMLResponse)
 async def meeting_page(
     request: Request,
@@ -370,7 +336,6 @@ async def analyse_meeting(
 
     result = await ai_service.analyse_meeting_transcript(transcript, title)
 
-    # Save to DB
     mt = MeetingTranscript(
         title=title,
         raw_transcript=transcript,

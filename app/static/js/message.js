@@ -1,6 +1,6 @@
 let localStream      = null;
 let screenStream     = null;
-let peerConnections  = {};   // { userId: RTCPeerConnection }
+let peerConnections  = {};
 let currentCallUuid  = null;
 let currentCallType  = null;
 let currentCallChannelId = null;
@@ -21,7 +21,6 @@ function openScheduleModal() {
   const content = document.getElementById('msgInput').value.trim();
   if (!content) { toast('Type your message first', 'error'); return; }
   document.getElementById('scheduleContent').value = content;
-  // Default to 1 hour from now
   const d = new Date(Date.now() + 3600000);
   document.getElementById('scheduleTime').value = d.toISOString().slice(0, 16);
   openModal('scheduleModal');
@@ -87,10 +86,6 @@ function openScheduledPanel() {
 }
  
  
-// ══════════════════════════════════════════════════════════════════════════════
-//  9. PINNED MESSAGES
-// ══════════════════════════════════════════════════════════════════════════════
- 
 async function pinMessage(msgId) {
   const r = await fetch(`/messages/${msgId}/pin`, { method: 'POST' });
   const d = await r.json();
@@ -124,7 +119,7 @@ function openPinnedPanel() {
   loadPinned();
 }
  
-// Handle pin_update from WebSocket
+
 function applyPinUpdate(data) {
   toast(data.action === 'pinned'
     ? `${data.pinned_by} pinned a message`
@@ -133,10 +128,7 @@ function applyPinUpdate(data) {
 }
  
  
-// ══════════════════════════════════════════════════════════════════════════════
-//  10. MESSAGE EDIT
-// ══════════════════════════════════════════════════════════════════════════════
- 
+
 let editingMsgId = null;
  
 function startEdit(msgId) {
@@ -152,7 +144,6 @@ function startEdit(msgId) {
   input.style.height = 'auto';
   input.style.height = Math.min(input.scrollHeight, 120) + 'px';
  
-  // Show edit indicator
   document.getElementById('replyBarSender').textContent = 'Editing message';
   document.getElementById('replyBarText').textContent = current.slice(0, 80);
   document.getElementById('replyBar').classList.add('visible');
@@ -192,14 +183,12 @@ function applyMessageEdit(data) {
   wrap.dataset.preview = data.new_content;
 }
  
-// Hook send button to check if editing
 const _origSend = sendMessage;
 window.sendMessage = async function() {
   if (editingMsgId) { await submitEdit(); return; }
   await _origSend();
 };
  
-// Add message_edited handler to handleWsMessage
 const _origWsHandler = handleWsMessage;
 window.handleWsMessage = function(data) {
   if (data.type === 'message_edited') { applyMessageEdit(data); return; }
@@ -208,20 +197,13 @@ window.handleWsMessage = function(data) {
 };
  
  
-// ══════════════════════════════════════════════════════════════════════════════
-//  11 & 12. GROUP AUDIO/VIDEO CALLS + SCREEN SHARING (WebRTC)
-// ══════════════════════════════════════════════════════════════════════════════
- 
-
 async function startCall(type) {
   if (!currentChannelId) { toast('Open a chat first', 'error'); return; }
   if (callActive)         { toast('Already in a call', 'error'); return; }
  
-  // Collect other users in this channel as targets
-  const targetIds = ALL_USERS.map(u => u.id);   // all users visible in the channel
+  const targetIds = ALL_USERS.map(u => u.id); 
   isConference = targetIds.length > 1;
  
-  // 1. Register the call in the DB → get call_uuid
   const startResp = await fetch('/calls/start', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -238,7 +220,6 @@ async function startCall(type) {
   currentCallChannelId  = currentChannelId;
   callActive            = true;
  
-  // 2. Get local media
   try {
     localStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
@@ -250,11 +231,9 @@ async function startCall(type) {
     return;
   }
  
-  // 3. Show call UI
   showCallUI(type, 'calling');
   startRinging('outgoing');
  
-  // 4. Signal everyone in the channel
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({
       type:         'call_start',
@@ -268,7 +247,6 @@ async function startCall(type) {
     }));
   }
  
-  // 5. Mark missed after 45s if nobody answers
   missedCallTimer = setTimeout(async () => {
     if (callActive && Object.keys(peerConnections).length === 0) {
       await fetch(`/calls/${currentCallUuid}/missed`, { method: 'POST' });
@@ -328,7 +306,6 @@ function showIncomingCall(data) {
   document.body.appendChild(banner);
   startRinging('incoming');
  
-  // Auto-dismiss if caller gives up
   banner._timer = setTimeout(() => {
     banner.remove();
     stopRinging();
@@ -347,9 +324,8 @@ async function acceptCall(callUuid, type, callerId) {
   currentCallType      = type;
   currentCallChannelId = currentChannelId;
   callActive           = true;
-  isConference         = false;  // updated once we see actual participant count
+  isConference         = false; 
  
-  // Register answer in DB
   await fetch(`/calls/${callUuid}/answer`, { method: 'POST' });
  
   try {
@@ -365,7 +341,6 @@ async function acceptCall(callUuid, type, callerId) {
   showCallUI(type, 'connecting');
   startCallTimer();
  
-  // Create peer connection and send offer to caller
   await createPeerConnection(callerId, true);
 }
 
@@ -382,7 +357,6 @@ async function rejectCall(callUuid, callerId) {
     target_user_id: callerId,
   }));
 }
- 
 
 
 async function createPeerConnection(remoteUserId, sendOffer) {
@@ -414,7 +388,6 @@ async function createPeerConnection(remoteUserId, sendOffer) {
     if (['disconnected','failed','closed'].includes(pc.connectionState)) {
       removeRemoteStream(remoteUserId);
       delete peerConnections[remoteUserId];
-      // If no peers left and this is 1:1 → end the call
       if (!isConference && Object.keys(peerConnections).length === 0 && callActive) {
         toast('Call disconnected', 'info');
         cleanupCall();
@@ -438,7 +411,6 @@ async function createPeerConnection(remoteUserId, sendOffer) {
  
   return pc;
 }
-
 
 async function joinCall(remoteUserId, offer) {
   if (!localStream) {
@@ -515,13 +487,11 @@ async function startScreenShare() {
     });
     const screenTrack = screenStream.getVideoTracks()[0];
  
-    // Replace video track in all peer connections
     Object.values(peerConnections).forEach(pc => {
       const sender = pc.getSenders().find(s => s.track?.kind === 'video');
       if (sender) sender.replaceTrack(screenTrack);
     });
  
-    // Show local screen preview
     const localVid = document.getElementById('localVideo');
     if (localVid) localVid.srcObject = screenStream;
  
@@ -540,7 +510,6 @@ async function stopScreenShare() {
   screenStream.getTracks().forEach(t => t.stop());
   screenStream = null;
  
-  // Restore camera track
   const camTrack = localStream?.getVideoTracks()[0];
   if (camTrack) {
     Object.values(peerConnections).forEach(pc => {
@@ -586,12 +555,10 @@ function toggleVideo() {
 async function endCall() {
   if (!currentCallUuid) { cleanupCall(); return; }
  
-  // Ask DB: does this terminate the call or just remove me?
   const resp = await fetch(`/calls/${currentCallUuid}/end`, { method: 'POST' });
   const data = resp.ok ? await resp.json() : { action: 'ended' };
  
   if (data.action === 'ended') {
-    // 1:1 or last person → kill it for everyone via WS
     ws?.send(JSON.stringify({
       type:         'call_end',
       call_uuid:    currentCallUuid,
@@ -599,7 +566,6 @@ async function endCall() {
       channel_id:   currentCallChannelId,
     }));
   } else {
-    // Conference — just leave, others continue
     ws?.send(JSON.stringify({
       type:         'call_end',
       call_uuid:    currentCallUuid,
@@ -613,7 +579,6 @@ async function endCall() {
 }
 
 function cleanupCall(finalStatus) {
-  // Capture state before wiping — used for the inline call event bubble
   const _type   = currentCallType || 'audio';
   const _status = finalStatus || (callSeconds > 0 ? 'answered' : 'missed');
   const _dur    = callSeconds > 0
@@ -642,7 +607,6 @@ function cleanupCall(finalStatus) {
   document.getElementById('incomingCallBanner')?.remove();
   document.getElementById('remoteVideos').innerHTML = '';
 
-  // Show inline call event bubble (WhatsApp / Telegram style)
   appendCallEvent({ type: _type, status: _status, duration: _dur });
 }
  
@@ -656,7 +620,6 @@ function showCallUI(type) {
   modal.classList.add('open');
 }
  
-// Handle incoming call signals
 function handleCallSignal(data) {
   switch(data.type) {
     case 'call_start':
@@ -684,8 +647,7 @@ function handleCallSignal(data) {
       break;
   }
 }
- 
-// Extend the WS handler to support calls
+
 const _origWsHandler2 = window.handleWsMessage;
 window.handleWsMessage = function(data) {
   const callTypes = ['call_start','call_offer','call_answer','ice_candidate','call_end'];
@@ -709,16 +671,12 @@ const readReceipts = {};
 const myReadMessages = new Set();
 const reactionsCache = {};
 
-// ── EMOJI PICKER ─────────────────────────────────────────────────────────────
-// Single flag that blocks the document click listener from firing on the
-// same tick the picker was opened.
 let emojiPickerTarget = null;
 let emojiPickerJustOpened = false;
 
 function openEmojiPicker(msgId, anchorEl) {
   const picker = document.getElementById('globalEmojiPicker');
 
-  // If already open for this message → close it
   if (picker.classList.contains('open') && emojiPickerTarget === msgId) {
     closeEmojiPicker();
     return;
@@ -726,18 +684,16 @@ function openEmojiPicker(msgId, anchorEl) {
 
   emojiPickerTarget = msgId;
 
-  // Build emoji grid
   picker.innerHTML = EMOJIS.map(e =>
     `<div class="ep-emoji" data-emoji="${e}" title="${e}">${e}</div>`
   ).join('');
 
-  // Attach click handlers directly on emoji elements (not on document)
   picker.querySelectorAll('.ep-emoji').forEach(el => {
   el.addEventListener('click', function(e) {
     e.stopPropagation();
     const emoji  = this.dataset.emoji;
-    const target = emojiPickerTarget;  // capture before close nulls it
-    closeEmojiPicker();                // close immediately
+    const target = emojiPickerTarget; 
+    closeEmojiPicker();  
     if (!target) return;
     const fd = new FormData();
     fd.append('emoji', emoji);
@@ -746,19 +702,16 @@ function openEmojiPicker(msgId, anchorEl) {
   });
 });
 
-  // Position: measure anchor, then place picker above it
   const rect = anchorEl.getBoundingClientRect();
   picker.style.visibility = 'hidden';
-  picker.style.display = 'flex';   // temporarily show to measure
+  picker.style.display = 'flex';  
 
   const pw = picker.offsetWidth  || 232;
   const ph = picker.offsetHeight || 160;
 
-  // Prefer above the anchor; fall back below if not enough room
   let top = rect.top - ph - 8;
   if (top < 8) top = rect.bottom + 8;
 
-  // Align right edge with anchor right, clamped to viewport
   let left = rect.right - pw;
   if (left < 8) left = 8;
   if (left + pw > window.innerWidth - 8) left = window.innerWidth - pw - 8;
@@ -768,7 +721,6 @@ function openEmojiPicker(msgId, anchorEl) {
   picker.style.visibility = '';
   picker.classList.add('open');
 
-  // Mark as just-opened so the document listener ignores this tick
   emojiPickerJustOpened = true;
   requestAnimationFrame(() => { emojiPickerJustOpened = false; });
 }
@@ -781,7 +733,6 @@ function closeEmojiPicker() {
   emojiPickerTarget = null;
 }
 
-// Close picker on any outside click (guarded by the just-opened flag)
 document.addEventListener('click', function(e) {
   if (emojiPickerJustOpened) return;
   const picker = document.getElementById('globalEmojiPicker');
@@ -838,8 +789,6 @@ function renderReactionsBar(bar, msgId, reactions) {
     </div>`
   ).join('') +
   `<div class="add-reaction-btn" data-msg-id="${msgId}" title="Add reaction">+</div>`;
-
-  // Wire up pill clicks
   bar.querySelectorAll('.reaction-pill').forEach(pill => {
     pill.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -847,7 +796,6 @@ function renderReactionsBar(bar, msgId, reactions) {
     });
   });
 
-  // Wire up the + button
   const addBtn = bar.querySelector('.add-reaction-btn');
   if (addBtn) {
     addBtn.addEventListener('click', function(e) {
@@ -856,14 +804,11 @@ function renderReactionsBar(bar, msgId, reactions) {
     });
   }
 }
-// ── END EMOJI PICKER ──────────────────────────────────────────────────────────
 
 async function loadToken() {
   try { const r = await fetch('/auth/ws-token'); if (r.ok) { const d = await r.json(); WS_TOKEN = d.token; } } catch(e) {}
 }
 loadToken();
-
-
 
 function switchTab(tab) {
   document.getElementById('tabDM').classList.toggle('active', tab === 'dm');
@@ -871,6 +816,7 @@ function switchTab(tab) {
   document.getElementById('dmPanel').style.display = tab === 'dm' ? 'block' : 'none';
   document.getElementById('channelsPanel').style.display = tab === 'channels' ? 'block' : 'none';
 }
+
 function filterConvs(q) {
   q = q.toLowerCase();
   document.querySelectorAll('.conv-item').forEach(el => {
@@ -1062,7 +1008,6 @@ function markDeleted(msgId) {
   });
 }
 
-// ── SEARCH ──
 let searchVisible = false;
 
 function toggleSearch() {
@@ -1125,7 +1070,6 @@ function jumpToMessage(msgId) {
   }
 }
 
-// ── VOICE NOTES ──
 function toggleRecording() {
   if (mediaRecorder && mediaRecorder.state === 'recording') stopAndSendRecording();
   else startRecording();
@@ -1239,7 +1183,6 @@ function seekVoice(id, e) {
 }
 function formatDur(s) { s = Math.floor(s||0); return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
 
-// ── READ RECEIPTS ──
 function markRead(msgId) {
   if (myReadMessages.has(msgId) || !ws || ws.readyState !== WebSocket.OPEN) return;
   myReadMessages.add(msgId);
@@ -1269,7 +1212,6 @@ function updateReceiptsUI(msgId) {
 }
 function getUserColor(userId) { const u = ALL_USERS.find(u => u.id === userId); return u ? u.color : '#6366f1'; }
 
-// ── THREADS ──
 function openThread(msgId, content, senderName, color, threadCount) {
   currentThreadId = msgId;
   document.getElementById('threadParent').innerHTML = `<div style="display:flex;gap:8px;align-items:flex-start;">
@@ -1335,7 +1277,6 @@ function updateThreadCount(threadId) {
   }
 }
 
-// ── @MENTIONS ──
 function handleMentionInput(textarea) {
   const val = textarea.value;
   const cursor = textarea.selectionStart;
@@ -1429,7 +1370,6 @@ function jumpToMention(channelId, messageId) {
   else { jumpToMessage(messageId); }
 }
 
-// ── HELPERS ──
 function escHtml(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function escAttr(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,' ').replace(/\r/g,'');
@@ -1502,7 +1442,6 @@ function appendMessage(msg, scroll=true) {
   const menuId = `menu-${msg.id}`;
   const canDelete = !Boolean(msg.is_deleted) && (isMine || ['super_admin','admin'].includes(ME.role));
 
-  // Thread button stored via data attributes — no inline string injection
   const threadBtnHtml = (!msg.is_deleted && !msg.is_thread_reply)
     ? `<div class="thread-btn"
           data-thread-msg-id="${msg.id}"
@@ -1669,12 +1608,10 @@ function fileIcon(name) {
 }
 function formatSize(b) { if (b<1024) return b+' B'; if (b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 
-// ── LIGHTBOX ──
 function openLightbox(url, name) { document.getElementById('lightboxImg').src = url; const dl = document.getElementById('lightboxDl'); dl.href = url; dl.download = name||'image'; document.getElementById('lightbox').classList.add('open'); }
 function closeLightbox() { document.getElementById('lightbox').classList.remove('open'); }
 function handleLightboxClick(e) { if (e.target === document.getElementById('lightbox')) closeLightbox(); }
 
-// ── MISC ──
 function scrollToMsg(msgId) { const el = document.querySelector(`#messagesList [data-msg-id="${msgId}"]`); if (el) { el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.background='rgba(37,99,235,0.06)'; setTimeout(()=>el.style.background='',1600); } }
 function scrollBottom() { const l = document.getElementById('messagesList'); l.scrollTop = l.scrollHeight; }
 
@@ -1689,7 +1626,6 @@ function setActive(id) { document.querySelectorAll('.conv-item').forEach(el=>el.
 function openLeftPanel()  { document.querySelector('.left-panel').classList.add('open'); document.getElementById('panelOverlay').classList.add('visible'); }
 function closeLeftPanel() { document.querySelector('.left-panel').classList.remove('open'); document.getElementById('panelOverlay').classList.remove('visible'); }
 
-// ── CHANNEL CRUD ──
 async function createChannel() {
   const name = document.getElementById('nc-name').value.trim(); if (!name) { toast('Channel name is required','error'); return; }
   const depts = [...document.querySelectorAll('#nc-depts .selected')].map(l=>l.querySelector('input').value);
@@ -1725,7 +1661,6 @@ async function saveChannel() {
   else toast('Error updating channel','error');
 }
 
-// ── MSG CONTEXT MENU ──
 let msgMenuJustOpened = false;
 
 function toggleMsgMenu(menuId, e) {
@@ -1766,18 +1701,15 @@ function closeMsgMenu(menuId) {
   document.getElementById(menuId)?.classList.remove('open');
 }
 
-// Close all menus on outside click
 document.addEventListener('click', function() {
   if (msgMenuJustOpened) return;
   document.querySelectorAll('.msg-action-menu.open').forEach(m => m.classList.remove('open'));
 });
 
-// Auto mark-read on scroll
 document.getElementById('messagesList')?.addEventListener('scroll', function() {
   if (this.scrollTop + this.clientHeight >= this.scrollHeight - 40) markLastRead();
 });
 
-// Close mention panel on outside click
 document.addEventListener('click', e => {
   const panel = document.getElementById('mentionPanel');
   const btn   = document.querySelector('.mention-badge-btn');
@@ -1804,7 +1736,6 @@ function stopCallTimer() {
   _callSeconds = 0;
 }
 
-
 async function handleCallOffer(data) {
   const pc = await createPeerConnection(data.from_user_id, false);
   await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
@@ -1822,7 +1753,6 @@ async function handleCallAnswer(data) {
   const pc = peerConnections[data.from_user_id];
   if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
 }
- 
 
 async function handleIceCandidate(data) {
   const pc = peerConnections[data.from_user_id];
@@ -1848,7 +1778,6 @@ function addRemoteStream(userId, stream) {
 function removeRemoteStream(userId) {
   document.getElementById(`rv-${userId}`)?.remove();
 }
- 
 
 function startRinging(direction) {
   stopRinging();
@@ -1870,7 +1799,6 @@ function startRinging(direction) {
 }
  
 function stopRinging() { try { ringAudio?.stop(); } catch(e) {} ringAudio = null; }
- 
 
 async function startScreenShare() {
   if (!callActive) { toast('Start a call first', 'error'); return; }
@@ -1929,12 +1857,10 @@ function toggleVideo() {
 }
  
 function endCall() {
-  // Notify others
   if (ws && ws.readyState === WebSocket.OPEN && callChannelId) {
     ws.send(JSON.stringify({ type: 'call_end', channel_id: callChannelId }));
   }
- 
-  // Cleanup
+
   Object.entries(peerConnections).forEach(([id, pc]) => {
     try { pc.close(); } catch(e) {}
   });
@@ -1965,7 +1891,6 @@ function endCall() {
   toast('Call ended', 'info');
 }
  
-
 function showCallUI(type, state) {
   const modal = document.getElementById('callModal'); if (!modal) return;
   const isVideo = type === 'video';
@@ -1983,7 +1908,6 @@ function showCallUI(type, state) {
   if (el('audioCallIcon')) el('audioCallIcon').style.display = isVideo ? 'none' : 'flex';
   modal.classList.add('open');
 }
- 
 
 function startCallTimer() {
   callSeconds = 0; clearInterval(callTimerInterval);
@@ -1997,7 +1921,6 @@ function startCallTimer() {
  
 function stopCallTimer() { clearInterval(callTimerInterval); callTimerInterval = null; callSeconds = 0; }
  
-
 function handleCallSignal(data) {
   switch(data.type) {
  
@@ -2047,7 +1970,6 @@ function handleCallSignal(data) {
   }
 }
  
-
 const _prevHandler = window.handleWsMessage;
 window.handleWsMessage = function(data) {
   const callTypes = [
@@ -2086,7 +2008,6 @@ function appendCallEvent({ type = 'audio', status, duration, with: withName, tim
   };
   const label = labelMap[status] || (isVideo ? 'Video call' : 'Voice call');
 
-  // FA icon classes
   const callIconClass  = isVideo ? 'fa-solid fa-video' : 'fa-solid fa-phone';
   const arrowIconClass = isOut
     ? 'fa-solid fa-arrow-up-right'
@@ -2160,10 +2081,6 @@ function appendCallEvent({ type = 'audio', status, duration, with: withName, tim
   list.scrollTop = list.scrollHeight;
 }
 
-/**
- * Load and render historical call events inline in the current chat.
- * Call this after history messages are loaded (e.g. at end of openChannel/openDM).
- */
 async function loadInlineCallHistory(channelId) {
   if (!channelId) return;
   try {
@@ -2189,7 +2106,6 @@ async function loadInlineCallHistory(channelId) {
 function openCallHistory() {
 }
 
-// Extend endCall to stop timer
 const _origEndCall = endCall;
 window.endCall = function() { stopCallTimer(); _origEndCall(); };
 const _origStartCall = startCall;

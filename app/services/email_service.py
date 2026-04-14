@@ -22,9 +22,6 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-
-# ── HTML email template ───────────────────────────────────────────────────────
-
 def _wrap_html(subject: str, body_html: str, footer: str = "") -> str:
     """Wrap content in a branded BOSS HTML email shell."""
     accent = "#dc2626"
@@ -65,9 +62,6 @@ def _wrap_html(subject: str, body_html: str, footer: str = "") -> str:
 </body>
 </html>"""
 
-
-# ── Core send function ────────────────────────────────────────────────────────
-
 async def send_email(
     to_email: str,
     subject: str,
@@ -103,8 +97,6 @@ async def send_email(
                     s.starttls(context=context)
                     s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                     s.send_message(msg)
-
-        # Run blocking SMTP in a thread pool so we don't block the event loop
         await asyncio.get_event_loop().run_in_executor(None, _send)
         logger.info(f"Email sent to {to_email}: {subject}")
         return True
@@ -112,9 +104,6 @@ async def send_email(
     except Exception as e:
         logger.error(f"Email send failed to {to_email}: {e}")
         return False
-
-
-# ── Convenience senders ───────────────────────────────────────────────────────
 
 async def send_mention_notification(
     to_email: str,
@@ -325,8 +314,6 @@ async def send_alert(
         html_body=body,
     )
 
-
-# Singleton instance
 email_service = type("EmailService", (), {
     "send": staticmethod(send_email),
     "mention": staticmethod(send_mention_notification),

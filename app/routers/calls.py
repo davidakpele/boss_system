@@ -28,10 +28,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/calls", tags=["calls"])
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  START CALL
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/start")
 async def start_call(
     request: Request,
@@ -41,14 +37,13 @@ async def start_call(
     body = await request.json()
     channel_id = body.get("channel_id")
     call_type  = body.get("call_type", "audio")   # audio | video
-    target_ids = body.get("target_user_ids", [])  # list of user IDs being called
+    target_ids = body.get("target_user_ids", [])  
 
     if not channel_id:
         return JSONResponse({"error": "channel_id required"}, status_code=400)
 
     call_uuid = str(_uuid.uuid4())
 
-    # Create call record
     call = CallRecord(
         call_uuid   = call_uuid,
         channel_id  = channel_id,
@@ -59,7 +54,6 @@ async def start_call(
     db.add(call)
     await db.flush()
 
-    # Log caller
     db.add(CallParticipant(
         call_id   = call.id,
         user_id   = current_user.id,
@@ -67,8 +61,6 @@ async def start_call(
         status    = "answered",
         joined_at = datetime.utcnow(),
     ))
-
-    # Log each callee as ringing
     for uid in target_ids:
         db.add(CallParticipant(
             call_id = call.id,
@@ -86,10 +78,6 @@ async def start_call(
         "is_conference": call.is_conference,
     })
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  ANSWER
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/{call_uuid}/answer")
 async def answer_call(
@@ -111,7 +99,6 @@ async def answer_call(
     )).scalar_one_or_none()
 
     if not participant:
-        # User joining a conference they weren't pre-listed in
         participant = CallParticipant(
             call_id = call.id,
             user_id = current_user.id,
@@ -129,10 +116,6 @@ async def answer_call(
     await db.commit()
     return JSONResponse({"status": "answered"})
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  REJECT
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/{call_uuid}/reject")
 async def reject_call(
@@ -157,7 +140,6 @@ async def reject_call(
         participant.status  = "rejected"
         participant.left_at = datetime.utcnow()
 
-    # If this was a 1:1 and the only callee rejected → mark call rejected
     all_participants = (await db.execute(
         select(CallParticipant).where(CallParticipant.call_id == call.id)
     )).scalars().all()
@@ -172,11 +154,6 @@ async def reject_call(
     await db.commit()
     return JSONResponse({"status": "rejected"})
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  END CALL — core logic for 1:1 vs conference
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/{call_uuid}/end")
 async def end_call(
     call_uuid: str,
@@ -190,8 +167,6 @@ async def end_call(
         raise HTTPException(404)
 
     now = datetime.utcnow()
-
-    # Mark this user as having left
     participant = (await db.execute(
         select(CallParticipant).where(
             CallParticipant.call_id == call.id,
@@ -202,8 +177,6 @@ async def end_call(
     if participant:
         participant.status  = "left"
         participant.left_at = now
-
-    # Count how many participants are still active (answered but not left)
     active = (await db.execute(
         select(func.count(CallParticipant.id)).where(
             CallParticipant.call_id == call.id,
@@ -215,10 +188,8 @@ async def end_call(
     is_conference = call.is_conference
 
     if is_conference and active >= 2:
-        # Conference with 2+ remaining — call continues, just this user leaves
         action = "left"
     else:
-        # 1:1 OR last person remaining → terminate the entire call
         call.status   = "ended"
         call.ended_at = now
         if call.answered_at:
@@ -233,11 +204,6 @@ async def end_call(
         "call_uuid":       call_uuid,
     })
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  MARK MISSED (called by scheduler after 45s timeout)
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/{call_uuid}/missed")
 async def mark_missed(
     call_uuid: str,
@@ -250,7 +216,6 @@ async def mark_missed(
     if not call or call.status != "ongoing":
         return JSONResponse({"status": "no_action"})
 
-    # Mark all still-ringing participants as missed
     ringing = (await db.execute(
         select(CallParticipant).where(
             CallParticipant.call_id == call.id,
@@ -268,10 +233,6 @@ async def mark_missed(
 
     return JSONResponse({"status": "marked_missed", "count": len(ringing)})
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CALL HISTORY
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/history")
 async def call_history(

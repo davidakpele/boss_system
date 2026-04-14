@@ -11,14 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
-# ⚠️  Import Base from app.models so every table shares one MetaData object
 from app.models import Base
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Session management
-# ─────────────────────────────────────────────────────────────────────────────
 
 class UserSession(Base):
     """One row per active login.  Revoked on logout or by admin."""
@@ -36,11 +29,6 @@ class UserSession(Base):
     created_at    = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User", foreign_keys=[user_id])
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Login attempt tracking / lockout
-# ─────────────────────────────────────────────────────────────────────────────
 
 class LoginAttempt(Base):
     """Every login attempt (success or failure) per email + IP."""
@@ -64,11 +52,6 @@ class AccountLockout(Base):
     unlock_at = Column(DateTime(timezone=True), nullable=False)
     is_manual = Column(Boolean, default=False)
     reason    = Column(String(255))
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Two-Factor Authentication (TOTP)
-# ─────────────────────────────────────────────────────────────────────────────
 
 class TwoFactorSecret(Base):
     """TOTP secret per user. is_enabled=False until the first OTP is verified."""
@@ -97,11 +80,6 @@ class TwoFactorBackupCode(Base):
 
     user = relationship("User")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  API Key management
-# ─────────────────────────────────────────────────────────────────────────────
-
 class APIKey(Base):
     """Long-lived API keys.  Raw key shown once; SHA-256 hash stored."""
     __tablename__ = "api_keys"
@@ -120,11 +98,6 @@ class APIKey(Base):
 
     user = relationship("User")
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Password history (prevent reuse)
-# ─────────────────────────────────────────────────────────────────────────────
-
 class PasswordHistory(Base):
     """Keeps last N bcrypt hashes so users cannot reuse recent passwords."""
     __tablename__ = "password_history"
@@ -135,11 +108,6 @@ class PasswordHistory(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user = relationship("User")
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Data-retention policy
-# ─────────────────────────────────────────────────────────────────────────────
 
 class DataRetentionPolicy(Base):
     """Admin-configured per-resource retention rules."""
@@ -155,11 +123,6 @@ class DataRetentionPolicy(Base):
     created_at  = Column(DateTime(timezone=True), server_default=func.now())
 
     creator = relationship("User", foreign_keys=[created_by])
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  Field-level encryption audit
-# ─────────────────────────────────────────────────────────────────────────────
 
 class EncryptedFieldAudit(Base):
     """Records who decrypted which field and when."""

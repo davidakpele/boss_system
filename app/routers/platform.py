@@ -51,11 +51,6 @@ templates = Jinja2Templates(directory="app/templates")
 BACKUP_DIR = Path("backups")
 BACKUP_DIR.mkdir(exist_ok=True)
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  4. HEALTH CHECK DASHBOARD
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/platform", response_class=HTMLResponse)
 async def health_dashboard(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -76,7 +71,6 @@ async def health_data(
     """JSON health snapshot — called every 10s by the dashboard."""
     result = {}
 
-    # ── Database ─────────────────────────────────────────────────────────────
     db_ok = False
     db_latency = None
     try:
@@ -87,7 +81,6 @@ async def health_data(
     except Exception as e:
         result["db_error"] = str(e)
 
-    # Table counts
     counts = {}
     for model, label in [
         (User, "users"), (Document, "documents"),
@@ -105,7 +98,6 @@ async def health_data(
         "counts": counts,
     }
 
-    # ── Ollama / AI ───────────────────────────────────────────────────────────
     ai_ok = False
     ai_model = settings.OLLAMA_MODEL
     try:
@@ -121,7 +113,6 @@ async def health_data(
 
     result["ai"] = {"ok": ai_ok, "model": ai_model, "url": settings.OLLAMA_BASE_URL}
 
-    # ── Disk ─────────────────────────────────────────────────────────────────
     try:
         disk = shutil.disk_usage("/")
         result["disk"] = {
@@ -133,7 +124,6 @@ async def health_data(
     except Exception:
         result["disk"] = {}
 
-    # ── Memory ───────────────────────────────────────────────────────────────
     try:
         with open("/proc/meminfo") as f:
             mem = {}
@@ -151,8 +141,6 @@ async def health_data(
         }
     except Exception:
         result["memory"] = {}
-
-    # ── Active WebSockets ─────────────────────────────────────────────────────
     try:
         from app.services.websocket_manager import manager
         ws_count = sum(len(v) for v in manager.channel_connections.values())
@@ -160,15 +148,12 @@ async def health_data(
     except Exception:
         result["websockets"] = {"active": 0}
 
-    # ── Upload directory size ─────────────────────────────────────────────────
     try:
         upload_path = Path(settings.UPLOAD_DIR)
         total_bytes = sum(f.stat().st_size for f in upload_path.rglob("*") if f.is_file())
         result["uploads"] = {"size_mb": round(total_bytes / 1e6, 1)}
     except Exception:
         result["uploads"] = {"size_mb": 0}
-
-    # ── Server uptime ─────────────────────────────────────────────────────────
     try:
         with open("/proc/uptime") as f:
             uptime_s = float(f.read().split()[0])
@@ -178,11 +163,6 @@ async def health_data(
 
     result["timestamp"] = datetime.utcnow().isoformat()
     return JSONResponse(result)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  3. AUTOMATED BACKUPS
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/platform/backup")
 async def trigger_backup(
@@ -213,8 +193,7 @@ async def _run_backup(log_id: int):
             return
 
         try:
-            # Parse DATABASE_URL for pg_dump args
-            db_url = settings.DATABASE_URL  # postgresql+asyncpg://user:pass@host/db
+            db_url = settings.DATABASE_URL 
             clean  = db_url.replace("postgresql+asyncpg://", "postgresql://")
 
             timestamp  = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
@@ -235,7 +214,6 @@ async def _run_backup(log_id: int):
                 log.completed_at = datetime.utcnow()
                 logger.info(f"Backup completed: {out_file} ({size} bytes)")
 
-                # Prune backups older than retention days
                 await _prune_old_backups()
             else:
                 log.status = "failed"
@@ -304,11 +282,6 @@ async def download_backup(
         headers={"Content-Disposition": f"attachment; filename={path.name}"}
     )
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  6. CHANGELOG
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/platform/changelog", response_class=HTMLResponse)
 async def changelog_page(
     request: Request, db: AsyncSession = Depends(get_db),
@@ -324,7 +297,6 @@ async def changelog_page(
         select(ChangelogRead.version).where(ChangelogRead.user_id == current_user.id)
     )).scalars().all())
 
-    # Auto-mark as read
     for e in entries:
         if e.version not in read_versions:
             db.add(ChangelogRead(user_id=current_user.id, version=e.version))
@@ -369,11 +341,6 @@ async def changelog_unread(
     )).scalar() or 0
     return JSONResponse({"unread": max(0, total - read)})
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  9. GLOBAL SEARCH
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("/search")
 async def global_search(
     q: str,
@@ -386,7 +353,6 @@ async def global_search(
     pattern = f"%{q}%"
     results = []
 
-    # Messages
     msgs = (await db.execute(
         select(Message, User.full_name)
         .join(User, Message.sender_id == User.id)
@@ -402,7 +368,6 @@ async def global_search(
             "color": "var(--blue)",
         })
 
-    # Documents
     docs = (await db.execute(
         select(Document)
         .where(or_(Document.title.ilike(pattern), Document.content.ilike(pattern)))
@@ -417,7 +382,6 @@ async def global_search(
             "color": "var(--green)",
         })
 
-    # Users
     users = (await db.execute(
         select(User)
         .where(or_(User.full_name.ilike(pattern), User.email.ilike(pattern)))
@@ -463,11 +427,6 @@ async def global_search(
         })
 
     return JSONResponse({"results": results, "query": q, "total": len(results)})
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  11. AUDIT TRAIL EXPORT
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/platform/audit/export")
 async def export_audit(
@@ -565,11 +524,6 @@ def _build_audit_pdf(logs, days: int) -> bytes:
 
     doc.build(story)
     return buf.getvalue()
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  1. TENANT MANAGEMENT (super_admin only)
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/tenants", response_class=HTMLResponse)
 async def tenants_page(

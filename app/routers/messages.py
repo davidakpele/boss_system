@@ -824,22 +824,14 @@ async def websocket_endpoint(
                     })
  
             elif msg_type == "call_end":
-                # ── Core logic ─────────────────────────────────────────────
-                # Ask the call router whether this terminates the call
-                # or just removes this participant (conference scenario)
                 call_uuid = data.get("call_uuid", "")
                 is_conference = data.get("is_conference", False)
- 
-                # Count active peers in THIS channel's WS connections
-                # (excludes the user who just ended)
                 active_peers = [
                     uid for uid in manager.get_online_users(channel_id)
                     if uid != user.id
                 ]
  
                 if is_conference and len(active_peers) >= 2:
-                    # Conference — only notify this user's peers that they left
-                    # The call continues among remaining participants
                     await manager.broadcast_to_channel(channel_id, {
                         "type":       "call_participant_left",
                         "user_id":    user.id,
@@ -848,12 +840,11 @@ async def websocket_endpoint(
                         "remaining":  len(active_peers),
                     }, exclude_user=user.id)
                 else:
-                    # 1:1 or last person — TERMINATE for everyone
                     await manager.broadcast_to_channel(channel_id, {
                         "type":      "call_terminated",
                         "ended_by":  user.full_name,
                         "call_uuid": call_uuid,
-                    })   # broadcast to ALL including sender so their UI also closes
+                    })   
  
             elif msg_type == "call_reject":
                 target_user_id = data.get("target_user_id")
@@ -867,7 +858,6 @@ async def websocket_endpoint(
                     })
  
             elif msg_type == "call_missed":
-                # Sent by the caller's 45s timeout to notify callees
                 call_uuid = data.get("call_uuid", "")
                 await manager.broadcast_to_channel(channel_id, {
                     "type":      "call_missed",
@@ -907,11 +897,9 @@ async def schedule_message(
             status_code=400
         )
  
-    # Robust ISO parse — handles both "2024-01-15T14:30" and "2024-01-15T14:30:00Z"
     try:
         clean = scheduled_at.replace("Z", "+00:00")
         sched_dt = datetime.fromisoformat(clean)
-        # Strip timezone info for DB storage (store as UTC naive)
         if sched_dt.tzinfo is not None:
             sched_dt = sched_dt.replace(tzinfo=None)
     except (ValueError, AttributeError):
@@ -982,11 +970,6 @@ async def cancel_scheduled(
     await db.commit()
     return JSONResponse({"status": "cancelled"})
  
- 
-# ══════════════════════════════════════════════════════════════════════════════
-#  9. PINNED MESSAGES
-# ══════════════════════════════════════════════════════════════════════════════
- 
 @router.post("/{message_id}/pin")
 async def pin_message(
     message_id: int,
@@ -1050,11 +1033,7 @@ async def get_pinned(
         "pinned_at": pin.pinned_at.isoformat() if pin.pinned_at else "",
     } for pin, msg, name, color in rows])
  
- 
-# ══════════════════════════════════════════════════════════════════════════════
-#  10. MESSAGE EDIT
-# ══════════════════════════════════════════════════════════════════════════════
- 
+
 @router.post("/{message_id}/edit")
 async def edit_message(
     message_id: int,
@@ -1074,8 +1053,7 @@ async def edit_message(
         return JSONResponse({"error": "You can only edit your own messages"}, status_code=403)
     if msg.is_deleted:
         return JSONResponse({"error": "Cannot edit a deleted message"}, status_code=400)
- 
-    # Save edit history
+
     db.add(MessageEdit(
         message_id=message_id,
         old_content=msg.content or "",
