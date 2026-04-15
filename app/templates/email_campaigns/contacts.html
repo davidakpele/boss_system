@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Email Contacts — BOSS{% endblock %}
+{% block page_title %}Email Contacts{% endblock %}
+{% block page_sub %}Manage your campaign recipient list{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div style="font-size:13px;color:var(--text2);">{{ contacts|length }} contact{{ 's' if contacts|length != 1 else '' }}</div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('csvImport').click()">
+      <i class="fa-solid fa-file-csv"></i> Import CSV
+    </button>
+    <input type="file" id="csvImport" accept=".csv" style="display:none" onchange="importCSV(this)"/>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addContactModal')">
+      <i class="fa-solid fa-plus"></i> Add Contact
+    </button>
+  </div>
+</div>
+
+<!-- CSV format hint -->
+<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text3);">
+  <i class="fa-solid fa-info-circle" style="color:var(--blue);margin-right:6px;"></i>
+  CSV import expects columns: <code>name, email, title, institution, department</code>
+</div>
+
+<!-- Contacts table -->
+<div class="card" style="padding:0;overflow:hidden;">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Title / Role</th>
+        <th>Institution</th>
+        <th>Department</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in contacts %}
+      <tr id="row-{{ c.id }}">
+        <td style="font-weight:600;">{{ c.name or '—' }}</td>
+        <td style="font-family:var(--font-mono);font-size:12px;">{{ c.email }}</td>
+        <td style="color:var(--text3);">{{ c.title or '—' }}</td>
+        <td style="color:var(--text2);">{{ c.institution or '—' }}</td>
+        <td>{% if c.department %}<span class="badge badge-blue">{{ c.department }}</span>{% else %}—{% endif %}</td>
+        <td>
+          <button class="btn btn-ghost btn-xs" style="color:var(--red);" onclick="removeContact({{ c.id }}, this)">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="6" style="text-align:center;padding:40px;color:var(--text3);">
+          No contacts yet. Add individual contacts or import a CSV file.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Add Contact Modal -->
+<div class="modal-overlay" id="addContactModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-user-plus" style="color:var(--accent);"></i> Add Contact</span>
+      <span class="modal-close" onclick="closeModal('addContactModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="margin:0;"><label class="form-label">Full Name *</label><input type="text" id="ac-name" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Email *</label><input type="email" id="ac-email" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Title / Role</label><input type="text" id="ac-title" class="form-control" placeholder="e.g. Head Librarian" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Department</label><input type="text" id="ac-dept" class="form-control" placeholder="e.g. Library" style="padding-left:12px;"/></div>
+    </div>
+    <div class="form-group mt-2"><label class="form-label">Institution / Organisation</label><input type="text" id="ac-inst" class="form-control" placeholder="e.g. University of Lagos" style="padding-left:12px;"/></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea id="ac-notes" class="form-control" rows="2" style="padding:10px;" placeholder="Any notes about this contact…"></textarea></div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('addContactModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addContact()"><i class="fa-solid fa-plus"></i> Add Contact</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function addContact() {
+  const name  = document.getElementById('ac-name').value.trim();
+  const email = document.getElementById('ac-email').value.trim();
+  if (!name || !email) { toast('Name and email required', 'error'); return; }
+  const r = await fetch('/email-campaigns/contacts/add', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name, email,
+      title:       document.getElementById('ac-title').value,
+      department:  document.getElementById('ac-dept').value,
+      institution: document.getElementById('ac-inst').value,
+      notes:       document.getElementById('ac-notes').value,
+    }),
+  });
+  const d = await r.json();
+  if (r.ok) { toast('Contact added!', 'success'); closeModal('addContactModal'); setTimeout(() => location.reload(), 500); }
+  else toast(d.error || 'Error', 'error');
+}
+
+async function removeContact(id, btn) {
+  if (!confirm('Remove this contact?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/email-campaigns/contacts/${id}`, { method: 'DELETE' });
+  if (r.ok) { document.getElementById('row-' + id)?.remove(); toast('Removed', 'info'); }
+  else { btn.disabled = false; toast('Error', 'error'); }
+}
+
+async function importCSV(input) {
+  const file = input.files[0]; if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  const r = await fetch('/email-campaigns/contacts/import', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (r.ok) {
+    toast(`Imported ${d.created} contacts (${d.skipped} skipped)`, 'success');
+    setTimeout(() => location.reload(), 800);
+  } else toast(d.error || 'Import failed', 'error');
+}
+</script>
+{% endblock %}

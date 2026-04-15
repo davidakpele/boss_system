@@ -1,9 +1,0 @@
-python -m app.commad.init_db
-
-API Key
-goT0nJRjwmSgqI1frENrY06u5
-
-
-API Key Secret
-
-JOHUSOFbsr2yEi19rzCh8uXUyx6Xvdu9L9N71ccthZzaZE4Mrt

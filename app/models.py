@@ -911,3 +911,64 @@ class CallParticipant(Base):
  
     call = relationship("CallRecord", back_populates="participants")
     user = relationship("User")
+
+
+class EmailContact(Base):
+    """External contacts who can receive AI-generated emails from BOSS."""
+    __tablename__ = "email_contacts"
+ 
+    id         = Column(Integer, primary_key=True, index=True)
+    name       = Column(String(200), nullable=False)
+    email      = Column(String(300), unique=True, index=True, nullable=False)
+    title      = Column(String(200), nullable=True)        # e.g. "Head Librarian"
+    department = Column(String(100), nullable=True)        # e.g. "Library"
+    institution= Column(String(300), nullable=True)        # e.g. "University of Lagos"
+    tags       = Column(JSON, default=list)                # ["librarian","vip","lagos"]
+    is_active  = Column(Boolean, default=True)
+    notes      = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+ 
+    creator = relationship("User", foreign_keys=[created_by])
+ 
+ 
+class EmailCampaign(Base):
+    """An AI-generated email campaign — one subject/body, many recipients."""
+    __tablename__ = "email_campaigns"
+ 
+    id           = Column(Integer, primary_key=True, index=True)
+    name         = Column(String(300), nullable=False)
+    subject      = Column(String(500), nullable=False)
+    html_body    = Column(Text, nullable=False)
+    text_body    = Column(Text, nullable=True)
+    status       = Column(String(20), default="draft")   # draft|scheduled|sending|sent|failed
+    ai_prompt    = Column(Text, nullable=True)           # what the user asked AI to write
+    knowledge_context = Column(Text, nullable=True)     # RAG context used
+    total_recipients  = Column(Integer, default=0)
+    sent_count        = Column(Integer, default=0)
+    failed_count      = Column(Integer, default=0)
+    scheduled_at      = Column(DateTime(timezone=True), nullable=True)
+    started_at        = Column(DateTime(timezone=True), nullable=True)
+    completed_at      = Column(DateTime(timezone=True), nullable=True)
+    created_by        = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at        = Column(DateTime(timezone=True), server_default=func.now())
+ 
+    creator    = relationship("User")
+    recipients = relationship("EmailCampaignRecipient", back_populates="campaign")
+ 
+ 
+class EmailCampaignRecipient(Base):
+    """Junction: which contacts receive which campaign + per-recipient status."""
+    __tablename__ = "email_campaign_recipients"
+ 
+    id          = Column(Integer, primary_key=True, index=True)
+    campaign_id = Column(Integer, ForeignKey("email_campaigns.id"), nullable=False)
+    contact_id  = Column(Integer, ForeignKey("email_contacts.id"), nullable=True)
+    email       = Column(String(300), nullable=False)   # denormalised for resilience
+    name        = Column(String(200), nullable=True)
+    status      = Column(String(20), default="pending")  # pending|sent|failed|bounced
+    sent_at     = Column(DateTime(timezone=True), nullable=True)
+    error       = Column(Text, nullable=True)
+ 
+    campaign = relationship("EmailCampaign", back_populates="recipients")
+    contact  = relationship("EmailContact")

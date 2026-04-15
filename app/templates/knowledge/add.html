@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Add Knowledge — BOSS{% endblock %}
+{% block page_title %}Add to Knowledge Base{% endblock %}
+{% block page_sub %}Teach the AI about your business without uploading a file{% endblock %}
+
+{% block extra_css %}
+.kb-form-wrap { max-width: 780px; }
+.category-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 8px; }
+.cat-card {
+  border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; cursor: pointer; transition: all .15s;
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+}
+.cat-card:hover { border-color: var(--accent); background: var(--accent-light); }
+.cat-card.selected { border-color: var(--accent); background: var(--accent-light); }
+.cat-card input { display: none; }
+.cat-icon { font-size: 22px; }
+.cat-label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+.cat-desc  { font-size: 11px; color: var(--text3); line-height: 1.5; }
+
+.char-count { font-size: 11px; color: var(--text3); text-align: right; margin-top: 4px; font-family: var(--font-mono); }
+.template-strip { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.tmpl-btn {
+  padding: 5px 12px; border-radius: 20px; font-size: 11.5px; font-weight: 600;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+  cursor: pointer; transition: all .12s;
+}
+.tmpl-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-light); }
+.preview-box {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px; font-size: 13px;
+  line-height: 1.75; color: var(--text2); min-height: 100px;
+  white-space: pre-wrap; font-family: var(--font);
+}
+{% endblock %}
+
+{% block content %}
+<div class="kb-form-wrap">
+
+  <!-- Category selector -->
+  <div class="card mb-4">
+    <div class="card-title"><i class="fa-solid fa-tag" style="color:var(--accent)"></i> What type of knowledge is this?</div>
+    <div class="category-grid" id="categoryGrid">
+      {% set cats = [
+        ('company_profile',  '🏢', 'Company Profile',    'Who you are, what you do, your mission'),
+        ('products_services','📦', 'Products & Services', 'What you offer, pricing, features'),
+        ('policies',        '📋', 'Policies & Rules',   'HR, leave, conduct, procedures'),
+        ('faqs',            '❓', 'FAQs',               'Common questions and answers'),
+        ('team',            '👥', 'Team & Roles',       'Who does what in your organisation'),
+        ('clients',         '🤝', 'Clients & Partners', 'Clients, partners, stakeholders'),
+        ('market',          '📊', 'Market & Industry',  'Industry context, competitors'),
+        ('processes',       '⚙️', 'Processes',          'How things get done step by step'),
+        ('locations',       '📍', 'Locations',          'Offices, branches, territories'),
+        ('history',         '📖', 'Company History',    'Background, milestones, achievements'),
+      ] %}
+      {% for val, icon, label, desc in cats %}
+      <label class="cat-card {% if loop.first %}selected{% endif %}" onclick="selectCat(this, '{{ val }}')">
+        <input type="radio" name="category" value="{{ val }}" {% if loop.first %}checked{% endif %}/>
+        <span class="cat-icon">{{ icon }}</span>
+        <span class="cat-label">{{ label }}</span>
+        <span class="cat-desc">{{ desc }}</span>
+      </label>
+      {% endfor %}
+    </div>
+    <input type="hidden" id="selectedCategory" value="company_profile"/>
+  </div>
+
+  <!-- Content form -->
+  <div class="card mb-4">
+    <div class="card-title"><i class="fa-solid fa-pencil" style="color:var(--green)"></i> Knowledge Content</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px;">
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Title / Topic *</label>
+        <input type="text" id="kb-title" class="form-control" placeholder="e.g. About Safari Books Limited" style="padding-left:12px;"/>
+      </div>
+      <div class="form-group" style="margin:0;">
+        <label class="form-label">Department</label>
+        <select id="kb-dept" class="form-control" style="padding-left:12px;">
+          <option value="General">General (all departments)</option>
+          {% for d in ['HR','Sales','Technology','Finance','Operations','Legal','Marketing','Management'] %}
+          <option value="{{ d }}">{{ d }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+
+    <!-- Content templates -->
+    <label class="form-label">Content *</label>
+    <div class="template-strip" id="templateStrip">
+      <button type="button" class="tmpl-btn" onclick="loadTemplate('company')">🏢 Company intro</button>
+      <button type="button" class="tmpl-btn" onclick="loadTemplate('product')">📦 Product description</button>
+      <button type="button" class="tmpl-btn" onclick="loadTemplate('faq')">❓ FAQ format</button>
+      <button type="button" class="tmpl-btn" onclick="loadTemplate('policy')">📋 Policy statement</button>
+      <button type="button" class="tmpl-btn" onclick="loadTemplate('contact')">📞 Contact details</button>
+    </div>
+
+    <textarea id="kb-content" class="form-control" rows="14"
+      style="padding:14px;font-size:13.5px;line-height:1.75;resize:vertical;"
+      placeholder="Write everything the AI should know about this topic. Be detailed — the more context you provide, the better the AI can represent your business.
+
+Example:
+Safari Books Limited is a leading publishing company and ProQuest agent serving institutions across Nigeria. We supply premium print collections and cutting-edge digital databases including ProQuest to universities, polytechnics, and research institutions...
+
+You can paste content from your website, brochures, or write it fresh here."
+      oninput="updateCharCount(this)"></textarea>
+    <div class="char-count" id="charCount">0 characters · 0 words</div>
+
+    <div class="form-group mt-4" style="margin-bottom:0;">
+      <label class="form-label">Tags <span style="color:var(--text3);font-weight:400;">(comma-separated, helps AI find this knowledge)</span></label>
+      <input type="text" id="kb-tags" class="form-control" placeholder="e.g. library, proquest, database, subscription" style="padding-left:12px;"/>
+    </div>
+  </div>
+
+  <!-- Preview -->
+  <div class="card mb-6" id="previewCard" style="display:none;">
+    <div class="card-title"><i class="fa-solid fa-eye" style="color:var(--blue)"></i> Preview</div>
+    <div class="preview-box" id="previewContent"></div>
+  </div>
+
+  <!-- Actions -->
+  <div style="display:flex;gap:12px;align-items:center;">
+    <button class="btn btn-ghost" onclick="togglePreview()"><i class="fa-solid fa-eye"></i> Preview</button>
+    <button class="btn btn-ghost" onclick="clearForm()"><i class="fa-solid fa-rotate-left"></i> Clear</button>
+    <div style="margin-left:auto;display:flex;gap:10px;">
+      <a href="/knowledge-base" class="btn btn-ghost"><i class="fa-solid fa-arrow-left"></i> Cancel</a>
+      <button class="btn btn-primary" onclick="submitKnowledge()" id="submitBtn">
+        <i class="fa-solid fa-brain"></i> Add to Knowledge Base
+      </button>
+    </div>
+  </div>
+
+  <!-- Success state (hidden) -->
+  <div id="successBanner" style="display:none;" class="card mt-4" style="border-color:var(--green);">
+    <div style="display:flex;align-items:center;gap:12px;color:var(--green);">
+      <i class="fa-solid fa-circle-check" style="font-size:24px;"></i>
+      <div>
+        <div style="font-weight:700;font-size:14px;">Knowledge added successfully!</div>
+        <div style="font-size:12.5px;color:var(--text3);margin-top:2px;" id="successDetail"></div>
+      </div>
+      <div style="margin-left:auto;display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="addAnother()">Add More</button>
+        <a href="/email-campaigns" class="btn btn-primary btn-sm"><i class="fa-solid fa-paper-plane"></i> Generate Email</a>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const TEMPLATES = {
+  company: `[Company Name] is a [describe company type] established in [year], based in [location].
+
+We specialise in [core business activities] and serve [target audience/clients].
+
+Our key products/services include:
+- [Product/Service 1]: [brief description]
+- [Product/Service 2]: [brief description]
+- [Product/Service 3]: [brief description]
+
+Contact us:
+📞 [Phone number]
+📧 [Email address]
+🌐 [Website]`,
+
+  product: `Product/Service Name: [Name]
+
+Description:
+[Detailed description of what this product/service does and the problem it solves]
+
+Key Features:
+- [Feature 1]
+- [Feature 2]
+- [Feature 3]
+
+Who it's for:
+[Target audience / ideal customer]
+
+Pricing:
+[Pricing details or how to get a quote]
+
+How to get started:
+[Call to action / next steps]`,
+
+  faq: `Frequently Asked Questions
+
+Q: [First common question]
+A: [Detailed answer]
+
+Q: [Second common question]
+A: [Detailed answer]
+
+Q: [Third common question]
+A: [Detailed answer]
+
+Q: How do I contact you?
+A: You can reach us at [email] or call [phone]. Our office hours are [hours].`,
+
+  policy: `Policy Name: [Policy Title]
+Effective Date: [Date]
+Department: [Department]
+
+Purpose:
+[Why this policy exists]
+
+Scope:
+This policy applies to [who it applies to].
+
+Policy Statement:
+[Main policy rules and guidelines]
+
+Procedure:
+1. [Step 1]
+2. [Step 2]
+3. [Step 3]
+
+For questions about this policy, contact [name/department].`,
+
+  contact: `Contact Information
+
+Head Office:
+[Company Name]
+[Street Address]
+[City, State]
+
+Phone: [Main phone number]
+Email: [Main email]
+Website: [Website URL]
+
+Key Contacts:
+- [Name], [Title]: [email] / [phone]
+- [Name], [Title]: [email] / [phone]
+
+Office Hours:
+Monday – Friday: [Hours]
+Saturday: [Hours]
+Sunday: Closed`,
+};
+
+function selectCat(el, val) {
+  document.querySelectorAll('.cat-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('selectedCategory').value = val;
+  el.querySelector('input').checked = true;
+}
+
+function loadTemplate(key) {
+  const ta = document.getElementById('kb-content');
+  if (ta.value.trim() && !confirm('Replace current content with template?')) return;
+  ta.value = TEMPLATES[key] || '';
+  updateCharCount(ta);
+}
+
+function updateCharCount(el) {
+  const chars = el.value.length;
+  const words = el.value.trim() ? el.value.trim().split(/\s+/).length : 0;
+  document.getElementById('charCount').textContent = `${chars.toLocaleString()} characters · ${words.toLocaleString()} words`;
+}
+
+function togglePreview() {
+  const content = document.getElementById('kb-content').value.trim();
+  const card = document.getElementById('previewCard');
+  if (!content) { toast('Write some content first', 'error'); return; }
+  if (card.style.display === 'none') {
+    document.getElementById('previewContent').textContent = content;
+    card.style.display = 'block';
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } else {
+    card.style.display = 'none';
+  }
+}
+
+function clearForm() {
+  if (!confirm('Clear all content?')) return;
+  document.getElementById('kb-title').value   = '';
+  document.getElementById('kb-content').value = '';
+  document.getElementById('kb-tags').value    = '';
+  updateCharCount(document.getElementById('kb-content'));
+  document.getElementById('previewCard').style.display = 'none';
+}
+
+function addAnother() {
+  clearForm();
+  document.getElementById('successBanner').style.display = 'none';
+  document.getElementById('submitBtn').style.display = 'flex';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function submitKnowledge() {
+  const title   = document.getElementById('kb-title').value.trim();
+  const content = document.getElementById('kb-content').value.trim();
+  const category= document.getElementById('selectedCategory').value;
+  const dept    = document.getElementById('kb-dept').value;
+  const tags    = document.getElementById('kb-tags').value;
+
+  if (!title)   { toast('Please enter a title', 'error'); return; }
+  if (!content) { toast('Please enter some content', 'error'); return; }
+  if (content.length < 50) { toast('Content is too short — add more detail so the AI can learn from it', 'error'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing…';
+
+  try {
+    const fd = new FormData();
+    fd.append('title',    title);
+    fd.append('category', category);
+    fd.append('department', dept);
+    fd.append('content',  content);
+    fd.append('tags',     tags);
+
+    const r = await fetch('/knowledge-base/add', { method: 'POST', body: fd });
+    const d = await r.json();
+
+    if (r.ok) {
+      document.getElementById('successBanner').style.display = 'block';
+      document.getElementById('successDetail').textContent =
+        `"${title}" split into ${d.chunks} chunk${d.chunks > 1 ? 's' : ''} and added to the AI knowledge base. The AI will now use this when generating responses and emails.`;
+      btn.style.display = 'none';
+      document.getElementById('successBanner').scrollIntoView({ behavior: 'smooth' });
+    } else {
+      toast(d.error || 'Error saving knowledge', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-brain"></i> Add to Knowledge Base';
+    }
+  } catch(e) {
+    toast('Network error', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-brain"></i> Add to Knowledge Base';
+  }
+}
+</script>
+{% endblock %}
