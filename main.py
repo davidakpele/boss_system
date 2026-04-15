@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import json as _json
 from app.database import init_db, AsyncSessionLocal
 from app.config import settings
-from app.routers import analytics, auth, bcc, dashboard, messages, ask_boss, documents, admin, whatsapp
+from app.routers import analytics, auth, bcc, dashboard, email_blast, messages, ask_boss, documents, admin, whatsapp
 from app.routers import business_ops, sso, push
 from app.middleware.ip_allowlist import IPAllowlistMiddleware
 from app.routers import calls as calls_router
@@ -71,17 +71,14 @@ app = FastAPI(
     redoc_url=None,
 )
 
-# ── Middleware (order matters — session BEFORE IP check) ──────────────────────
 app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 app.add_middleware(IPAllowlistMiddleware)
 
-# ── Static mounts ─────────────────────────────────────────────────────────────
 app.mount("/static",  StaticFiles(directory="app/static"),        name="static")
 app.mount("/public",  StaticFiles(directory="public"),       name="public") 
 app.mount("/uploads", StaticFiles(directory=settings.UPLOAD_DIR), name="uploads")
 
 
-# ── PWA files at root ─────────────────────────────────────────────────────────
 @app.get("/manifest.json", include_in_schema=False)
 async def pwa_manifest():
     return FileResponse("app/static/manifest.json", media_type="application/manifest+json")
@@ -101,8 +98,7 @@ for r in [
     analytics.router, ai_features.router, dashboard.router,
     messages.router, ask_boss.router, documents.router,
     admin.router, business_ops.router, whatsapp.router,
-    platform_router.router, calls_router.router
-    
+    platform_router.router, calls_router.router, email_blast.router
 ]:
     app.include_router(r)
 
@@ -140,8 +136,6 @@ async def admin_run_retention(
     results = await DataRetentionService.run_all(db)
     return JSONResponse({"purged": results})
 
-
-# ── Error handlers 
 @app.exception_handler(403)
 async def handle_403(request: Request, exc):
     return templates.TemplateResponse(
@@ -158,7 +152,7 @@ async def _scheduled_message_worker():
     """Check every 30s for messages whose send time has arrived."""
     import asyncio
     import logging
-    from datetime import datetime                          # ← CLASS not module
+    from datetime import datetime 
     from sqlalchemy import select
     from app.database import AsyncSessionLocal
     from app.models import ScheduledMessage, Message, User
@@ -223,4 +217,36 @@ async def _scheduled_message_worker():
         except Exception as e:
             logger.error(f"Scheduled message worker error: {e}", exc_info=True)
 
+
+async def _campaign_scheduler_worker():
+    """Deliver scheduled email campaigns on time."""
+    import asyncio
+    from datetime import datetime
+    from app.database import AsyncSessionLocal
+    from sqlalchemy import select
+    from app.models import EmailCampaign
+    from app.routers.email_blast import _send_campaign_emails
+ 
+    while True:
+        await asyncio.sleep(60) 
+        try:
+            async with AsyncSessionLocal() as db:
+                due = (await db.execute(
+                    select(EmailCampaign).where(
+                        EmailCampaign.status == "scheduled",
+                        EmailCampaign.scheduled_at <= datetime.utcnow(),
+                    )
+                )).scalars().all()
+ 
+                for campaign in due:
+                    campaign.status = "sending"
+                    campaign.started_at = datetime.utcnow()
+                    await db.commit()
+                    asyncio.create_task(_send_campaign_emails(campaign.id))
+                    logger.info(f"Campaign scheduler triggered campaign {campaign.id}")
+        except Exception as e:
+            logger.error(f"Campaign scheduler error: {e}")
+            
 asyncio.create_task(_scheduled_message_worker())
+
+asyncio.create_task(_campaign_scheduler_worker())

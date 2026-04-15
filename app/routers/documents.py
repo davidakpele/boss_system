@@ -17,7 +17,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["knowledge"])
 templates = Jinja2Templates(directory="app/templates")
 
-
 async def _post_approve_background(doc_id: int, content: str, department: str):
     """Run after document approval: generate embeddings and detect risks."""
     from app.database import AsyncSessionLocal
@@ -220,3 +219,86 @@ async def reject_document(
         doc.status = DocStatus.rejected
         await db.commit()
     return JSONResponse({"status": "rejected"})
+
+
+@router.get("/knowledge-base/add", response_class=HTMLResponse)
+async def knowledge_add_form(
+    request: Request,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    return templates.TemplateResponse(
+        request=request,
+        name="knowledge/add.html",
+        context={"user": current_user, "page": "knowledge_base"},
+    )
+ 
+ 
+@router.post("/knowledge-base/add")
+async def knowledge_add_submit(
+    background_tasks: BackgroundTasks,
+    title: str = Form(...),
+    category: str = Form(...),          # e.g. Company Profile, Products, Policies, FAQs
+    department: str = Form("General"),
+    content: str = Form(...),
+    tags: str = Form(""),               # comma-separated
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from app.models import KnowledgeChunk
+ 
+    content = content.strip()
+    if not content:
+        return JSONResponse({"error": "Content is required"}, status_code=400)
+ 
+    # Split into chunks if large
+    chunks = chunk_text(content, chunk_size=400, overlap=50) if len(content) > 400 else [content]
+ 
+    chunk_ids = []
+    for ct in chunks[:30]:
+        summary = await ai_service.summarize_text(ct)
+        kc = KnowledgeChunk(
+            source_type = "manual",
+            content     = ct,
+            summary     = summary,
+            department  = department,
+            # store category and title in summary prefix for retrieval context
+        )
+        db.add(kc)
+        await db.flush()
+        chunk_ids.append(kc.id)
+ 
+    await db.commit()
+ 
+    # Background: generate embeddings for all chunks
+    background_tasks.add_task(_embed_knowledge_chunks, chunk_ids)
+ 
+    db.add(AuditLog(
+        user_id       = current_user.id,
+        action        = "add_knowledge",
+        resource_type = "knowledge_chunk",
+        resource_id   = chunk_ids[0] if chunk_ids else None,
+        details       = {"title": title, "category": category, "chunks": len(chunk_ids)},
+    ))
+    await db.commit()
+ 
+    return JSONResponse({
+        "status":  "added",
+        "chunks":  len(chunk_ids),
+        "message": f"Added {len(chunk_ids)} knowledge chunk(s) from '{title}'",
+    })
+ 
+ 
+async def _embed_knowledge_chunks(chunk_ids: list[int]):
+    """Background: generate embeddings for newly added knowledge chunks."""
+    from app.database import AsyncSessionLocal
+    async with AsyncSessionLocal() as db:
+        for cid in chunk_ids:
+            chunk = (await db.execute(
+                select(KnowledgeChunk).where(KnowledgeChunk.id == cid)
+            )).scalar_one_or_none()
+            if chunk and not chunk.embedding:
+                emb = await ai_service.embed_and_store_chunk(chunk.content)
+                if emb:
+                    chunk.embedding = emb
+        await db.commit()

@@ -1,0 +1,521 @@
+{% extends "base.html" %}
+{% block title %}Email Campaigns — BOSS{% endblock %}
+{% block page_title %}Email Campaigns{% endblock %}
+{% block page_sub %}AI-powered email generation and delivery{% endblock %}
+
+{% block extra_css %}
+.campaign-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:14px; }
+.campaign-card { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:18px 20px; transition:border-color .15s; }
+.campaign-card:hover { border-color:var(--border2); }
+.status-pill { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:20px; font-size:11px; font-weight:700; font-family:var(--font-mono); }
+.sp-draft     { background:var(--bg3); color:var(--text2); }
+.sp-scheduled { background:var(--blue-bg); color:var(--blue); }
+.sp-sending   { background:var(--yellow-bg); color:var(--yellow); }
+.sp-sent      { background:var(--green-bg); color:var(--green); }
+.sp-failed    { background:var(--red-bg); color:var(--red); }
+
+.stat-bar { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px; }
+.stat-b { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; text-align:center; }
+.stat-b-val { font-family:var(--font-mono); font-weight:700; font-size:26px; margin:4px 0; }
+.stat-b-lbl { font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--text3); font-weight:600; }
+{% endblock %}
+
+{% block content %}
+
+{% if not smtp_enabled %}
+<div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);border-radius:var(--radius);padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+  <i class="fa-solid fa-triangle-exclamation" style="color:var(--yellow);font-size:18px;"></i>
+  <div>
+    <div style="font-weight:600;font-size:13.5px;">SMTP not configured — emails won't send</div>
+    <div style="font-size:12px;color:var(--text3);margin-top:2px;">Add <code>SMTP_HOST</code>, <code>SMTP_USER</code>, <code>SMTP_PASSWORD</code> to your <code>.env</code> file to enable email delivery. You can still generate and preview emails.</div>
+  </div>
+  <a href="/settings" class="btn btn-ghost btn-sm" style="flex-shrink:0;margin-left:auto;">Configure</a>
+</div>
+{% endif %}
+
+<!-- Stats -->
+<div class="stat-bar">
+  <div class="stat-b">
+    <div class="stat-b-lbl">Total Contacts</div>
+    <div class="stat-b-val" style="color:var(--blue);">{{ total_contacts }}</div>
+  </div>
+  <div class="stat-b">
+    <div class="stat-b-lbl">Campaigns</div>
+    <div class="stat-b-val" style="color:var(--text);">{{ campaigns|length }}</div>
+  </div>
+  <div class="stat-b">
+    <div class="stat-b-lbl">Total Sent</div>
+    <div class="stat-b-val" style="color:var(--green);">{{ total_sent or 0 }}</div>
+  </div>
+</div>
+
+<!-- Actions -->
+<div class="flex justify-between items-center mb-4">
+  <div style="font-size:13.5px;color:var(--text2);">
+    AI generates emails from your knowledge base, then sends to selected contacts.
+  </div>
+  <div style="display:flex;gap:8px;">
+    <a href="/email-campaigns/contacts" class="btn btn-ghost btn-sm">
+      <i class="fa-solid fa-address-book"></i> Manage Contacts
+    </a>
+    <button class="btn btn-primary" onclick="openModal('generateModal')">
+      <i class="fa-solid fa-wand-magic-sparkles"></i> Generate Email
+    </button>
+  </div>
+</div>
+
+<!-- Campaign list -->
+{% if campaigns %}
+<div class="campaign-grid">
+  {% for c in campaigns %}
+  <div class="campaign-card">
+    <div class="flex items-center justify-between mb-2">
+      <span class="status-pill sp-{{ c.status }}">
+        <i class="fa-solid fa-circle" style="font-size:6px;"></i>
+        {{ c.status.title() }}
+      </span>
+      <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">
+        {{ c.created_at.strftime('%b %d, %Y') if c.created_at else '' }}
+      </span>
+    </div>
+    <div style="font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</div>
+    <div style="font-size:12.5px;color:var(--text3);margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.subject }}</div>
+    <div style="display:flex;gap:16px;font-size:12px;color:var(--text3);margin-bottom:14px;font-family:var(--font-mono);">
+      <span><i class="fa-solid fa-users" style="margin-right:4px;"></i>{{ c.total_recipients }} recipients</span>
+      {% if c.sent_count %}<span style="color:var(--green);"><i class="fa-solid fa-check" style="margin-right:4px;"></i>{{ c.sent_count }} sent</span>{% endif %}
+      {% if c.failed_count %}<span style="color:var(--red);"><i class="fa-solid fa-xmark" style="margin-right:4px;"></i>{{ c.failed_count }} failed</span>{% endif %}
+    </div>
+    <div class="flex gap-2">
+      <button class="btn btn-ghost btn-xs" onclick="previewCampaign({{ c.id }})">
+        <i class="fa-solid fa-eye"></i> Preview
+      </button>
+      {% if c.status == 'draft' %}
+      <button class="btn btn-primary btn-xs" onclick="sendCampaign({{ c.id }}, this)">
+        <i class="fa-solid fa-paper-plane"></i> Send Now
+      </button>
+      <button class="btn btn-ghost btn-xs" onclick="openSchedule({{ c.id }})">
+        <i class="fa-solid fa-clock"></i> Schedule
+      </button>
+      {% elif c.status == 'scheduled' %}
+      <button class="btn btn-danger btn-xs" onclick="cancelCampaign({{ c.id }}, this)">
+        <i class="fa-solid fa-xmark"></i> Cancel
+      </button>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:60px 20px;color:var(--text3);">
+  <i class="fa-solid fa-paper-plane" style="font-size:40px;opacity:.15;display:block;margin-bottom:12px;"></i>
+  <div style="font-size:15px;font-weight:600;color:var(--text2);">No campaigns yet</div>
+  <div style="font-size:13px;margin-top:4px;margin-bottom:20px;">Generate your first AI email and send it to your contacts.</div>
+  <button class="btn btn-primary" onclick="openModal('generateModal')">
+    <i class="fa-solid fa-wand-magic-sparkles"></i> Generate First Email
+  </button>
+</div>
+{% endif %}
+
+
+<!-- ── GENERATE EMAIL MODAL ─────────────────────────────────────────────── -->
+<div class="modal-overlay" id="generateModal">
+  <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--accent);"></i> Generate AI Email</span>
+      <span class="modal-close" onclick="closeModal('generateModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+
+    <!-- Step 1: Setup -->
+    <div id="step1">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Campaign Name *</label>
+          <input type="text" id="gen-name" class="form-control" placeholder="e.g. ProQuest Librarian Outreach" style="padding-left:12px;"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Tone</label>
+          <select id="gen-tone" class="form-control" style="padding-left:12px;">
+            <option value="professional">Professional</option>
+            <option value="persuasive">Persuasive</option>
+            <option value="formal">Formal</option>
+            <option value="friendly">Friendly</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Sender Name</label>
+          <input type="text" id="gen-sender-name" class="form-control" placeholder="e.g. Safari Books Limited" style="padding-left:12px;"/>
+        </div>
+        <div class="form-group" style="margin:0;">
+          <label class="form-label">Sender Email</label>
+          <input type="email" id="gen-sender-email" class="form-control" placeholder="e.g. info@safaribooksng.com" style="padding-left:12px;"/>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Sender Phone</label>
+        <input type="text" id="gen-sender-phone" class="form-control" placeholder="e.g. 07060603020" style="padding-left:12px;"/>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Target Audience</label>
+        <input type="text" id="gen-audience" class="form-control" placeholder="e.g. Librarians at Nigerian universities and polytechnics" style="padding-left:12px;"/>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Email Purpose / Prompt *</label>
+        <textarea id="gen-prompt" class="form-control" rows="4" style="padding:12px;"
+          placeholder="Describe what this email should communicate. Be specific.
+
+Example: Write a marketing email to academic librarians introducing ProQuest database and our company Safari Books Limited as the authorised agent. Highlight the value for Nigerian universities and include a call to action to contact us for a demo."></textarea>
+      </div>
+
+      <button class="btn btn-primary" onclick="generateEmail()" id="genBtn" style="width:100%;justify-content:center;">
+        <i class="fa-solid fa-brain"></i> Generate Email with AI
+      </button>
+    </div>
+
+    <!-- Step 2: Preview + edit generated email -->
+    <div id="step2" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div style="font-weight:700;font-size:14px;">✉️ Generated Email</div>
+        <button class="btn btn-ghost btn-xs" onclick="goBackToStep1()"><i class="fa-solid fa-arrow-left"></i> Regenerate</button>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Subject Line</label>
+        <input type="text" id="gen-subject" class="form-control" style="padding-left:12px;font-weight:600;"/>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Email Body <span style="font-weight:400;color:var(--text3);">(edit freely)</span></label>
+        <textarea id="gen-body-text" class="form-control" rows="12" style="padding:14px;font-size:13px;line-height:1.75;"></textarea>
+      </div>
+
+      <!-- Knowledge base info -->
+      <div id="kbInfo" style="font-size:12px;color:var(--text3);margin-bottom:14px;display:none;">
+        <i class="fa-solid fa-brain" style="color:var(--accent);margin-right:4px;"></i>
+        <span id="kbInfoText"></span>
+      </div>
+
+      <!-- Recipient selector -->
+      <div class="form-group">
+        <div class="flex items-center justify-between mb-2">
+          <label class="form-label" style="margin:0;">Select Recipients *</label>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-ghost btn-xs" onclick="selectAllContacts()">Select All</button>
+            <button type="button" class="btn btn-ghost btn-xs" onclick="clearContactSelection()">Clear</button>
+          </div>
+        </div>
+        <div style="position:relative;margin-bottom:8px;">
+          <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px;"></i>
+          <input type="text" id="contactSearch" class="form-control" placeholder="Search contacts…"
+                 style="padding-left:30px;" oninput="filterContactList(this.value)"/>
+        </div>
+        <div id="contactList" style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius);"></div>
+        <div style="font-size:11.5px;color:var(--text3);margin-top:6px;" id="selectedCount">0 contacts selected</div>
+      </div>
+
+      <!-- Also add manual emails -->
+      <div class="form-group">
+        <label class="form-label">Add Extra Emails <span style="font-weight:400;color:var(--text3);">(comma-separated)</span></label>
+        <input type="text" id="gen-extra-emails" class="form-control" placeholder="extra1@email.com, extra2@email.com" style="padding-left:12px;"/>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:4px;">
+        <button class="btn btn-ghost" onclick="saveCampaignDraft()" style="flex:1;justify-content:center;">
+          <i class="fa-solid fa-floppy-disk"></i> Save Draft
+        </button>
+        <button class="btn btn-primary" onclick="sendOrSchedule('now')" style="flex:1;justify-content:center;">
+          <i class="fa-solid fa-paper-plane"></i> Send Now
+        </button>
+        <button class="btn btn-ghost" onclick="openScheduleFromModal()" style="flex-shrink:0;">
+          <i class="fa-solid fa-clock"></i> Schedule
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCHEDULE MODAL ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="scheduleModal">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-clock" style="color:var(--accent);"></i> Schedule Campaign</span>
+      <span class="modal-close" onclick="closeModal('scheduleModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Send At</label>
+      <input type="datetime-local" id="scheduleAt" class="form-control" style="padding-left:12px;"/>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:14px;">
+      A background job will send the emails at this exact time. Make sure SMTP is configured.
+    </div>
+    <div class="flex gap-2 justify-between">
+      <button class="btn btn-ghost" onclick="closeModal('scheduleModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmSchedule()"><i class="fa-solid fa-clock"></i> Schedule</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── PREVIEW MODAL ───────────────────────────────────────────────────── -->
+<div class="modal-overlay" id="previewModal">
+  <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
+    <div class="modal-title">
+      <span>📧 Campaign Preview</span>
+      <span class="modal-close" onclick="closeModal('previewModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div id="previewContent" style="font-size:13.5px;line-height:1.75;color:var(--text2);"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allContacts = [];
+let selectedContactIds = new Set();
+let currentCampaignId = null;
+let schedulingCampaignId = null;
+
+// Load contacts when modal opens
+document.getElementById('generateModal').addEventListener('click', () => {});
+
+async function generateEmail() {
+  const name    = document.getElementById('gen-name').value.trim();
+  const prompt  = document.getElementById('gen-prompt').value.trim();
+  if (!name)   { toast('Campaign name required', 'error'); return; }
+  if (!prompt) { toast('Email purpose/prompt required', 'error'); return; }
+
+  const btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> AI is writing…';
+
+  try {
+    const r = await fetch('/email-campaigns/generate', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        campaign_name: name,
+        prompt:        prompt,
+        tone:          document.getElementById('gen-tone').value,
+        audience:      document.getElementById('gen-audience').value,
+        sender_name:   document.getElementById('gen-sender-name').value,
+        sender_email:  document.getElementById('gen-sender-email').value,
+        sender_phone:  document.getElementById('gen-sender-phone').value,
+      }),
+    });
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'AI error', 'error'); return; }
+
+    document.getElementById('gen-subject').value   = d.subject;
+    document.getElementById('gen-body-text').value = d.text_body;
+
+    const kbInfo = document.getElementById('kbInfo');
+    const kbText = document.getElementById('kbInfoText');
+    if (d.context_used) {
+      kbText.textContent = `Generated using ${d.knowledge_chunks} knowledge base chunk(s). The AI drew on your company knowledge to write this email.`;
+      kbInfo.style.display = 'block';
+    }
+
+    // Load contacts
+    await loadContacts();
+
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+
+  } catch(e) {
+    toast('Network error', 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-brain"></i> Generate Email with AI';
+  }
+}
+
+async function loadContacts() {
+  const r = await fetch('/email-campaigns/contacts/list');
+  allContacts = await r.json();
+  renderContactList(allContacts);
+}
+
+function renderContactList(contacts) {
+  const list = document.getElementById('contactList');
+  if (!contacts.length) {
+    list.innerHTML = `<div style="padding:20px;text-align:center;color:var(--text3);font-size:12.5px;">
+      No contacts yet. <a href="/email-campaigns/contacts" style="color:var(--accent);">Add contacts</a> first.
+    </div>`;
+    return;
+  }
+  list.innerHTML = contacts.map(c => `
+    <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s;" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background=''">
+      <input type="checkbox" value="${c.id}" ${selectedContactIds.has(c.id) ? 'checked' : ''}
+             onchange="toggleContact(${c.id}, this.checked)" style="width:15px;height:15px;accent-color:var(--accent);"/>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:13px;font-weight:600;">${escHtml(c.name || c.email)}</div>
+        <div style="font-size:11px;color:var(--text3);">${escHtml(c.email)}${c.institution ? ' · ' + escHtml(c.institution) : ''}</div>
+      </div>
+    </label>`).join('');
+  updateSelectedCount();
+}
+
+function toggleContact(id, checked) {
+  if (checked) selectedContactIds.add(id);
+  else selectedContactIds.delete(id);
+  updateSelectedCount();
+}
+
+function selectAllContacts() {
+  allContacts.forEach(c => selectedContactIds.add(c.id));
+  renderContactList(allContacts);
+}
+
+function clearContactSelection() {
+  selectedContactIds.clear();
+  renderContactList(allContacts);
+}
+
+function filterContactList(q) {
+  q = q.toLowerCase();
+  const filtered = allContacts.filter(c =>
+    (c.name||'').toLowerCase().includes(q) ||
+    (c.email||'').toLowerCase().includes(q) ||
+    (c.institution||'').toLowerCase().includes(q)
+  );
+  renderContactList(filtered);
+}
+
+function updateSelectedCount() {
+  const el = document.getElementById('selectedCount');
+  const n = selectedContactIds.size;
+  el.textContent = `${n} contact${n !== 1 ? 's' : ''} selected`;
+  el.style.color = n > 0 ? 'var(--green)' : 'var(--text3)';
+}
+
+function goBackToStep1() {
+  document.getElementById('step1').style.display = 'block';
+  document.getElementById('step2').style.display = 'none';
+}
+
+async function saveCampaignDraft(scheduleAt = null) {
+  const extraEmails = document.getElementById('gen-extra-emails').value
+    .split(',').map(e => e.trim()).filter(e => e && e.includes('@'));
+
+  const bodyText = document.getElementById('gen-body-text').value;
+  // Convert line breaks to HTML
+  let htmlBody = bodyText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
+  htmlBody = `<p>${htmlBody}</p>`;
+  htmlBody = htmlBody.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+
+  const r = await fetch('/email-campaigns/save', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      campaign_name:    document.getElementById('gen-name').value,
+      subject:          document.getElementById('gen-subject').value,
+      text_body:        bodyText,
+      html_body:        htmlBody,
+      prompt:           document.getElementById('gen-prompt').value,
+      recipient_ids:    [...selectedContactIds],
+      recipient_emails: extraEmails,
+    }),
+  });
+  const d = await r.json();
+  if (r.ok) {
+    currentCampaignId = d.campaign_id;
+    return d;
+  }
+  throw new Error(d.error || 'Save failed');
+}
+
+async function sendOrSchedule(mode) {
+  if (selectedContactIds.size === 0 && !document.getElementById('gen-extra-emails').value.trim()) {
+    toast('Select at least one recipient', 'error'); return;
+  }
+  try {
+    const d = await saveCampaignDraft();
+    currentCampaignId = d.campaign_id;
+    if (mode === 'now') {
+      await sendCampaign(currentCampaignId, null);
+      closeModal('generateModal');
+      setTimeout(() => location.reload(), 800);
+    }
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+function openScheduleFromModal() {
+  const dt = new Date(Date.now() + 3600000);
+  document.getElementById('scheduleAt').value = dt.toISOString().slice(0, 16);
+  openModal('scheduleModal');
+}
+
+function openSchedule(id) {
+  schedulingCampaignId = id;
+  const dt = new Date(Date.now() + 3600000);
+  document.getElementById('scheduleAt').value = dt.toISOString().slice(0, 16);
+  openModal('scheduleModal');
+}
+
+async function confirmSchedule() {
+  const at  = document.getElementById('scheduleAt').value;
+  const cid = schedulingCampaignId || currentCampaignId;
+  if (!cid) {
+    // Need to save first
+    try { const d = await saveCampaignDraft(); currentCampaignId = d.campaign_id; schedulingCampaignId = d.campaign_id; }
+    catch(e) { toast(e.message, 'error'); return; }
+  }
+  const r = await fetch(`/email-campaigns/${schedulingCampaignId || currentCampaignId}/schedule`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ scheduled_at: new Date(at).toISOString() }),
+  });
+  const d = await r.json();
+  if (r.ok) {
+    toast('Campaign scheduled ✓', 'success');
+    closeModal('scheduleModal'); closeModal('generateModal');
+    setTimeout(() => location.reload(), 700);
+  } else {
+    toast(d.error || 'Error', 'error');
+  }
+}
+
+async function sendCampaign(id, btn) {
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; }
+  const r = await fetch(`/email-campaigns/${id}/send`, { method: 'POST' });
+  const d = await r.json();
+  if (r.ok) {
+    toast('Sending started! Emails are being delivered.', 'success');
+    setTimeout(() => location.reload(), 1000);
+  } else {
+    toast(d.error || 'Send failed', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send Now'; }
+  }
+}
+
+async function cancelCampaign(id, btn) {
+  if (!confirm('Cancel this scheduled campaign?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/email-campaigns/${id}/cancel`, { method: 'POST' });
+  if (r.ok) { toast('Cancelled', 'info'); setTimeout(() => location.reload(), 500); }
+  else { btn.disabled = false; }
+}
+
+async function previewCampaign(id) {
+  const r = await fetch(`/email-campaigns/${id}/detail`);
+  const d = await r.json();
+  document.getElementById('previewContent').innerHTML = `
+    <div style="margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:4px;">Subject</div>
+      <div style="font-size:15px;font-weight:700;">${escHtml(d.subject)}</div>
+    </div>
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);margin-bottom:8px;">Email Body</div>
+    <div style="background:var(--bg2);border-radius:8px;padding:20px;line-height:1.8;">${d.html_body}</div>
+    <div style="margin-top:14px;font-size:12px;color:var(--text3);">${d.total} recipient(s) · ${d.sent_count} sent · ${d.failed_count} failed</div>`;
+  openModal('previewModal');
+}
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}

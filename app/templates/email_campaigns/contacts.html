@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}Email Contacts — BOSS{% endblock %}
+{% block page_title %}Email Contacts{% endblock %}
+{% block page_sub %}Manage your campaign recipient list{% endblock %}
+
+{% block content %}
+<div class="flex justify-between items-center mb-6">
+  <div style="font-size:13px;color:var(--text2);" id="contactCount">{{ contacts|length }} contact{{ 's' if contacts|length != 1 else '' }}</div>
+  <div style="display:flex;gap:8px;">
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('csvImport').click()">
+      <i class="fa-solid fa-file-arrow-up"></i> Import File
+    </button>
+    <input type="file" id="csvImport" accept=".csv,.txt,.pdf,.docx" style="display:none" onchange="importCSV(this)"/>
+    <button class="btn btn-primary btn-sm" onclick="openModal('addContactModal')">
+      <i class="fa-solid fa-plus"></i> Add Contact
+    </button>
+  </div>
+</div>
+
+<!-- Info hint -->
+<div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text3);">
+  <i class="fa-solid fa-info-circle" style="color:var(--blue);margin-right:6px;"></i>
+  Upload any <strong>CSV, TXT, PDF, or DOCX</strong> file — all email addresses will be extracted and saved automatically.
+</div>
+
+<!-- Search + page size controls -->
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+  <div style="position:relative;flex:1;max-width:340px;">
+    <i class="fa-solid fa-magnifying-glass" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:12px;"></i>
+    <input type="text" id="searchInput" class="form-control" placeholder="Search name, email, institution…"
+      style="padding-left:30px;height:34px;font-size:13px;" oninput="onSearch()"/>
+  </div>
+  <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text2);margin-left:auto;">
+    <span>Show</span>
+    <select id="pageSizeSelect" class="form-control" style="width:70px;height:34px;padding:0 8px;font-size:13px;" onchange="onPageSizeChange()">
+      <option value="10">10</option>
+      <option value="25" selected>25</option>
+      <option value="50">50</option>
+      <option value="100">100</option>
+    </select>
+    <span>entries</span>
+  </div>
+</div>
+
+<!-- Contacts table -->
+<div class="card" style="padding:0;overflow:hidden;">
+  <table class="table">
+    <thead>
+      <tr>
+        <th style="width:32px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll(this)" style="cursor:pointer;"/></th>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Title / Role</th>
+        <th>Institution</th>
+        <th>Department</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody id="contactsBody"></tbody>
+  </table>
+</div>
+
+<!-- Pagination + summary -->
+<div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;flex-wrap:wrap;gap:10px;">
+  <div style="font-size:12.5px;color:var(--text3);" id="pageInfo"></div>
+  <div style="display:flex;gap:6px;align-items:center;" id="paginationControls"></div>
+</div>
+
+<!-- Bulk delete bar (appears when contacts selected) -->
+<div id="bulkBar" style="display:none;position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
+  padding:10px 20px;box-shadow:var(--shadow);display:none;align-items:center;gap:12px;z-index:300;">
+  <span id="bulkCount" style="font-size:13px;color:var(--text2);"></span>
+  <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none;" onclick="bulkDelete()">
+    <i class="fa-solid fa-trash"></i> Delete Selected
+  </button>
+  <button class="btn btn-ghost btn-sm" onclick="clearSelection()">Cancel</button>
+</div>
+
+<!-- Add Contact Modal -->
+<div class="modal-overlay" id="addContactModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-user-plus" style="color:var(--accent);"></i> Add Contact</span>
+      <span class="modal-close" onclick="closeModal('addContactModal')"><i class="fa-solid fa-xmark"></i></span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group" style="margin:0;"><label class="form-label">Full Name</label><input type="text" id="ac-name" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Email *</label><input type="email" id="ac-email" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Title / Role</label><input type="text" id="ac-title" class="form-control" placeholder="e.g. Head Librarian" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Department</label><input type="text" id="ac-dept" class="form-control" placeholder="e.g. Library" style="padding-left:12px;"/></div>
+    </div>
+    <div class="form-group mt-2"><label class="form-label">Institution / Organisation</label><input type="text" id="ac-inst" class="form-control" placeholder="e.g. University of Lagos" style="padding-left:12px;"/></div>
+    <div class="form-group"><label class="form-label">Notes</label><textarea id="ac-notes" class="form-control" rows="2" style="padding:10px;" placeholder="Any notes about this contact…"></textarea></div>
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('addContactModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="addContact()"><i class="fa-solid fa-plus"></i> Add Contact</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ── Raw data from server ──
+const ALL_CONTACTS = [
+  {% for c in contacts %}
+  {
+    id:          {{ c.id }},
+    name:        {{ (c.name or '')|tojson }},
+    email:       {{ c.email|tojson }},
+    title:       {{ (c.title or '')|tojson }},
+    institution: {{ (c.institution or '')|tojson }},
+    department:  {{ (c.department or '')|tojson }},
+  },
+  {% endfor %}
+];
+
+let filtered   = [...ALL_CONTACTS];
+let currentPage = 1;
+let pageSize    = 25;
+let selected    = new Set();
+
+// ── Search ──
+function onSearch() {
+  const q = document.getElementById('searchInput').value.toLowerCase().trim();
+  filtered = q
+    ? ALL_CONTACTS.filter(c =>
+        c.name.toLowerCase().includes(q) ||
+        c.email.toLowerCase().includes(q) ||
+        c.institution.toLowerCase().includes(q) ||
+        c.department.toLowerCase().includes(q)
+      )
+    : [...ALL_CONTACTS];
+  currentPage = 1;
+  selected.clear();
+  render();
+}
+
+function onPageSizeChange() {
+  pageSize = parseInt(document.getElementById('pageSizeSelect').value);
+  currentPage = 1;
+  render();
+}
+
+// ── Render table ──
+function render() {
+  const total      = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  currentPage      = Math.min(currentPage, totalPages);
+
+  const start = (currentPage - 1) * pageSize;
+  const slice = filtered.slice(start, start + pageSize);
+
+  const tbody = document.getElementById('contactsBody');
+
+  if (slice.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">
+      No contacts found.</td></tr>`;
+  } else {
+    tbody.innerHTML = slice.map(c => `
+      <tr id="row-${c.id}" class="${selected.has(c.id) ? 'selected-row' : ''}">
+        <td><input type="checkbox" class="row-check" data-id="${c.id}"
+          ${selected.has(c.id) ? 'checked' : ''}
+          onchange="toggleRow(${c.id}, this)" style="cursor:pointer;"/></td>
+        <td style="font-weight:600;">${c.name || '—'}</td>
+        <td style="font-family:var(--font-mono);font-size:12px;">${c.email}</td>
+        <td style="color:var(--text3);">${c.title || '—'}</td>
+        <td style="color:var(--text2);">${c.institution || '—'}</td>
+        <td>${c.department ? `<span class="badge badge-blue">${c.department}</span>` : '—'}</td>
+        <td>
+          <button class="btn btn-ghost btn-xs" style="color:var(--red);"
+            onclick="removeContact(${c.id}, this)">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </td>
+      </tr>`).join('');
+  }
+
+  // Page info
+  const from = total === 0 ? 0 : start + 1;
+  const to   = Math.min(start + pageSize, total);
+  document.getElementById('pageInfo').textContent =
+    `Showing ${from}–${to} of ${total} contact${total !== 1 ? 's' : ''}`;
+  document.getElementById('contactCount').textContent =
+    `${ALL_CONTACTS.length} contact${ALL_CONTACTS.length !== 1 ? 's' : ''}`;
+
+  // Pagination buttons
+  renderPagination(totalPages);
+
+  // Select all checkbox state
+  const allChecked = slice.length > 0 && slice.every(c => selected.has(c.id));
+  document.getElementById('selectAll').checked = allChecked;
+  document.getElementById('selectAll').indeterminate = !allChecked && slice.some(c => selected.has(c.id));
+
+  updateBulkBar();
+}
+
+function renderPagination(totalPages) {
+  const ctrl = document.getElementById('paginationControls');
+  if (totalPages <= 1) { ctrl.innerHTML = ''; return; }
+
+  let pages = [];
+  // always show first, last, current ±1
+  const show = new Set([1, totalPages, currentPage, currentPage - 1, currentPage + 1]
+    .filter(p => p >= 1 && p <= totalPages));
+  const sorted = [...show].sort((a, b) => a - b);
+
+  let html = `<button class="btn btn-ghost btn-xs" ${currentPage === 1 ? 'disabled' : ''}
+    onclick="goPage(${currentPage - 1})"><i class="fa-solid fa-chevron-left"></i></button>`;
+
+  let prev = null;
+  for (const p of sorted) {
+    if (prev && p - prev > 1) html += `<span style="color:var(--text3);padding:0 4px;">…</span>`;
+    html += `<button class="btn btn-xs ${p === currentPage ? 'btn-primary' : 'btn-ghost'}"
+      onclick="goPage(${p})">${p}</button>`;
+    prev = p;
+  }
+
+  html += `<button class="btn btn-ghost btn-xs" ${currentPage === totalPages ? 'disabled' : ''}
+    onclick="goPage(${currentPage + 1})"><i class="fa-solid fa-chevron-right"></i></button>`;
+
+  ctrl.innerHTML = html;
+}
+
+function goPage(p) { currentPage = p; render(); }
+
+// ── Selection ──
+function toggleRow(id, cb) {
+  if (cb.checked) selected.add(id); else selected.delete(id);
+  const row = document.getElementById('row-' + id);
+  if (row) row.classList.toggle('selected-row', cb.checked);
+  updateBulkBar();
+  const slice = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const allChecked = slice.every(c => selected.has(c.id));
+  document.getElementById('selectAll').checked = allChecked;
+  document.getElementById('selectAll').indeterminate = !allChecked && slice.some(c => selected.has(c.id));
+}
+
+function toggleSelectAll(cb) {
+  const slice = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  slice.forEach(c => {
+    if (cb.checked) selected.add(c.id); else selected.delete(c.id);
+    const row = document.getElementById('row-' + c.id);
+    if (row) row.classList.toggle('selected-row', cb.checked);
+  });
+  updateBulkBar();
+  render();
+}
+
+function updateBulkBar() {
+  const bar = document.getElementById('bulkBar');
+  if (selected.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('bulkCount').textContent = `${selected.size} selected`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearSelection() { selected.clear(); render(); }
+
+async function bulkDelete() {
+  if (!confirm(`Delete ${selected.size} contact(s)? This cannot be undone.`)) return;
+  const ids = [...selected];
+  await Promise.all(ids.map(id => fetch(`/email-campaigns/contacts/${id}`, { method: 'DELETE' })));
+  ids.forEach(id => {
+    const idx = ALL_CONTACTS.findIndex(c => c.id === id);
+    if (idx !== -1) ALL_CONTACTS.splice(idx, 1);
+    const fi = filtered.findIndex(c => c.id === id);
+    if (fi !== -1) filtered.splice(fi, 1);
+  });
+  selected.clear();
+  toast(`Deleted ${ids.length} contact(s)`, 'info');
+  render();
+}
+
+// ── Single delete ──
+async function removeContact(id, btn) {
+  if (!confirm('Remove this contact?')) return;
+  btn.disabled = true;
+  const r = await fetch(`/email-campaigns/contacts/${id}`, { method: 'DELETE' });
+  if (r.ok) {
+    [ALL_CONTACTS, filtered].forEach(arr => {
+      const i = arr.findIndex(c => c.id === id);
+      if (i !== -1) arr.splice(i, 1);
+    });
+    selected.delete(id);
+    toast('Removed', 'info');
+    render();
+  } else { btn.disabled = false; toast('Error', 'error'); }
+}
+
+// ── Add contact ──
+async function addContact() {
+  const email = document.getElementById('ac-email').value.trim();
+  if (!email) { toast('Email address is required', 'error'); return; }
+  const r = await fetch('/email-campaigns/contacts/add', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      name:        document.getElementById('ac-name').value.trim(),
+      email,
+      title:       document.getElementById('ac-title').value.trim(),
+      department:  document.getElementById('ac-dept').value.trim(),
+      institution: document.getElementById('ac-inst').value.trim(),
+      notes:       document.getElementById('ac-notes').value.trim(),
+    }),
+  });
+  const d = await r.json();
+  if (r.ok) {
+    toast('Contact added!', 'success');
+    closeModal('addContactModal');
+    setTimeout(() => location.reload(), 500);
+  } else toast(d.error || 'Error', 'error');
+}
+
+// ── Import file ──
+async function importCSV(input) {
+  const file = input.files[0]; if (!file) return;
+  const fd = new FormData(); fd.append('file', file);
+  toast('Importing…', 'info');
+  const r = await fetch('/email-campaigns/contacts/import', { method: 'POST', body: fd });
+  const d = await r.json();
+  if (r.ok) {
+    toast(`Found ${d.found} emails — saved ${d.created}, skipped ${d.skipped} duplicates`, 'success');
+    setTimeout(() => location.reload(), 800);
+  } else toast(d.error || 'Import failed', 'error');
+  input.value = '';
+}
+
+// ── Highlight selected rows ──
+const style = document.createElement('style');
+style.textContent = `.selected-row { background: var(--bg2) !important; }`;
+document.head.appendChild(style);
+
+// ── Init ──
+render();
+</script>
+{% endblock %}
