@@ -39,11 +39,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/email-campaigns", tags=["email_campaigns"])
 templates = Jinja2Templates(directory="app/templates")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  DASHBOARD
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.get("", response_class=HTMLResponse)
 async def campaigns_dashboard(
     request: Request,
@@ -77,11 +72,6 @@ async def campaigns_dashboard(
             "smtp_enabled": settings.smtp_enabled,
         },
     )
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  CONTACTS
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.get("/contacts", response_class=HTMLResponse)
 async def contacts_page(
@@ -144,14 +134,12 @@ async def import_contacts_csv(
     current_user: User = Depends(require_user),
 ):
     import re
-    import fitz  # pymupdf
+    import fitz 
     from docx import Document as DocxDocument
 
     content = await file.read()
     filename = (file.filename or "").lower()
     text = ""
-
-    # ── Extract raw text based on file type ──
     if filename.endswith(".pdf"):
         try:
             pdf = fitz.open(stream=content, filetype="pdf")
@@ -164,7 +152,6 @@ async def import_contacts_csv(
             from io import BytesIO
             doc = DocxDocument(BytesIO(content))
             text = "\n".join(p.text for p in doc.paragraphs)
-            # also grab text from tables
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
@@ -180,9 +167,7 @@ async def import_contacts_csv(
             {"error": "Unsupported file type. Please upload CSV, TXT, PDF, or DOCX."},
             status_code=400,
         )
-
-    # ── Extract all emails via regex ──
-    emails_found = list(dict.fromkeys(  # deduplicate, preserve order
+    emails_found = list(dict.fromkeys( 
         m.lower() for m in re.findall(
             r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
             text
@@ -203,7 +188,7 @@ async def import_contacts_csv(
             skipped += 1
             continue
         db.add(EmailContact(
-            name       = email.split("@")[0],  # fallback name
+            name       = email.split("@")[0], 
             email      = email,
             created_by = current_user.id,
         ))
@@ -251,101 +236,105 @@ async def list_contacts_json(
         "tags":        c.tags or [],
     } for c in contacts])
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  AI EMAIL GENERATION
-# ══════════════════════════════════════════════════════════════════════════════
-
 @router.post("/generate")
 async def generate_email(
     request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    """
-    AI generates a professional email using:
-    - The user's prompt / purpose
-    - Company knowledge base (RAG)
-    - Tone, audience, and style preferences
-    """
+    import re as _re
+    import httpx
+ 
     body = await request.json()
-    prompt      = (body.get("prompt") or "").strip()
-    tone        = body.get("tone", "professional")       # professional|friendly|formal|persuasive
-    audience    = body.get("audience", "")               # e.g. "Librarians in Nigerian universities"
-    campaign_name = body.get("campaign_name", "")
+    prompt        = (body.get("prompt") or "").strip()
+    tone          = body.get("tone", "professional")
+    audience      = body.get("audience", "")
     sender_name   = body.get("sender_name", "")
     sender_email  = body.get("sender_email", "")
     sender_phone  = body.get("sender_phone", "")
-
+ 
     if not prompt:
         return JSONResponse({"error": "Prompt is required"}, status_code=400)
 
-    # RAG: pull relevant knowledge base context
     context_chunks = await ai_service.retrieve_context(prompt, db)
-    context_text   = "\n\n".join(
-        c.get("content", "")[:300] for c in context_chunks[:3]
-    ) if context_chunks else ""
+    context_text = "\n\n".join(
+        (c.get("content") or "")[:400] for c in (context_chunks or [])[:4]
+    )
 
-    # Build AI prompt
-    system_prompt = f"""You are a professional business email writer for a company.
-Your task is to write a complete, compelling email that represents the company well.
-
-RULES:
-- Write in a {tone} tone
-- The email must be factual, professional, and persuasive where appropriate
-- Use the company knowledge base context provided below as the source of truth
-- Do NOT invent facts — only use what is in the context
-- Format the email clearly: greeting, body paragraphs, call to action, sign-off
-- Return ONLY the email body text, no subject line, no JSON wrapper
-- Use **bold** for important terms (will render as HTML bold)
-- The sign-off should use the sender details provided
-
-COMPANY KNOWLEDGE BASE:
-{context_text if context_text else "No specific context available — write based on the prompt."}
-
-SENDER DETAILS:
-Name: {sender_name}
-Email: {sender_email}
-Phone: {sender_phone}
-"""
-
-    user_message = f"""Write a professional email with the following purpose:
-
+    sign_off = ""
+    if sender_name:
+        sign_off = f"\n\nWarm regards,\n{sender_name}"
+        if sender_phone:
+            sign_off += f"\n📞 {sender_phone}"
+        if sender_email:
+            sign_off += f"\n📧 {sender_email}"
+ 
+    context_section = f"\n\nCOMPANY INFORMATION (use this as factual basis):\n{context_text[:600]}" if context_text else ""
+ 
+    full_prompt = f"""Write a {tone} business email for the following purpose:
+ 
 PURPOSE: {prompt}
-TARGET AUDIENCE: {audience or "General business contacts"}
-TONE: {tone}
-
-Generate a complete email body ready to send."""
-
-    messages = [
-        {"role": "user", "content": f"{system_prompt}\n\n{user_message}"},
-    ]
-
+AUDIENCE: {audience or "business contacts"}
+{context_section}
+ 
+Write a complete, professional email. Start with "Dear" and end with a sign-off.
+Keep it clear, compelling, and under 400 words.
+Do NOT include a subject line — just the email body.{sign_off}"""
+    email_body = ""
     try:
-        email_body = await ai_service.chat_complete(messages)
-        logger.info(f"AI raw response length: {len(email_body) if email_body else 0}")
-        logger.info(f"AI raw response: {repr(email_body[:200]) if email_body else 'EMPTY'}")
-        email_body = email_body.strip()
+        ollama_url = f"{settings.OLLAMA_BASE_URL}/api/generate"
+        payload = {
+            "model":  settings.OLLAMA_MODEL,
+            "prompt": full_prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.7,
+                "num_predict": 600,
+                "stop": ["<|endoftext|>", "Subject:", "---"],
+            },
+        }
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(ollama_url, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                email_body = (data.get("response") or "").strip()
+                logger.info(f"Ollama /api/generate response length: {len(email_body)}")
+            else:
+                logger.error(f"Ollama error {resp.status_code}: {resp.text[:200]}")
     except Exception as e:
-        logger.error(f"AI email generation error: {e}", exc_info=True)
-        return JSONResponse({"error": "AI failed to generate email. Check Ollama."}, status_code=500)
-
+        logger.error(f"Ollama call failed: {e}", exc_info=True)
     if not email_body:
-        return JSONResponse({"error": "AI returned empty response"}, status_code=500)
-
-    subject_msgs = [
-        {"role": "system", "content": "You write concise, compelling email subject lines. Return ONLY the subject line, nothing else."},
-        {"role": "user",   "content": f"Write a subject line for this email purpose: {prompt}"},
-    ]
+        try:
+            msgs = [{"role": "user", "content": full_prompt}]
+            email_body = (await ai_service.chat_complete(msgs) or "").strip()
+            logger.info(f"chat_complete fallback length: {len(email_body)}")
+        except Exception as e:
+            logger.error(f"chat_complete fallback failed: {e}")
+ 
+    if not email_body:
+        return JSONResponse({
+            "error": "AI returned empty response. Check that Ollama is running and the model is loaded.",
+            "debug": f"Model: {settings.OLLAMA_MODEL}, URL: {settings.OLLAMA_BASE_URL}"
+        }, status_code=500)
+ 
+    subject = f"Message from {sender_name or 'Our Company'}"
     try:
-        subject = (await ai_service.chat_complete(subject_msgs)).strip().strip('"').strip("'")
+        subj_prompt = f"Write a short email subject line (max 10 words) for: {prompt}\nReturn only the subject line."
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.post(
+                f"{settings.OLLAMA_BASE_URL}/api/generate",
+                json={"model": settings.OLLAMA_MODEL, "prompt": subj_prompt, "stream": False,
+                      "options": {"num_predict": 30, "temperature": 0.5}},
+            )
+            if resp.status_code == 200:
+                subject = resp.json().get("response", "").strip().strip('"').strip("'")
+                subject = subject.split("\n")[0].strip()
     except Exception:
-        subject = f"Important Message from {sender_name or 'Our Company'}"
-    import re
-    html_body = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', email_body)
+        pass
+    html_body = _re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', email_body)
     html_body = html_body.replace('\n\n', '</p><p>').replace('\n', '<br>')
     html_body = f"<p>{html_body}</p>"
-
+ 
     return JSONResponse({
         "subject":          subject,
         "text_body":        email_body,
@@ -353,12 +342,7 @@ Generate a complete email body ready to send."""
         "context_used":     bool(context_text),
         "knowledge_chunks": len(context_chunks) if context_chunks else 0,
     })
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SAVE CAMPAIGN
-# ══════════════════════════════════════════════════════════════════════════════
-
+ 
 @router.post("/save")
 async def save_campaign(
     request: Request,
@@ -379,10 +363,8 @@ async def save_campaign(
     )
     db.add(campaign)
     await db.flush()
-
-    # Save recipients
     recipient_ids = body.get("recipient_ids", [])
-    recipient_emails = body.get("recipient_emails", [])  # manual emails
+    recipient_emails = body.get("recipient_emails", []) 
 
     count = 0
     for cid in recipient_ids:
@@ -398,7 +380,6 @@ async def save_campaign(
             ))
             count += 1
 
-    # Add any manually typed emails
     for em in recipient_emails:
         em = em.strip()
         if em and "@" in em:
@@ -413,11 +394,6 @@ async def save_campaign(
     await db.refresh(campaign)
 
     return JSONResponse({"status": "saved", "campaign_id": campaign.id, "recipients": count})
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SEND NOW
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/{campaign_id}/send")
 async def send_campaign(
@@ -446,7 +422,6 @@ async def send_campaign(
 
     return JSONResponse({"status": "sending", "campaign_id": campaign_id})
 
-
 async def _send_campaign_emails(campaign_id: int):
     """Background task: send emails to all campaign recipients."""
     async with AsyncSessionLocal() as db:
@@ -468,18 +443,16 @@ async def _send_campaign_emails(campaign_id: int):
         failed = 0
 
         for r in recipients:
-            # Personalise the email for each recipient
             personalised_html = campaign.html_body
             personalised_text = campaign.text_body or ""
 
-            if r.name:
-                # Replace generic greeting with personalised one
-                personalised_html = personalised_html.replace(
-                    "Dear Esteemed", f"Dear {r.name},"
-                ).replace("Dear Sir/Madam", f"Dear {r.name}")
-                personalised_text = personalised_text.replace(
-                    "Dear Esteemed", f"Dear {r.name},"
-                ).replace("Dear Sir/Madam", f"Dear {r.name}")
+            # if r.name:
+            #     personalised_html = personalised_html.replace(
+            #         "Dear Esteemed", f"Dear {r.name},"
+            #     ).replace("Dear Sir/Madam", f"Dear {r.name}")
+            #     personalised_text = personalised_text.replace(
+            #         "Dear Esteemed", f"Dear {r.name},"
+            #     ).replace("Dear Sir/Madam", f"Dear {r.name}")
 
             success = await send_email(
                 to_email  = r.email,
@@ -498,7 +471,6 @@ async def _send_campaign_emails(campaign_id: int):
                 r.error = "SMTP send failed"
 
             await db.commit()
-            # Small delay between emails to avoid rate limiting
             await asyncio.sleep(0.3)
 
         campaign.sent_count   = sent
@@ -509,10 +481,6 @@ async def _send_campaign_emails(campaign_id: int):
 
         logger.info(f"Campaign {campaign_id} complete: {sent} sent, {failed} failed")
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  SCHEDULE CAMPAIGN
-# ══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/{campaign_id}/schedule")
 async def schedule_campaign(
@@ -548,7 +516,6 @@ async def schedule_campaign(
         "status":       "scheduled",
         "scheduled_at": scheduled_at.isoformat(),
     })
-
 
 @router.post("/{campaign_id}/cancel")
 async def cancel_campaign(

@@ -66,11 +66,11 @@ class Settings(BaseSettings):
     MESSAGE_RETAIN_DAYS: int = 730
     
     # SMTP Email
-    SMTP_HOST:        str  = ""                        # e.g. smtp.gmail.com
+    SMTP_HOST:        str  = "smtp.gmail.com"                        # e.g. smtp.gmail.com
     SMTP_PORT:        int  = 587                       # 587 (TLS) or 465 (SSL)
-    SMTP_USER:        str  = ""                        # your email address
-    SMTP_PASSWORD:    str  = ""                        # app password
-    SMTP_FROM_EMAIL:  str  = ""                        # sender address
+    SMTP_USER:        str  = "akpeledavidprogress@gmail.com"                        # your email address
+    SMTP_PASSWORD:    str  = "eruxeybiakedfjfp"                        # app password
+    SMTP_FROM_EMAIL:  str  = "akpeledavidprogress@gmail.com"                        # sender address
     SMTP_FROM_NAME:   str  = "BOSS System"             # sender display name
  
     @property
