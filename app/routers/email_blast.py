@@ -111,20 +111,25 @@ async def add_contact(
     if not email:
         return JSONResponse({"error": "Email required"}, status_code=400)
 
+    if "@" not in email or "." not in email.split("@")[-1]:
+        return JSONResponse({"error": "Invalid email address"}, status_code=400)
+
     existing = (await db.execute(
         select(EmailContact).where(EmailContact.email == email)
     )).scalar_one_or_none()
     if existing:
         return JSONResponse({"error": "Contact already exists"}, status_code=409)
 
+    name = (body.get("name") or "").strip() or email.split("@")[0]
+
     c = EmailContact(
-        name        = (body.get("name") or "").strip(),
+        name        = name,
         email       = email,
-        title       = body.get("title", ""),
-        department  = body.get("department", ""),
-        institution = body.get("institution", ""),
-        tags        = body.get("tags", []),
-        notes       = body.get("notes", ""),
+        title       = (body.get("title") or "").strip(),
+        department  = (body.get("department") or "").strip(),
+        institution = (body.get("institution") or "").strip(),
+        tags        = body.get("tags") or [],
+        notes       = (body.get("notes") or "").strip(),
         created_by  = current_user.id,
     )
     db.add(c)
@@ -132,25 +137,65 @@ async def add_contact(
     await db.refresh(c)
     return JSONResponse({"status": "created", "id": c.id, "name": c.name, "email": c.email})
 
-
 @router.post("/contacts/import")
 async def import_contacts_csv(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
-    """Import contacts from CSV. Expected columns: name, email, title, institution, department"""
+    import re
+    import fitz  # pymupdf
+    from docx import Document as DocxDocument
+
     content = await file.read()
-    text    = content.decode("utf-8-sig", errors="replace")
-    reader  = csv.DictReader(io.StringIO(text))
+    filename = (file.filename or "").lower()
+    text = ""
+
+    # ── Extract raw text based on file type ──
+    if filename.endswith(".pdf"):
+        try:
+            pdf = fitz.open(stream=content, filetype="pdf")
+            text = "\n".join(page.get_text() for page in pdf)
+        except Exception as e:
+            return JSONResponse({"error": f"Could not read PDF: {e}"}, status_code=400)
+
+    elif filename.endswith(".docx"):
+        try:
+            from io import BytesIO
+            doc = DocxDocument(BytesIO(content))
+            text = "\n".join(p.text for p in doc.paragraphs)
+            # also grab text from tables
+            for table in doc.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        text += "\n" + cell.text
+        except Exception as e:
+            return JSONResponse({"error": f"Could not read DOCX: {e}"}, status_code=400)
+
+    elif filename.endswith(".csv") or filename.endswith(".txt"):
+        text = content.decode("utf-8-sig", errors="replace")
+
+    else:
+        return JSONResponse(
+            {"error": "Unsupported file type. Please upload CSV, TXT, PDF, or DOCX."},
+            status_code=400,
+        )
+
+    # ── Extract all emails via regex ──
+    emails_found = list(dict.fromkeys(  # deduplicate, preserve order
+        m.lower() for m in re.findall(
+            r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+            text
+        )
+    ))
+
+    if not emails_found:
+        return JSONResponse({"error": "No valid email addresses found in the file."}, status_code=400)
 
     created = 0
     skipped = 0
-    for row in reader:
-        email = (row.get("email") or row.get("Email") or "").strip().lower()
-        if not email or "@" not in email:
-            skipped += 1
-            continue
+
+    for email in emails_found:
         existing = (await db.execute(
             select(EmailContact).where(EmailContact.email == email)
         )).scalar_one_or_none()
@@ -158,18 +203,18 @@ async def import_contacts_csv(
             skipped += 1
             continue
         db.add(EmailContact(
-            name        = (row.get("name") or row.get("Name") or "").strip(),
-            email       = email,
-            title       = row.get("title", ""),
-            institution = row.get("institution", ""),
-            department  = row.get("department", ""),
-            created_by  = current_user.id,
+            name       = email.split("@")[0],  # fallback name
+            email      = email,
+            created_by = current_user.id,
         ))
         created += 1
 
     await db.commit()
-    return JSONResponse({"created": created, "skipped": skipped})
-
+    return JSONResponse({
+        "created": created,
+        "skipped": skipped,
+        "found":   len(emails_found),
+    })
 
 @router.delete("/contacts/{contact_id}")
 async def delete_contact(
@@ -238,7 +283,7 @@ async def generate_email(
     # RAG: pull relevant knowledge base context
     context_chunks = await ai_service.retrieve_context(prompt, db)
     context_text   = "\n\n".join(
-        c.get("content", "")[:500] for c in context_chunks[:6]
+        c.get("content", "")[:300] for c in context_chunks[:3]
     ) if context_chunks else ""
 
     # Build AI prompt
@@ -273,18 +318,21 @@ TONE: {tone}
 Generate a complete email body ready to send."""
 
     messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user",   "content": user_message},
+        {"role": "user", "content": f"{system_prompt}\n\n{user_message}"},
     ]
 
     try:
         email_body = await ai_service.chat_complete(messages)
+        logger.info(f"AI raw response length: {len(email_body) if email_body else 0}")
+        logger.info(f"AI raw response: {repr(email_body[:200]) if email_body else 'EMPTY'}")
         email_body = email_body.strip()
     except Exception as e:
-        logger.error(f"AI email generation error: {e}")
+        logger.error(f"AI email generation error: {e}", exc_info=True)
         return JSONResponse({"error": "AI failed to generate email. Check Ollama."}, status_code=500)
 
-    # Generate subject line separately
+    if not email_body:
+        return JSONResponse({"error": "AI returned empty response"}, status_code=500)
+
     subject_msgs = [
         {"role": "system", "content": "You write concise, compelling email subject lines. Return ONLY the subject line, nothing else."},
         {"role": "user",   "content": f"Write a subject line for this email purpose: {prompt}"},
@@ -293,8 +341,6 @@ Generate a complete email body ready to send."""
         subject = (await ai_service.chat_complete(subject_msgs)).strip().strip('"').strip("'")
     except Exception:
         subject = f"Important Message from {sender_name or 'Our Company'}"
-
-    # Convert markdown-style bold to HTML
     import re
     html_body = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', email_body)
     html_body = html_body.replace('\n\n', '</p><p>').replace('\n', '<br>')

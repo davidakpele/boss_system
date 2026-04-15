@@ -75,6 +75,12 @@
       <a href="/whatsapp" class="nav-child {% if request.url.path.startswith('/whatsapp') %}active{% endif %}">
         <i class="fa-brands fa-whatsapp" style="color:#25d366;"></i> WhatsApp
       </a>
+      <a href="/email-campaigns" class="nav-child {% if request.url.path.startswith('/email-campaigns') %}active{% endif %}">
+        <i class="fa-solid fa-envelope-open-text"></i> Email Campaigns
+      </a>
+       <a href="/email-campaigns/contacts" class="nav-child {% if request.url.path.startswith('/email-campaigns/contacts') %}active{% endif %}">
+        <i class="fa-solid fa-user-plus"></i> Add Contacts
+      </a>
     </div>
   </div>
  

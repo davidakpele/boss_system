@@ -10,7 +10,7 @@
     <button class="btn btn-ghost btn-sm" onclick="document.getElementById('csvImport').click()">
       <i class="fa-solid fa-file-csv"></i> Import CSV
     </button>
-    <input type="file" id="csvImport" accept=".csv" style="display:none" onchange="importCSV(this)"/>
+    <input type="file" id="csvImport" accept=".csv,.txt,.pdf,.docx" style="display:none" onchange="importCSV(this)"/>
     <button class="btn btn-primary btn-sm" onclick="openModal('addContactModal')">
       <i class="fa-solid fa-plus"></i> Add Contact
     </button>
@@ -20,7 +20,7 @@
 <!-- CSV format hint -->
 <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:12px 16px;margin-bottom:16px;font-size:12.5px;color:var(--text3);">
   <i class="fa-solid fa-info-circle" style="color:var(--blue);margin-right:6px;"></i>
-  CSV import expects columns: <code>name, email, title, institution, department</code>
+  Upload any <strong>CSV, TXT, PDF, or DOCX</strong> file — all email addresses will be extracted and saved automatically.
 </div>
 
 <!-- Contacts table -->
@@ -69,7 +69,7 @@
       <span class="modal-close" onclick="closeModal('addContactModal')"><i class="fa-solid fa-xmark"></i></span>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
-      <div class="form-group" style="margin:0;"><label class="form-label">Full Name *</label><input type="text" id="ac-name" class="form-control" style="padding-left:12px;"/></div>
+      <div class="form-group" style="margin:0;"><label class="form-label">Full Name</label><input type="text" id="ac-name" class="form-control" style="padding-left:12px;"/></div>
       <div class="form-group" style="margin:0;"><label class="form-label">Email *</label><input type="email" id="ac-email" class="form-control" style="padding-left:12px;"/></div>
       <div class="form-group" style="margin:0;"><label class="form-label">Title / Role</label><input type="text" id="ac-title" class="form-control" placeholder="e.g. Head Librarian" style="padding-left:12px;"/></div>
       <div class="form-group" style="margin:0;"><label class="form-label">Department</label><input type="text" id="ac-dept" class="form-control" placeholder="e.g. Library" style="padding-left:12px;"/></div>
@@ -87,17 +87,18 @@
 {% block extra_js %}
 <script>
 async function addContact() {
-  const name  = document.getElementById('ac-name').value.trim();
   const email = document.getElementById('ac-email').value.trim();
-  if (!name || !email) { toast('Name and email required', 'error'); return; }
+  if (!email) { toast('Email address is required', 'error'); return; } 
+
   const r = await fetch('/email-campaigns/contacts/add', {
     method: 'POST', headers: {'Content-Type': 'application/json'},
     body: JSON.stringify({
-      name, email,
-      title:       document.getElementById('ac-title').value,
-      department:  document.getElementById('ac-dept').value,
-      institution: document.getElementById('ac-inst').value,
-      notes:       document.getElementById('ac-notes').value,
+      name:        document.getElementById('ac-name').value.trim(),
+      email,
+      title:       document.getElementById('ac-title').value.trim(),
+      department:  document.getElementById('ac-dept').value.trim(),
+      institution: document.getElementById('ac-inst').value.trim(),
+      notes:       document.getElementById('ac-notes').value.trim(),
     }),
   });
   const d = await r.json();
@@ -119,7 +120,7 @@ async function importCSV(input) {
   const r = await fetch('/email-campaigns/contacts/import', { method: 'POST', body: fd });
   const d = await r.json();
   if (r.ok) {
-    toast(`Imported ${d.created} contacts (${d.skipped} skipped)`, 'success');
+    toast(`Found ${d.found} emails — saved ${d.created}, skipped ${d.skipped} duplicates`, 'success');
     setTimeout(() => location.reload(), 800);
   } else toast(d.error || 'Import failed', 'error');
 }

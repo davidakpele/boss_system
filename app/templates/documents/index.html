@@ -76,7 +76,10 @@
     <a href="/documents?dept={{ dept }}" class="filter-btn {% if filters.dept == dept %}active{% endif %}">{{ dept }}</a>
     {% endfor %}
   </div>
+  <div class="flex gap-2" style="flex-wrap:wrap;">
   <a href="/documents/new" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Upload Document</a>
+  <a href="/knowledge-base/add" class="btn btn-primary"><i class="fa-solid fa-plus"></i> Add Knowledge Base Entry</a>
+  </div>
 </div>
 
 <div class="card mb-4 activity-documents-list">
