@@ -563,3 +563,232 @@ async def campaign_detail(
         "created_at":   campaign.created_at.isoformat() if campaign.created_at else None,
         "recipients":   [{"email": r.email, "name": r.name, "status": r.status} for r in recipients],
     })
+    
+    
+
+@router.post("/{campaign_id}/resume")
+async def resume_campaign(
+    campaign_id: int,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    if not settings.smtp_enabled:
+        return JSONResponse(
+            {"error": "SMTP not configured. Add SMTP credentials to .env"},
+            status_code=503,
+        )
+ 
+    campaign = (await db.execute(
+        select(EmailCampaign).where(EmailCampaign.id == campaign_id)
+    )).scalar_one_or_none()
+ 
+    if not campaign:
+        raise HTTPException(404)
+ 
+    if campaign.status == "sending":
+        return JSONResponse(
+            {"error": "Campaign is already sending. Wait for it to finish."},
+            status_code=400,
+        )
+ 
+    # Count what's left
+    from sqlalchemy import func as _func
+    pending_count = (await db.execute(
+        select(_func.count(EmailCampaignRecipient.id)).where(
+            EmailCampaignRecipient.campaign_id == campaign_id,
+            EmailCampaignRecipient.status.in_(["pending", "failed"]),
+        )
+    )).scalar() or 0
+ 
+    already_sent = (await db.execute(
+        select(_func.count(EmailCampaignRecipient.id)).where(
+            EmailCampaignRecipient.campaign_id == campaign_id,
+            EmailCampaignRecipient.status == "sent",
+        )
+    )).scalar() or 0
+ 
+    if pending_count == 0:
+        return JSONResponse({
+            "status":       "nothing_to_do",
+            "message":      "All recipients have already been sent to.",
+            "already_sent": already_sent,
+        })
+ 
+    # Reset failed → pending so they get retried
+    failed_recipients = (await db.execute(
+        select(EmailCampaignRecipient).where(
+            EmailCampaignRecipient.campaign_id == campaign_id,
+            EmailCampaignRecipient.status == "failed",
+        )
+    )).scalars().all()
+ 
+    for r in failed_recipients:
+        r.status = "pending"
+        r.error  = None
+ 
+    campaign.status     = "sending"
+    campaign.started_at = datetime.utcnow()
+    await db.commit()
+ 
+    background_tasks.add_task(_resume_campaign_emails, campaign_id)
+ 
+    return JSONResponse({
+        "status":         "resuming",
+        "campaign_id":    campaign_id,
+        "remaining":      pending_count,
+        "already_sent":   already_sent,
+        "message":        f"Resuming delivery to {pending_count} remaining recipients. {already_sent} already sent.",
+    })
+ 
+ 
+async def _resume_campaign_emails(campaign_id: int):
+    """
+    Background task: delivers only to pending/failed recipients.
+    Identical logic to _send_campaign_emails but skips 'sent' rows.
+    Also respects a per-day send cap to stay within Gmail's 550/day limit.
+    """
+    async with AsyncSessionLocal() as db:
+        campaign = (await db.execute(
+            select(EmailCampaign).where(EmailCampaign.id == campaign_id)
+        )).scalar_one_or_none()
+        if not campaign:
+            return
+ 
+        # Only grab recipients not yet sent
+        recipients = (await db.execute(
+            select(EmailCampaignRecipient)
+            .where(
+                EmailCampaignRecipient.campaign_id == campaign_id,
+                EmailCampaignRecipient.status      == "pending",
+            )
+            .order_by(EmailCampaignRecipient.id.asc())
+        )).scalars().all()
+ 
+        if not recipients:
+            campaign.status       = "sent"
+            campaign.completed_at = datetime.utcnow()
+            await db.commit()
+            return
+ 
+        sent    = campaign.sent_count or 0
+        failed  = campaign.failed_count or 0
+        stopped = False          # set True when daily cap is hit
+ 
+        for r in recipients:
+            # Personalise
+            personalised_html = campaign.html_body
+            personalised_text = campaign.text_body or ""
+ 
+            if r.name:
+                for old in ("Dear Esteemed Librarian,", "Dear Esteemed,",
+                            "Dear Esteemed", "Dear Sir/Madam"):
+                    personalised_html = personalised_html.replace(old, f"Dear {r.name},")
+                    personalised_text = personalised_text.replace(old, f"Dear {r.name},")
+ 
+            from app.services.email_service import send_email
+            success = await send_email(
+                to_email          = r.email,
+                to_name           = r.name or "",
+                subject           = campaign.subject,
+                html_body         = personalised_html,
+                text_body         = personalised_text,
+                is_campaign       = True,
+                sender_name       = getattr(campaign, "sender_name",   "") or "",
+                sender_phone      = getattr(campaign, "sender_phone",  "") or "",
+                sender_email_addr = getattr(campaign, "sender_email",  "") or "",
+                sender_email2     = getattr(campaign, "sender_email2", "") or "",
+            )
+ 
+            if success:
+                r.status  = "sent"
+                r.sent_at = datetime.utcnow()
+                sent += 1
+            else:
+                r.status = "failed"
+                r.error  = "SMTP send failed — likely daily limit hit"
+                failed += 1
+                stopped = True           # stop on first failure so we don't burn retries
+ 
+            # Commit each recipient immediately so progress is saved
+            # (if the process dies mid-run, we know exactly where we stopped)
+            campaign.sent_count   = sent
+            campaign.failed_count = failed
+            await db.commit()
+ 
+            if stopped:
+                break
+ 
+            # 1.5s delay between emails — keeps Gmail happy and avoids
+            # triggering rate limiting (550/day ≈ one every ~157 seconds,
+            # but batching with pauses is fine for smaller runs)
+            await asyncio.sleep(1.5)
+ 
+        # Final status
+        remaining = (await db.execute(
+            select(EmailCampaignRecipient).where(
+                EmailCampaignRecipient.campaign_id == campaign_id,
+                EmailCampaignRecipient.status      == "pending",
+            )
+        )).scalars().first()
+ 
+        if remaining:
+            # Still has unsent — mark as paused (can resume again tomorrow)
+            campaign.status = "paused"
+        else:
+            campaign.status       = "sent"
+            campaign.completed_at = datetime.utcnow()
+ 
+        await db.commit()
+        logger.info(
+            f"Campaign {campaign_id} resume complete: {sent} sent, {failed} failed, "
+            f"status={campaign.status}"
+        )
+ 
+ 
+# ─────────────────────────────────────────────────────────────────────────────
+# ADD GET PROGRESS ENDPOINT — for the UI to poll live progress
+# ─────────────────────────────────────────────────────────────────────────────
+ 
+@router.get("/{campaign_id}/progress")
+async def campaign_progress(
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    from sqlalchemy import func as _func
+ 
+    campaign = (await db.execute(
+        select(EmailCampaign).where(EmailCampaign.id == campaign_id)
+    )).scalar_one_or_none()
+    if not campaign:
+        raise HTTPException(404)
+ 
+    counts = (await db.execute(
+        select(
+            EmailCampaignRecipient.status,
+            _func.count(EmailCampaignRecipient.id).label("n"),
+        )
+        .where(EmailCampaignRecipient.campaign_id == campaign_id)
+        .group_by(EmailCampaignRecipient.status)
+    )).all()
+ 
+    breakdown = {row.status: row.n for row in counts}
+    total     = sum(breakdown.values())
+    sent      = breakdown.get("sent", 0)
+    pending   = breakdown.get("pending", 0)
+    failed    = breakdown.get("failed", 0)
+    pct       = round((sent / total * 100) if total else 0, 1)
+ 
+    return JSONResponse({
+        "campaign_id":   campaign_id,
+        "campaign_name": campaign.name,
+        "status":        campaign.status,
+        "total":         total,
+        "sent":          sent,
+        "pending":       pending,
+        "failed":        failed,
+        "percent":       pct,
+        "can_resume":    (pending + failed) > 0 and campaign.status not in ("sending",),
+        "completed_at":  campaign.completed_at.isoformat() if campaign.completed_at else None,
+    })

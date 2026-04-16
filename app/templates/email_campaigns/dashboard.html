@@ -13,7 +13,7 @@
 .sp-sending   { background:var(--yellow-bg); color:var(--yellow); }
 .sp-sent      { background:var(--green-bg); color:var(--green); }
 .sp-failed    { background:var(--red-bg); color:var(--red); }
-
+.sp-paused { background:rgba(234,179,8,.12); color:#ca8a04; }
 .stat-bar { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:24px; }
 .stat-b { background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:16px 20px; text-align:center; }
 .stat-b-val { font-family:var(--font-mono); font-weight:700; font-size:26px; margin:4px 0; }
@@ -68,42 +68,88 @@
 {% if campaigns %}
 <div class="campaign-grid">
   {% for c in campaigns %}
-  <div class="campaign-card">
-    <div class="flex items-center justify-between mb-2">
-      <span class="status-pill sp-{{ c.status }}">
-        <i class="fa-solid fa-circle" style="font-size:6px;"></i>
-        {{ c.status.title() }}
-      </span>
-      <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">
-        {{ c.created_at.strftime('%b %d, %Y') if c.created_at else '' }}
-      </span>
-    </div>
-    <div style="font-weight:700;font-size:14px;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</div>
-    <div style="font-size:12.5px;color:var(--text3);margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.subject }}</div>
-    <div style="display:flex;gap:16px;font-size:12px;color:var(--text3);margin-bottom:14px;font-family:var(--font-mono);">
-      <span><i class="fa-solid fa-users" style="margin-right:4px;"></i>{{ c.total_recipients }} recipients</span>
-      {% if c.sent_count %}<span style="color:var(--green);"><i class="fa-solid fa-check" style="margin-right:4px;"></i>{{ c.sent_count }} sent</span>{% endif %}
-      {% if c.failed_count %}<span style="color:var(--red);"><i class="fa-solid fa-xmark" style="margin-right:4px;"></i>{{ c.failed_count }} failed</span>{% endif %}
-    </div>
-    <div class="flex gap-2">
-      <button class="btn btn-ghost btn-xs" onclick="previewCampaign({{ c.id }})">
-        <i class="fa-solid fa-eye"></i> Preview
-      </button>
-      {% if c.status == 'draft' %}
-      <button class="btn btn-primary btn-xs" onclick="sendCampaign({{ c.id }}, this)">
-        <i class="fa-solid fa-paper-plane"></i> Send Now
-      </button>
-      <button class="btn btn-ghost btn-xs" onclick="openSchedule({{ c.id }})">
-        <i class="fa-solid fa-clock"></i> Schedule
-      </button>
-      {% elif c.status == 'scheduled' %}
-      <button class="btn btn-danger btn-xs" onclick="cancelCampaign({{ c.id }}, this)">
-        <i class="fa-solid fa-xmark"></i> Cancel
-      </button>
+    <div class="campaign-card" id="card-{{ c.id }}">
+      <div class="flex items-center justify-between mb-2">
+        <span class="status-pill sp-{{ c.status }}">
+          <i class="fa-solid fa-circle" style="font-size:6px;"></i>
+          {{ c.status.title() }}
+        </span>
+        <span style="font-size:11px;color:var(--text3);font-family:var(--font-mono);">
+          {{ c.created_at.strftime('%b %d, %Y') if c.created_at else '' }}
+        </span>
+      </div>
+
+      <div style="font-weight:700;font-size:14px;margin-bottom:4px;
+                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        {{ c.name }}
+      </div>
+      <div style="font-size:12.5px;color:var(--text3);margin-bottom:10px;
+                  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+        {{ c.subject }}
+      </div>
+
+      <!-- Progress bar (shown when sending or partially done) -->
+      {% set total = c.total_recipients or 1 %}
+      {% set pct   = ((c.sent_count or 0) / total * 100)|round(1) %}
+      {% if c.total_recipients %}
+      <div style="margin-bottom:10px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;
+                    color:var(--text3);margin-bottom:4px;font-family:var(--font-mono);">
+          <span>{{ c.sent_count or 0 }} / {{ c.total_recipients }} sent</span>
+          <span>{{ pct }}%</span>
+        </div>
+        <div style="background:var(--border);border-radius:20px;height:5px;overflow:hidden;">
+          <div style="width:{{ pct }}%;background:var(--green);height:100%;
+                      border-radius:20px;transition:width .4s ease;"></div>
+        </div>
+        {% if c.failed_count %}
+        <div style="font-size:10.5px;color:var(--red);margin-top:3px;font-family:var(--font-mono);">
+          {{ c.failed_count }} failed · can resume
+        </div>
+        {% endif %}
+      </div>
       {% endif %}
+
+      <!-- Action buttons -->
+      <div class="flex gap-2" style="flex-wrap:wrap;">
+        <button class="btn btn-ghost btn-xs" onclick="previewCampaign({{ c.id }})">
+          <i class="fa-solid fa-eye"></i> Preview
+        </button>
+
+        {% if c.status == 'draft' %}
+          <button class="btn btn-primary btn-xs" onclick="sendCampaign({{ c.id }}, this)">
+            <i class="fa-solid fa-paper-plane"></i> Send Now
+          </button>
+          <button class="btn btn-ghost btn-xs" onclick="openSchedule({{ c.id }})">
+            <i class="fa-solid fa-clock"></i> Schedule
+          </button>
+
+        {% elif c.status == 'scheduled' %}
+          <button class="btn btn-danger btn-xs" onclick="cancelCampaign({{ c.id }}, this)">
+            <i class="fa-solid fa-xmark"></i> Cancel
+          </button>
+
+        {% elif c.status in ('paused', 'sending') %}
+          <!-- Resume button — the key addition -->
+          <button class="btn btn-primary btn-xs" id="resume-{{ c.id }}"
+                  onclick="resumeCampaign({{ c.id }}, this)"
+                  {% if c.status == 'sending' %}disabled{% endif %}>
+            <i class="fa-solid fa-{% if c.status == 'sending' %}spinner fa-spin{% else %}play{% endif %}"></i>
+            {% if c.status == 'sending' %}Sending…{% else %}Resume{% endif %}
+          </button>
+          <button class="btn btn-ghost btn-xs" onclick="showProgress({{ c.id }})">
+            <i class="fa-solid fa-chart-bar"></i> Progress
+          </button>
+
+        {% elif c.status == 'sent' %}
+          <span style="font-size:11px;color:var(--green);font-weight:700;
+                      font-family:var(--font-mono);">
+            <i class="fa-solid fa-check-circle"></i> Complete
+          </span>
+        {% endif %}
+      </div>
     </div>
-  </div>
-  {% endfor %}
+{% endfor %}
 </div>
 {% else %}
 <div class="card" style="text-align:center;padding:60px 20px;color:var(--text3);">
@@ -271,6 +317,32 @@ Example: Write a marketing email to academic librarians introducing ProQuest dat
   </div>
 </div>
 
+<div class="modal-overlay" id="progressModal">
+  <div class="modal" style="max-width:440px;">
+    <div class="modal-title">
+      <span><i class="fa-solid fa-chart-bar" style="color:var(--accent);"></i>
+            Campaign Progress</span>
+      <span class="modal-close" onclick="closeModal('progressModal')">
+        <i class="fa-solid fa-xmark"></i>
+      </span>
+    </div>
+
+    <div id="progressBody" style="padding:4px 0;">
+      <div style="text-align:center;padding:20px;color:var(--text3);">
+        <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+      </div>
+    </div>
+
+    <div class="flex gap-2 justify-between mt-4">
+      <button class="btn btn-ghost" onclick="closeModal('progressModal')">Close</button>
+      <button class="btn btn-primary" id="modalResumeBtn" style="display:none;"
+              onclick="resumeFromModal()">
+        <i class="fa-solid fa-play"></i> Resume Sending
+      </button>
+    </div>
+  </div>
+</div>
+
 {% endblock %}
 
 {% block extra_js %}
@@ -279,7 +351,8 @@ let allContacts = [];
 let selectedContactIds = new Set();
 let currentCampaignId = null;
 let schedulingCampaignId = null;
-
+let progressCampaignId = null;
+let progressPoller     = null;
 // Load contacts when modal opens
 document.getElementById('generateModal').addEventListener('click', () => {});
 
@@ -517,5 +590,159 @@ async function previewCampaign(id) {
 function escHtml(s) {
   return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
+
+async function resumeCampaign(id, btn) {
+  if (!confirm(
+    'Resume sending to remaining recipients?\n\n' +
+    'This will skip anyone already sent to and retry failed addresses.'
+  )) return;
+
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Starting…';
+  }
+
+  const r = await fetch(`/email-campaigns/${id}/resume`, { method: 'POST' });
+  const d = await r.json();
+
+  if (r.ok && d.status !== 'nothing_to_do') {
+    toast(`Resuming — ${d.remaining} emails queued`, 'success');
+    // Open progress modal and start polling
+    showProgress(id);
+    setTimeout(() => location.reload(), 90000);   // refresh after 90s
+  } else if (d.status === 'nothing_to_do') {
+    toast('All recipients already sent to ✓', 'success');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Done'; }
+  } else {
+    toast(d.error || 'Resume failed', 'error');
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-play"></i> Resume';
+    }
+  }
+}
+
+async function showProgress(id) {
+  progressCampaignId = id;
+  openModal('progressModal');
+  await refreshProgress();
+
+  // Poll every 4 seconds while sending
+  clearInterval(progressPoller);
+  progressPoller = setInterval(async () => {
+    const done = await refreshProgress();
+    if (done) clearInterval(progressPoller);
+  }, 4000);
+}
+
+async function refreshProgress() {
+  if (!progressCampaignId) return true;
+  try {
+    const r = await fetch(`/email-campaigns/${progressCampaignId}/progress`);
+    const d = await r.json();
+    renderProgressBody(d);
+    return ['sent','paused','draft','cancelled'].includes(d.status);
+  } catch(e) {
+    return false;
+  }
+}
+
+function renderProgressBody(d) {
+  const pct     = d.percent;
+  const sending = d.status === 'sending';
+  const canResume = d.can_resume;
+
+  // Status colour
+  const statusColors = {
+    sent: 'var(--green)', sending: 'var(--yellow)',
+    paused: 'var(--yellow)', draft: 'var(--text3)', failed: 'var(--red)',
+  };
+  const statusColor = statusColors[d.status] || 'var(--text2)';
+
+  document.getElementById('progressBody').innerHTML = `
+    <!-- Campaign name + status -->
+    <div style="margin-bottom:16px;">
+      <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${escHtml(d.campaign_name)}</div>
+      <span style="font-size:12px;font-weight:700;color:${statusColor};
+                   font-family:var(--font-mono);text-transform:uppercase;">
+        ${d.status}${sending ? ' <i class="fa-solid fa-spinner fa-spin"></i>' : ''}
+      </span>
+    </div>
+
+    <!-- Big percentage -->
+    <div style="text-align:center;margin-bottom:16px;">
+      <div style="font-size:42px;font-weight:800;font-family:var(--font-mono);
+                  color:${pct === 100 ? 'var(--green)' : 'var(--text)'};">
+        ${pct}%
+      </div>
+      <div style="font-size:12px;color:var(--text3);">delivered</div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="background:var(--border);border-radius:20px;height:8px;
+                overflow:hidden;margin-bottom:16px;">
+      <div style="width:${pct}%;background:${pct === 100 ? 'var(--green)' : 'var(--accent)'};
+                  height:100%;border-radius:20px;transition:width .5s ease;"></div>
+    </div>
+
+    <!-- Stat grid -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
+      <div style="text-align:center;padding:12px;background:var(--bg2);
+                  border-radius:var(--radius);border:1px solid var(--border);">
+        <div style="font-size:22px;font-weight:800;color:var(--green);
+                    font-family:var(--font-mono);">${d.sent}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Sent</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg2);
+                  border-radius:var(--radius);border:1px solid var(--border);">
+        <div style="font-size:22px;font-weight:800;color:var(--text3);
+                    font-family:var(--font-mono);">${d.pending}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Remaining</div>
+      </div>
+      <div style="text-align:center;padding:12px;background:var(--bg2);
+                  border-radius:var(--radius);border:1px solid var(--border);">
+        <div style="font-size:22px;font-weight:800;
+                    color:${d.failed > 0 ? 'var(--red)' : 'var(--text3)'};
+                    font-family:var(--font-mono);">${d.failed}</div>
+        <div style="font-size:10.5px;color:var(--text3);margin-top:2px;">Failed</div>
+      </div>
+    </div>
+
+    <!-- Gmail limit tip -->
+    ${d.status === 'paused' ? `
+    <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);
+                border-radius:var(--radius);padding:12px 14px;font-size:12.5px;
+                color:var(--text2);line-height:1.6;">
+      <strong>📬 Gmail daily limit reached.</strong><br/>
+      Come back tomorrow and click <strong>Resume</strong> — it will continue
+      from where it stopped. No one who already received the email will get it again.
+      <br/><br/>
+      <strong>Sent today:</strong> ${d.sent} &nbsp;·&nbsp;
+      <strong>Remaining:</strong> ${d.pending + d.failed}
+    </div>` : ''}
+
+    ${d.status === 'sent' ? `
+    <div style="background:rgba(16,185,129,.07);border:1px solid rgba(16,185,129,.25);
+                border-radius:var(--radius);padding:12px 14px;font-size:12.5px;color:var(--green);">
+      <i class="fa-solid fa-circle-check"></i> <strong>All emails delivered successfully!</strong>
+    </div>` : ''}`;
+
+  // Show/hide resume button in modal footer
+  const resumeBtn = document.getElementById('modalResumeBtn');
+  if (resumeBtn) {
+    resumeBtn.style.display = canResume ? 'flex' : 'none';
+  }
+}
+
+async function resumeFromModal() {
+  if (!progressCampaignId) return;
+  closeModal('progressModal');
+  const btn = document.getElementById(`resume-${progressCampaignId}`);
+  await resumeCampaign(progressCampaignId, btn);
+}
+
+document.getElementById('progressModal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'progressModal') clearInterval(progressPoller);
+});
 </script>
 {% endblock %}
