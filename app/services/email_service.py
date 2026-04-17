@@ -1,19 +1,10 @@
 # app/services/email_service.py
-"""
-1. Email Integration (SMTP)
-Handles all outbound email for BOSS:
-  - HR notifications (offer letters, interview invites, rejection)
-  - @Mention notifications
-  - Audit alerts
-  - Daily/weekly digest
-  - General system alerts
-"""
-
+import re
 import asyncio
 import logging
 import smtplib
 import ssl
-from datetime import datetime, timedelta
+from datetime import datetime
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Optional
@@ -22,27 +13,92 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-def _wrap_html(subject: str, body_html: str, footer: str = "") -> str:
-    """Wrap content in a plain, simple HTML email shell."""
+DEFAULT_SENDER_NAME   = "Safari Books Limited"
+DEFAULT_SENDER_PHONE  = "07060603020"
+DEFAULT_SENDER_EMAIL  = "safarinigeria@gmail.com"
+DEFAULT_SENDER_EMAIL2 = "safaribk4jakpele@gmail.com"
+
+
+def _wrap_html(
+    body_html: str,
+    sender_name: str = "",
+    sender_phone: str = "",
+    sender_email: str = "",
+    sender_email2: str = "",
+) -> str:
+
+    sender_name   = sender_name   or DEFAULT_SENDER_NAME
+    sender_phone  = sender_phone  or DEFAULT_SENDER_PHONE
+    sender_email  = sender_email  or DEFAULT_SENDER_EMAIL
+    sender_email2 = sender_email2 or DEFAULT_SENDER_EMAIL2
+
+    AUTO_BOLD_TERMS = [
+        'Safari Books Limited',
+        'ProQuest',
+        'Elsevier',
+        'Springer Nature',
+        'Wiley',
+        'Harvard University',
+        'University of Oxford',
+        'Massachusetts Institute of Technology',
+        'library development and book supply',
+        'leading global universities',
+    ]
+
+    body_html = re.sub(r'\*\*(.+?)\*\*', r'\1', body_html)
+    body_html = body_html.replace('—', ' - ')
+
+    for term in sorted(AUTO_BOLD_TERMS, key=len, reverse=True):
+        body_html = body_html.replace(term, f'<strong>{term}</strong>')
+
+    body_html = re.sub(r'(<strong>)+' + re.escape('<strong>'), '<strong>', body_html)
+    body_html = re.sub(r'(</strong>)+', '</strong>', body_html)
+
+    body_html = re.sub(r'([^\n])\n?(For enquiries[^:]*:)', r'\1\n\n\2', body_html, flags=re.IGNORECASE)
+
+    paragraphs = [p.strip() for p in body_html.replace('\r\n', '\n').split('\n\n') if p.strip()]
+
+    body_paragraphs = ""
+    for p in paragraphs:
+        p_html = p.replace('\n', '<br/>')
+        body_paragraphs += f'<p style="margin:0 0 14px 0;">{p_html}</p>\n'
+
+    contact_lines = []
+    if sender_phone:
+        contact_lines.append(f'<p style="margin:4px 0;">📞 {sender_phone}</p>')
+
+    if sender_email and sender_email2:
+        contact_lines.append(
+            f'<p style="margin:4px 0;">📧 '
+            f'<a href="mailto:{sender_email}" style="color:#000000;text-decoration:none;">{sender_email}</a>'
+            f' | '
+            f'<a href="mailto:{sender_email2}" style="color:#000000;text-decoration:none;">{sender_email2}</a>'
+            f'</p>'
+        )
+    elif sender_email:
+        contact_lines.append(
+            f'<p style="margin:4px 0;">📧 '
+            f'<a href="mailto:{sender_email}" style="color:#000000;text-decoration:none;">{sender_email}</a>'
+            f'</p>'
+        )
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>{subject}</title>
 </head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,sans-serif;font-size:14px;color:#000000;line-height:1.6;">
-  <table width="100%" cellpadding="0" cellspacing="0">
-    <tr><td style="padding:32px 40px;max-width:700px;">
-      {body_html}
-      <br/><br/>
-      <p style="font-size:12px;color:#555555;margin:0;">
-        {footer or 'This email was sent by BOSS System · <a href="#" style="color:#000000;">Unsubscribe</a>'}
-      </p>
+<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#000000;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;">
+    <tr><td style="padding:20px;">
+
+      {body_paragraphs}
+
     </td></tr>
   </table>
 </body>
 </html>"""
+
 
 async def send_email(
     to_email: str,
@@ -50,8 +106,11 @@ async def send_email(
     html_body: str,
     to_name: str = "",
     text_body: str = "",
+    sender_name: str = "",
+    sender_phone: str = "",
+    sender_email: str = "",
+    sender_email2: str = "",
 ) -> bool:
-    """Send a single email via SMTP. Returns True on success."""
     if not settings.SMTP_HOST or not settings.SMTP_USER:
         logger.warning("SMTP not configured — email not sent")
         return False
@@ -62,7 +121,17 @@ async def send_email(
         msg["From"]    = f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
         msg["To"]      = f"{to_name} <{to_email}>" if to_name else to_email
 
-        full_html = _wrap_html(subject, html_body)
+        if html_body.strip().lower().startswith("<!doctype") or html_body.strip().lower().startswith("<html"):
+            full_html = html_body
+        else:
+            full_html = _wrap_html(
+                body_html     = html_body,
+                sender_name   = sender_name,
+                sender_phone  = sender_phone,
+                sender_email  = sender_email,
+                sender_email2 = sender_email2,
+            )
+
         if text_body:
             msg.attach(MIMEText(text_body, "plain"))
         msg.attach(MIMEText(full_html, "html"))
@@ -79,6 +148,7 @@ async def send_email(
                     s.starttls(context=context)
                     s.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
                     s.send_message(msg)
+
         await asyncio.get_event_loop().run_in_executor(None, _send)
         logger.info(f"Email sent to {to_email}: {subject}")
         return True
@@ -114,7 +184,6 @@ async def send_hr_email(
     subject: str,
     body_html: str,
 ):
-    """Generic HR email (offer, interview invite, rejection, etc.)."""
     await send_email(to_email=to_email, to_name=to_name, subject=subject, html_body=body_html)
 
 
@@ -130,10 +199,7 @@ async def send_interview_invite(
 ):
     body = f"""
     <p>Dear {to_name},</p>
-    <p>
-      We are pleased to invite you for an interview for the <strong>{position}</strong> position
-      at <strong>{company_name}</strong>.
-    </p>
+    <p>We are pleased to invite you for an interview for the <strong>{position}</strong> position at <strong>{company_name}</strong>.</p>
     <p>
       Job Title: {position}<br/>
       Date: {interview_date}<br/>
@@ -159,20 +225,13 @@ async def send_offer_letter(
 ):
     body = f"""
     <p>Dear {to_name},</p>
-    <p>
-      We are delighted to offer you the position of <strong>{position}</strong> at
-      <strong>{company_name}</strong>. After careful consideration of your application and
-      interview performance, we are confident you will be a valuable addition to our team.
-    </p>
+    <p>We are delighted to offer you the position of <strong>{position}</strong> at <strong>{company_name}</strong>. After careful consideration of your application and interview performance, we are confident you will be a valuable addition to our team.</p>
     <p>
       Position: {position}<br/>
       Salary: {salary}<br/>
       Start Date: {start_date}
     </p>
-    <p>
-      Please review the terms and confirm your acceptance within 5 business days.
-      We are excited to have you join our team!
-    </p>
+    <p>Please review the terms and confirm your acceptance within 5 business days. We are excited to have you join our team!</p>
     <p>Best regards,<br/>{company_name}</p>"""
     await send_email(
         to_email=to_email, to_name=to_name,
@@ -189,18 +248,9 @@ async def send_rejection_email(
 ):
     body = f"""
     <p>Dear {to_name},</p>
-    <p>
-      Thank you for your interest in the <strong>{position}</strong> position at
-      <strong>{company_name}</strong> and for taking the time to go through our process.
-    </p>
-    <p>
-      After careful consideration, we have decided to move forward with other candidates
-      whose qualifications more closely match our current requirements.
-    </p>
-    <p>
-      We appreciate your effort and encourage you to apply for future openings that match
-      your skills and experience. We wish you the very best in your career journey.
-    </p>
+    <p>Thank you for your interest in the <strong>{position}</strong> position at <strong>{company_name}</strong> and for taking the time to go through our process.</p>
+    <p>After careful consideration, we have decided to move forward with other candidates whose qualifications more closely match our current requirements.</p>
+    <p>We appreciate your effort and encourage you to apply for future openings that match your skills and experience. We wish you the very best in your career journey.</p>
     <p>Best regards,<br/>{company_name}</p>"""
     await send_email(
         to_email=to_email, to_name=to_name,
@@ -215,7 +265,6 @@ async def send_daily_digest(
     stats: dict,
     app_url: str = "http://localhost:8000",
 ):
-    """Daily activity digest for managers."""
     date_str = datetime.utcnow().strftime("%B %d, %Y")
     rows = "".join(
         f"<p>{item['label']}: <strong>{item['value']}</strong></p>"
@@ -238,7 +287,7 @@ async def send_alert(
     to_name: str,
     title: str,
     message: str,
-    severity: str = "info",   # info | warning | critical
+    severity: str = "info",
     app_url: str = "http://localhost:8000",
 ):
     label = {"info": "Info", "warning": "Warning", "critical": "Critical"}.get(severity, "Info")
@@ -253,13 +302,14 @@ async def send_alert(
         html_body=body,
     )
 
+
 email_service = type("EmailService", (), {
-    "send": staticmethod(send_email),
-    "mention": staticmethod(send_mention_notification),
-    "hr": staticmethod(send_hr_email),
-    "interview": staticmethod(send_interview_invite),
-    "offer": staticmethod(send_offer_letter),
-    "rejection": staticmethod(send_rejection_email),
-    "digest": staticmethod(send_daily_digest),
-    "alert": staticmethod(send_alert),
+    "send":       staticmethod(send_email),
+    "mention":    staticmethod(send_mention_notification),
+    "hr":         staticmethod(send_hr_email),
+    "interview":  staticmethod(send_interview_invite),
+    "offer":      staticmethod(send_offer_letter),
+    "rejection":  staticmethod(send_rejection_email),
+    "digest":     staticmethod(send_daily_digest),
+    "alert":      staticmethod(send_alert),
 })()

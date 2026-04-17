@@ -946,6 +946,7 @@ class EmailCampaign(Base):
     knowledge_context = Column(Text, nullable=True)     # RAG context used
     total_recipients  = Column(Integer, default=0)
     sent_count        = Column(Integer, default=0)
+    status = Column(String(20), default="draft")        # Values: draft | scheduled | sending | paused | sent | failed
     failed_count      = Column(Integer, default=0)
     scheduled_at      = Column(DateTime(timezone=True), nullable=True)
     started_at        = Column(DateTime(timezone=True), nullable=True)
