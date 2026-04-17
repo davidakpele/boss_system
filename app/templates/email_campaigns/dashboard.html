@@ -110,7 +110,7 @@
       </div>
       {% endif %}
 
-      <!-- Action buttons -->
+     <!-- Action buttons -->
       <div class="flex gap-2" style="flex-wrap:wrap;">
         <button class="btn btn-ghost btn-xs" onclick="previewCampaign({{ c.id }})">
           <i class="fa-solid fa-eye"></i> Preview
@@ -130,12 +130,11 @@
           </button>
 
         {% elif c.status in ('paused', 'sending') %}
-          <!-- Resume button — the key addition -->
+          <!-- Resume always clickable — allows force-resuming a stalled send -->
           <button class="btn btn-primary btn-xs" id="resume-{{ c.id }}"
-                  onclick="resumeCampaign({{ c.id }}, this)"
-                  {% if c.status == 'sending' %}disabled{% endif %}>
-            <i class="fa-solid fa-{% if c.status == 'sending' %}spinner fa-spin{% else %}play{% endif %}"></i>
-            {% if c.status == 'sending' %}Sending…{% else %}Resume{% endif %}
+                  onclick="resumeCampaign({{ c.id }}, this)">
+            <i class="fa-solid fa-{% if c.status == 'sending' %}rotate-right{% else %}play{% endif %}"></i>
+            {% if c.status == 'sending' %}Force Resume{% else %}Resume{% endif %}
           </button>
           <button class="btn btn-ghost btn-xs" onclick="showProgress({{ c.id }})">
             <i class="fa-solid fa-chart-bar"></i> Progress
