@@ -6,13 +6,11 @@ import re
 import uuid
 import logging
 from pathlib import Path
-
 from fastapi import APIRouter, Depends, Request, WebSocket, WebSocketDisconnect, Form, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, or_
-
 from app.database import get_db, AsyncSessionLocal
 from app.models import Channel, ChannelMember, Message, User, KnowledgeChunk
 from app.models import MessageReaction, MessageReadReceipt, Mention
@@ -42,9 +40,6 @@ ALLOWED_EXTENSIONS = {
 
 STATIC_UPLOAD_DIR = os.path.join("app", "static", "uploads", "messages")
 VOICE_UPLOAD_DIR  = os.path.join("app", "static", "uploads", "voice")
-
-
-# ── PAGES ──────────────────────────────────────────────────────────────────────
 
 @router.get("", response_class=HTMLResponse)
 async def messages_page(
@@ -95,9 +90,6 @@ async def messages_page(
         }
     )
 
-
-# ── HISTORY ────────────────────────────────────────────────────────────────────
-
 @router.get("/channel/{channel_id}/history")
 async def get_channel_history(
     channel_id: int,
@@ -107,12 +99,9 @@ async def get_channel_history(
 ):
     where_clauses = [Message.channel_id == channel_id]
     if thread_id:
-        # Thread replies for a specific parent
         where_clauses.append(Message.thread_id == thread_id)
         where_clauses.append(Message.is_thread_reply == True)
     else:
-        # Top-level messages only — exclude thread replies
-        # Use explicit False check + handle NULL (older rows may have NULL)
         where_clauses.append(
             or_(Message.is_thread_reply == False, Message.is_thread_reply == None)
         )
@@ -160,7 +149,6 @@ async def init_dm(
 
     return JSONResponse({"channel_id": channel.id, "messages": messages})
 
-
 async def _get_reactions(db: AsyncSession, message_id: int, current_user_id: int) -> list:
     rows = (await db.execute(
         select(MessageReaction.emoji, func.count().label("cnt"))
@@ -182,7 +170,6 @@ async def _get_reactions(db: AsyncSession, message_id: int, current_user_id: int
 
     return list(agg.values())
 
-
 def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dict:
     return {
         "id": msg.id,
@@ -201,7 +188,6 @@ def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dic
         "file_url": msg.file_url,
         "file_name": msg.file_name,
         "file_size": msg.file_size,
-        # FIX: include voice_duration so the player shows correct time
         "voice_duration": getattr(msg, "voice_duration", None),
         "thread_id": getattr(msg, "thread_id", None),
         "thread_count": getattr(msg, "thread_count", 0) or 0,
@@ -209,8 +195,6 @@ def _serialize_message(msg: Message, sender_name: str, avatar_color: str) -> dic
         "reactions": [],
     }
 
-
-# ── DM HELPER ──────────────────────────────────────────────────────────────────
 
 async def _get_or_create_dm(db: AsyncSession, user_a: int, user_b: int) -> Channel:
     dm_name = f"dm_{min(user_a, user_b)}_{max(user_a, user_b)}"
@@ -229,8 +213,6 @@ async def _get_or_create_dm(db: AsyncSession, user_a: int, user_b: int) -> Chann
     await db.refresh(channel)
     return channel
 
-
-# ── CHANNEL MANAGEMENT ─────────────────────────────────────────────────────────
 
 @router.post("/channel/create")
 async def create_channel(
@@ -256,7 +238,6 @@ async def create_channel(
             db.add(ChannelMember(channel_id=channel.id, user_id=u.id))
     await db.commit()
     return JSONResponse({"id": channel.id, "name": channel.name})
-
 
 @router.post("/channel/{channel_id}/join")
 async def join_channel(
@@ -308,9 +289,6 @@ async def update_channel(
             db.add(ChannelMember(channel_id=channel_id, user_id=u.id))
     await db.commit()
     return JSONResponse({"status": "updated"})
-
-
-# ── FILE UPLOAD ────────────────────────────────────────────────────────────────
 
 @router.post("/upload")
 async def upload_file(
@@ -376,8 +354,6 @@ async def upload_file(
     return JSONResponse({"status": "ok", "file_url": file_url})
 
 
-# ── VOICE NOTE UPLOAD ──────────────────────────────────────────────────────────
-
 @router.post("/voice")
 async def upload_voice(
     channel_id: int = Form(...),
@@ -409,7 +385,7 @@ async def upload_voice(
             file_url=file_url,
             file_name=unique_name,
             file_size=len(data),
-            voice_duration=duration,   # FIX: store duration in DB
+            voice_duration=duration,
             thread_id=thread_id,
             is_thread_reply=thread_id is not None,
             is_deleted=False,
@@ -428,8 +404,6 @@ async def upload_voice(
 
     return JSONResponse({"status": "ok", "file_url": file_url})
 
-
-# ── REACTIONS ─────────────────────────────────────────────────────────────────
 
 @router.post("/{message_id}/react")
 async def toggle_reaction(
@@ -471,8 +445,6 @@ async def toggle_reaction(
     return JSONResponse({"status": action, "reactions": reactions})
 
 
-# ── READ RECEIPTS ─────────────────────────────────────────────────────────────
-
 @router.get("/{message_id}/readers")
 async def get_readers(
     message_id: int,
@@ -487,8 +459,6 @@ async def get_readers(
     )).all()
     return JSONResponse([{"name": r.full_name, "read_at": r.read_at.isoformat()} for r in rows])
 
-
-# ── SEARCH ────────────────────────────────────────────────────────────────────
 
 @router.get("/search")
 async def search_messages(
@@ -518,8 +488,6 @@ async def search_messages(
     return JSONResponse({"results": messages, "query": q})
 
 
-# ── MENTIONS ─────────────────────────────────────────────────────────────────
-
 @router.get("/mentions")
 async def get_mentions(
     db: AsyncSession = Depends(get_db),
@@ -547,7 +515,6 @@ async def get_mentions(
         })
     return JSONResponse(results)
 
-
 @router.post("/mentions/read-all")
 async def mark_mentions_read(
     db: AsyncSession = Depends(get_db),
@@ -560,9 +527,6 @@ async def mark_mentions_read(
     )
     await db.commit()
     return JSONResponse({"status": "ok"})
-
-
-# ── DELETE MESSAGE ─────────────────────────────────────────────────────────────
 
 @router.post("/{message_id}/delete")
 async def delete_message(
@@ -587,9 +551,6 @@ async def delete_message(
         "message_id": message_id,
     })
     return JSONResponse({"status": "deleted"})
-
-
-# ── MENTION HELPER ─────────────────────────────────────────────────────────────
 
 async def _process_mentions(content: str, message_id: int, sender_id: int, channel_id: int, sess: AsyncSession):
     """Parse @name mentions, store them, push WS notifications."""
@@ -640,9 +601,6 @@ async def _process_mentions(content: str, message_id: int, sender_id: int, chann
         })
 
     await sess.commit()
-
-
-# ── WEBSOCKET ──────────────────────────────────────────────────────────────────
 
 @router.websocket("/ws/{channel_id}")
 async def websocket_endpoint(
@@ -863,9 +821,7 @@ async def websocket_endpoint(
                     "type":      "call_missed",
                     "call_uuid": call_uuid,
                     "caller_id": user.id,
-                })
-                    
-                    
+                }) 
     except WebSocketDisconnect:
         manager.disconnect_from_channel(websocket, channel_id, user.id)
         await manager.broadcast_to_channel(channel_id, {
@@ -877,7 +833,6 @@ async def websocket_endpoint(
         logger.error(f"WS error for user {user.id}: {e}")
         manager.disconnect_from_channel(websocket, channel_id, user.id)
 
-
 @router.post("/schedule")
 async def schedule_message(
     request: Request,
@@ -885,7 +840,6 @@ async def schedule_message(
     current_user: User = Depends(require_user),
 ):
     from app.models import ScheduledMessage
- 
     body = await request.json()
     channel_id   = body.get("channel_id")
     content      = (body.get("content") or "").strip()
@@ -928,7 +882,6 @@ async def schedule_message(
     })
     
 
- 
 @router.get("/scheduled")
 async def list_scheduled(
     channel_id: int = Query(...),
@@ -950,8 +903,7 @@ async def list_scheduled(
         "id": s.id, "content": s.content,
         "scheduled_at": s.scheduled_at.isoformat(),
     } for s in rows])
- 
- 
+
 @router.delete("/scheduled/{sm_id}")
 async def cancel_scheduled(
     sm_id: int,

@@ -654,7 +654,6 @@ async def _resume_campaign_emails(campaign_id: int):
         if not campaign:
             return
  
-        # Only grab recipients not yet sent
         recipients = (await db.execute(
             select(EmailCampaignRecipient)
             .where(
@@ -672,10 +671,9 @@ async def _resume_campaign_emails(campaign_id: int):
  
         sent    = campaign.sent_count or 0
         failed  = campaign.failed_count or 0
-        stopped = False          # set True when daily cap is hit
+        stopped = False  
  
         for r in recipients:
-            # Personalise
             personalised_html = campaign.html_body
             personalised_text = campaign.text_body or ""
  
@@ -709,14 +707,11 @@ async def _resume_campaign_emails(campaign_id: int):
                     await db.commit()
                     logger.warning(f"Campaign {campaign_id} paused after {failed} failures — likely daily limit.")
                     return
-
             campaign.sent_count   = sent
             campaign.failed_count = failed
             await db.commit()
 
             await asyncio.sleep(1.5)
- 
-        # Final status
         remaining = (await db.execute(
             select(EmailCampaignRecipient).where(
                 EmailCampaignRecipient.campaign_id == campaign_id,
@@ -736,7 +731,6 @@ async def _resume_campaign_emails(campaign_id: int):
             f"status={campaign.status}"
         )
  
-
 @router.get("/{campaign_id}/progress")
 async def campaign_progress(
     campaign_id: int,
