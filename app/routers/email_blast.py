@@ -445,15 +445,7 @@ async def _send_campaign_emails(campaign_id: int):
         for r in recipients:
             personalised_html = campaign.html_body
             personalised_text = campaign.text_body or ""
-
-            # if r.name:
-            #     personalised_html = personalised_html.replace(
-            #         "Dear Esteemed", f"Dear {r.name},"
-            #     ).replace("Dear Sir/Madam", f"Dear {r.name}")
-            #     personalised_text = personalised_text.replace(
-            #         "Dear Esteemed", f"Dear {r.name},"
-            #     ).replace("Dear Sir/Madam", f"Dear {r.name}")
-
+            
             success = await send_email(
                 to_email  = r.email,
                 to_name   = r.name or "",
@@ -563,8 +555,6 @@ async def campaign_detail(
         "created_at":   campaign.created_at.isoformat() if campaign.created_at else None,
         "recipients":   [{"email": r.email, "name": r.name, "status": r.status} for r in recipients],
     })
-    
-    
 
 @router.post("/{campaign_id}/resume")
 async def resume_campaign(
@@ -664,7 +654,6 @@ async def _resume_campaign_emails(campaign_id: int):
         if not campaign:
             return
  
-        # Only grab recipients not yet sent
         recipients = (await db.execute(
             select(EmailCampaignRecipient)
             .where(
@@ -682,10 +671,9 @@ async def _resume_campaign_emails(campaign_id: int):
  
         sent    = campaign.sent_count or 0
         failed  = campaign.failed_count or 0
-        stopped = False          # set True when daily cap is hit
+        stopped = False  
  
         for r in recipients:
-            # Personalise
             personalised_html = campaign.html_body
             personalised_text = campaign.text_body or ""
  
@@ -712,23 +700,18 @@ async def _resume_campaign_emails(campaign_id: int):
                 r.status = "failed"
                 r.error  = "SMTP send failed"
                 failed += 1
-                # If it's a daily limit error, stop immediately — no point retrying others
                 if campaign.failed_count is not None and failed >= 3:
-                    # 3 consecutive failures = daily limit hit, pause and stop
                     campaign.sent_count   = sent
                     campaign.failed_count = failed
                     campaign.status       = "paused"
                     await db.commit()
                     logger.warning(f"Campaign {campaign_id} paused after {failed} failures — likely daily limit.")
                     return
-
             campaign.sent_count   = sent
             campaign.failed_count = failed
             await db.commit()
 
             await asyncio.sleep(1.5)
- 
-        # Final status
         remaining = (await db.execute(
             select(EmailCampaignRecipient).where(
                 EmailCampaignRecipient.campaign_id == campaign_id,
@@ -737,7 +720,6 @@ async def _resume_campaign_emails(campaign_id: int):
         )).scalars().first()
  
         if remaining:
-            # Still has unsent — mark as paused (can resume again tomorrow)
             campaign.status = "paused"
         else:
             campaign.status       = "sent"
@@ -748,11 +730,6 @@ async def _resume_campaign_emails(campaign_id: int):
             f"Campaign {campaign_id} resume complete: {sent} sent, {failed} failed, "
             f"status={campaign.status}"
         )
- 
- 
-# ─────────────────────────────────────────────────────────────────────────────
-# ADD GET PROGRESS ENDPOINT — for the UI to poll live progress
-# ─────────────────────────────────────────────────────────────────────────────
  
 @router.get("/{campaign_id}/progress")
 async def campaign_progress(
