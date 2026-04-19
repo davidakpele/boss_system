@@ -482,11 +482,6 @@ class AccountingCategory(Base):
     type       = Column(String(20))   # income | expense
     created_at = Column(DateTime(timezone=True), server_default=func.now())
  
- 
-# ══════════════════════════════════════════════════════════════════════════════
-#  INVENTORY
-# ══════════════════════════════════════════════════════════════════════════════
- 
 class InventoryItem(Base):
     __tablename__ = "inventory_items"
     id              = Column(Integer, primary_key=True, index=True)
@@ -531,11 +526,6 @@ class InventoryMovement(Base):
  
     item     = relationship("InventoryItem", back_populates="movements")
     recorder = relationship("User", foreign_keys=[recorded_by])
- 
- 
-# ══════════════════════════════════════════════════════════════════════════════
-#  HR — RECRUITMENT PIPELINE
-# ══════════════════════════════════════════════════════════════════════════════
  
 class JobStatus(str, enum.Enum):
     open   = "open"
@@ -607,10 +597,6 @@ class HRNotification(Base):
  
     application = relationship("JobApplication")
  
- 
-# ══════════════════════════════════════════════════════════════════════════════
-#  INTERNAL NOTIFICATIONS  (in-app)
-# ══════════════════════════════════════════════════════════════════════════════
  
 class InternalNotification(Base):
     __tablename__ = "internal_notifications"
