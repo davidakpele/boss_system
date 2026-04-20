@@ -29,8 +29,6 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="app/templates")
 
-
-# ── Jinja2 custom filters ─────────────────────────────────────────────────────
 def _fromjson(s):
     if not s:
         return {}
@@ -41,8 +39,6 @@ def _fromjson(s):
 
 templates.env.filters["fromjson"] = _fromjson
 
-
-# ── Lifespan ──────────────────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 1. Create all DB tables (app models + security models)
