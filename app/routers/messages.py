@@ -18,6 +18,7 @@ from app.auth import require_user
 from app.services.websocket_manager import manager
 from app.services.ai_service import ai_service
 from app.config import settings
+from app.services.knowledge_harvester import harvester
 
 logger = logging.getLogger(__name__)
 
@@ -697,6 +698,20 @@ async def websocket_endpoint(
                 except Exception as e:
                     logger.error(f"Knowledge extraction error: {e}")
 
+                # Passive learning — fire and forget, don't block the WS response
+                if msg.content and len(msg.content.split()) >= 40:
+                    import asyncio
+                    async with AsyncSessionLocal() as ch_sess:
+                        channel_obj = (await ch_sess.execute(
+                            select(Channel).where(Channel.id == channel_id)
+                        )).scalar_one_or_none()
+                    asyncio.create_task(harvester.learn_from_message(
+                        content      = msg.content,
+                        channel_name = channel_obj.name if channel_obj else "",
+                        department   = channel_obj.department if channel_obj and channel_obj.department else "General",
+                        db           = AsyncSessionLocal(),
+                    ))
+
             elif msg_type == "typing":
                 await manager.broadcast_to_channel(channel_id, {
                     "type": "typing",
@@ -713,7 +728,6 @@ async def websocket_endpoint(
                     }, exclude_user=user.id)
 
             elif msg_type == "read":
-                # FIX: handle read receipt entirely in WS (no HTTP route needed from frontend)
                 message_id = data.get("message_id")
                 if message_id:
                     async with AsyncSessionLocal() as sess:
@@ -726,7 +740,6 @@ async def websocket_endpoint(
                         if not existing:
                             sess.add(MessageReadReceipt(message_id=message_id, user_id=user.id))
                             await sess.commit()
-                    # Broadcast receipt to others in channel (sender sees it on others' screens)
                     await manager.broadcast_to_channel(channel_id, {
                         "type": "read_receipt",
                         "message_id": message_id,
@@ -736,6 +749,7 @@ async def websocket_endpoint(
 
             elif msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
+
             elif msg_type == "call_start":
                 await manager.broadcast_to_channel(channel_id, {
                     "type":         "call_start",
@@ -747,30 +761,30 @@ async def websocket_endpoint(
                     "channel_id":   channel_id,
                     "target_ids":   data.get("target_ids", []),
                 }, exclude_user=user.id)
- 
+
             elif msg_type == "call_offer":
                 target_user_id = data.get("target_user_id")
                 if target_user_id:
                     await manager.send_to_user(int(target_user_id), {
-                        "type":          "call_offer",
-                        "offer":         data.get("offer"),
-                        "from_user_id":  user.id,
-                        "from_user_name":user.full_name,
-                        "call_uuid":     data.get("call_uuid", ""),
-                        "channel_id":    channel_id,
+                        "type":           "call_offer",
+                        "offer":          data.get("offer"),
+                        "from_user_id":   user.id,
+                        "from_user_name": user.full_name,
+                        "call_uuid":      data.get("call_uuid", ""),
+                        "channel_id":     channel_id,
                     })
- 
+
             elif msg_type == "call_answer":
                 target_user_id = data.get("target_user_id")
                 if target_user_id:
                     await manager.send_to_user(int(target_user_id), {
-                        "type":          "call_answer",
-                        "answer":        data.get("answer"),
-                        "from_user_id":  user.id,
-                        "from_user_name":user.full_name,
-                        "call_uuid":     data.get("call_uuid", ""),
+                        "type":           "call_answer",
+                        "answer":         data.get("answer"),
+                        "from_user_id":   user.id,
+                        "from_user_name": user.full_name,
+                        "call_uuid":      data.get("call_uuid", ""),
                     })
- 
+
             elif msg_type == "ice_candidate":
                 target_user_id = data.get("target_user_id")
                 if target_user_id:
@@ -780,7 +794,7 @@ async def websocket_endpoint(
                         "from_user_id":  user.id,
                         "call_uuid":     data.get("call_uuid", ""),
                     })
- 
+
             elif msg_type == "call_end":
                 call_uuid = data.get("call_uuid", "")
                 is_conference = data.get("is_conference", False)
@@ -788,22 +802,22 @@ async def websocket_endpoint(
                     uid for uid in manager.get_online_users(channel_id)
                     if uid != user.id
                 ]
- 
+
                 if is_conference and len(active_peers) >= 2:
                     await manager.broadcast_to_channel(channel_id, {
-                        "type":       "call_participant_left",
-                        "user_id":    user.id,
-                        "user_name":  user.full_name,
-                        "call_uuid":  call_uuid,
-                        "remaining":  len(active_peers),
+                        "type":      "call_participant_left",
+                        "user_id":   user.id,
+                        "user_name": user.full_name,
+                        "call_uuid": call_uuid,
+                        "remaining": len(active_peers),
                     }, exclude_user=user.id)
                 else:
                     await manager.broadcast_to_channel(channel_id, {
                         "type":      "call_terminated",
                         "ended_by":  user.full_name,
                         "call_uuid": call_uuid,
-                    })   
- 
+                    })
+
             elif msg_type == "call_reject":
                 target_user_id = data.get("target_user_id")
                 call_uuid      = data.get("call_uuid", "")
@@ -814,14 +828,15 @@ async def websocket_endpoint(
                         "rejected_by_id": user.id,
                         "call_uuid":      call_uuid,
                     })
- 
+
             elif msg_type == "call_missed":
                 call_uuid = data.get("call_uuid", "")
                 await manager.broadcast_to_channel(channel_id, {
                     "type":      "call_missed",
                     "call_uuid": call_uuid,
                     "caller_id": user.id,
-                }) 
+                })
+
     except WebSocketDisconnect:
         manager.disconnect_from_channel(websocket, channel_id, user.id)
         await manager.broadcast_to_channel(channel_id, {
@@ -832,6 +847,7 @@ async def websocket_endpoint(
     except Exception as e:
         logger.error(f"WS error for user {user.id}: {e}")
         manager.disconnect_from_channel(websocket, channel_id, user.id)
+        
 
 @router.post("/schedule")
 async def schedule_message(

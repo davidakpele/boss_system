@@ -294,6 +294,9 @@ async def _handle_inbound(
     msg_type: str,
 ):
     """Core logic: find/create contact → AI reply → save → send."""
+    import asyncio
+    from app.services.knowledge_harvester import harvester
+
     contact = (await db.execute(
         select(WhatsAppContact).where(WhatsAppContact.wa_id == wa_id)
     )).scalar_one_or_none()
@@ -335,7 +338,7 @@ async def _handle_inbound(
 
     intent = detect_intent(content)
     inbound.intent = intent
-    
+
     reply, accounting_data = await build_ai_reply(
         contact, content, intent, session, db
     )
@@ -358,12 +361,29 @@ async def _handle_inbound(
             logger.info(f"Auto-recorded {accounting_data['type']} of {accounting_data['amount']} from WhatsApp")
         except Exception as e:
             logger.error(f"Failed to save accounting record: {e}")
+
     history = list(session.history or [])
     history.append({"role": "user",      "content": content})
     history.append({"role": "assistant", "content": reply})
-    session.history = history[-20:] 
+    session.history = history[-20:]
 
     await db.commit()
+
+    # Passive learning — inbound message
+    asyncio.create_task(harvester.learn_from_whatsapp_message(
+        content      = content,
+        direction    = "inbound",
+        contact_name = contact.name or contact.phone,
+        db           = AsyncSessionLocal(),
+    ))
+
+    # Passive learning — outbound AI reply
+    asyncio.create_task(harvester.learn_from_whatsapp_message(
+        content      = reply,
+        direction    = "outbound",
+        contact_name = contact.name or contact.phone,
+        db           = AsyncSessionLocal(),
+    ))
 
     send_result = await send_whatsapp_message(wa_id, reply, wa_msg_id)
 
@@ -382,7 +402,6 @@ async def _handle_inbound(
         await out_db.commit()
 
     logger.info(f"WhatsApp: replied to {wa_id} (intent={intent})")
-
 
 @router.get("", response_class=HTMLResponse)
 async def whatsapp_dashboard(

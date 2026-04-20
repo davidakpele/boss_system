@@ -110,7 +110,6 @@ async def admin_unlock_account(
     ok = await LockoutService.unlock(db, email)
     return JSONResponse({"unlocked": ok, "email": email})
 
-
 @app.post("/admin/security/lock/{email}", tags=["admin-security"])
 async def admin_lock_account(
     email: str,
@@ -121,7 +120,6 @@ async def admin_lock_account(
     """Manually lock an account indefinitely."""
     await LockoutService.manual_lock(db, email, reason)
     return JSONResponse({"locked": True, "email": email})
-
 
 @app.post("/admin/security/retention/run", tags=["admin-security"])
 async def admin_run_retention(
@@ -242,7 +240,37 @@ async def _campaign_scheduler_worker():
                     logger.info(f"Campaign scheduler triggered campaign {campaign.id}")
         except Exception as e:
             logger.error(f"Campaign scheduler error: {e}")
-            
+       
+async def _nightly_harvest_worker():
+    """Runs every night at 2am to harvest knowledge from all channels."""
+    import asyncio
+    from datetime import datetime
+    from app.database import AsyncSessionLocal
+    from app.services.knowledge_harvester import harvester
+ 
+    while True:
+        # Calculate seconds until next 2am UTC
+        now = datetime.utcnow()
+        next_2am = now.replace(hour=2, minute=0, second=0, microsecond=0)
+        if now >= next_2am:
+            # Already past 2am today — schedule for tomorrow
+            from datetime import timedelta
+            next_2am += timedelta(days=1)
+ 
+        wait_seconds = (next_2am - now).total_seconds()
+        await asyncio.sleep(wait_seconds)
+ 
+        try:
+            async with AsyncSessionLocal() as db:
+                results = await harvester.run_full_harvest(db)
+                logger.info(f"Nightly harvest: {results}")
+        except Exception as e:
+            logger.error(f"Nightly harvest failed: {e}", exc_info=True)       
+     
 asyncio.create_task(_scheduled_message_worker())
 
 asyncio.create_task(_campaign_scheduler_worker())
+
+asyncio.create_task(_nightly_harvest_worker())
+
+

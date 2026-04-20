@@ -74,6 +74,8 @@ async def chat(
     request: Request, db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_user),
 ):
+    from app.services.knowledge_harvester import harvester
+
     body = await request.json()
     session_id = body.get("session_id")
     user_message = body.get("message", "").strip()
@@ -130,6 +132,13 @@ async def chat(
                 source_chunks=context_chunks,
             ))
             await save_db.commit()
+
+        asyncio.create_task(harvester.learn_from_ai_conversation(
+            question = user_message,
+            answer   = full_response,
+            db       = AsyncSessionLocal(),
+        ))
+
         yield f"data: {json.dumps({'done': True, 'session_id': session_id_final, 'sources': context_chunks})}\n\n"
 
     return StreamingResponse(stream_response(), media_type="text/event-stream")

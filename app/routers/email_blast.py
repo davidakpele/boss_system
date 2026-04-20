@@ -471,8 +471,11 @@ async def _send_campaign_emails(campaign_id: int):
         campaign.completed_at = datetime.utcnow()
         await db.commit()
 
-        logger.info(f"Campaign {campaign_id} complete: {sent} sent, {failed} failed")
+        from app.services.knowledge_harvester import harvester
+        async with AsyncSessionLocal() as learn_db:
+            await harvester.learn_from_email_campaign(campaign, learn_db)
 
+        logger.info(f"Campaign {campaign_id} complete: {sent} sent, {failed} failed")
 
 @router.post("/{campaign_id}/schedule")
 async def schedule_campaign(
