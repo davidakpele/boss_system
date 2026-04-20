@@ -110,10 +110,15 @@
       </div>
       {% endif %}
 
-     <!-- Action buttons -->
+      <!-- Action buttons -->
       <div class="flex gap-2" style="flex-wrap:wrap;">
         <button class="btn btn-ghost btn-xs" onclick="previewCampaign({{ c.id }})">
           <i class="fa-solid fa-eye"></i> Preview
+        </button>
+
+        <button class="btn btn-ghost btn-xs" style="color:var(--red);"
+                onclick="deleteCampaign({{ c.id }}, '{{ c.name|e }}', this)">
+          <i class="fa-solid fa-trash"></i> Delete
         </button>
 
         {% if c.status == 'draft' %}
@@ -130,7 +135,6 @@
           </button>
 
         {% elif c.status in ('paused', 'sending') %}
-          <!-- Resume always clickable — allows force-resuming a stalled send -->
           <button class="btn btn-primary btn-xs" id="resume-{{ c.id }}"
                   onclick="resumeCampaign({{ c.id }}, this)">
             <i class="fa-solid fa-{% if c.status == 'sending' %}rotate-right{% else %}play{% endif %}"></i>
@@ -225,7 +229,7 @@ Example: Write a marketing email to academic librarians introducing ProQuest dat
     <!-- Step 2: Preview + edit generated email -->
     <div id="step2" style="display:none;">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <div style="font-weight:700;font-size:14px;">✉️ Generated Email</div>
+        <div style="font-weight:700;font-size:14px;"><i class="fa fa-solid fa-envelope"></i> Generated Email</div>
         <button class="btn btn-ghost btn-xs" onclick="goBackToStep1()"><i class="fa-solid fa-arrow-left"></i> Regenerate</button>
       </div>
 
@@ -309,7 +313,7 @@ Example: Write a marketing email to academic librarians introducing ProQuest dat
 <div class="modal-overlay" id="previewModal">
   <div class="modal" style="max-width:680px;max-height:90vh;overflow-y:auto;">
     <div class="modal-title">
-      <span>📧 Campaign Preview</span>
+      <span><i class="fa fa-solid fa-eye"></i> Campaign Preview</span>
       <span class="modal-close" onclick="closeModal('previewModal')"><i class="fa-solid fa-xmark"></i></span>
     </div>
     <div id="previewContent" style="font-size:13.5px;line-height:1.75;color:var(--text2);"></div>
@@ -352,7 +356,7 @@ let currentCampaignId = null;
 let schedulingCampaignId = null;
 let progressCampaignId = null;
 let progressPoller     = null;
-// Load contacts when modal opens
+
 document.getElementById('generateModal').addEventListener('click', () => {});
 
 async function generateEmail() {
@@ -391,7 +395,6 @@ async function generateEmail() {
       kbInfo.style.display = 'block';
     }
 
-    // Load contacts
     await loadContacts();
 
     document.getElementById('step1').style.display = 'none';
@@ -474,7 +477,6 @@ async function saveCampaignDraft(scheduleAt = null) {
     .split(',').map(e => e.trim()).filter(e => e && e.includes('@'));
 
   const bodyText = document.getElementById('gen-body-text').value;
-  // Convert line breaks to HTML
   let htmlBody = bodyText.replace(/\n\n/g, '</p><p>').replace(/\n/g, '<br>');
   htmlBody = `<p>${htmlBody}</p>`;
   htmlBody = htmlBody.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
@@ -533,7 +535,6 @@ async function confirmSchedule() {
   const at  = document.getElementById('scheduleAt').value;
   const cid = schedulingCampaignId || currentCampaignId;
   if (!cid) {
-    // Need to save first
     try { const d = await saveCampaignDraft(); currentCampaignId = d.campaign_id; schedulingCampaignId = d.campaign_id; }
     catch(e) { toast(e.message, 'error'); return; }
   }
@@ -572,6 +573,43 @@ async function cancelCampaign(id, btn) {
   else { btn.disabled = false; }
 }
 
+async function deleteCampaign(id, name, btn) {
+  if (!confirm(
+    `Delete campaign "${name}"?\n\n` +
+    'This will permanently delete:\n' +
+    '• The campaign\n' +
+    '• All recipient records\n' +
+    '• All delivery status history\n\n' +
+    'This cannot be undone.'
+  )) return;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+  try {
+    const r = await fetch(`/email-campaigns/${id}`, { method: 'DELETE' });
+    const d = await r.json();
+    if (r.ok) {
+      toast(`Campaign "${name}" deleted`, 'info');
+      const card = document.getElementById(`card-${id}`);
+      if (card) {
+        card.style.transition = 'opacity .3s, transform .3s';
+        card.style.opacity    = '0';
+        card.style.transform  = 'scale(0.95)';
+        setTimeout(() => card.remove(), 300);
+      } else {
+        setTimeout(() => location.reload(), 500);
+      }
+    } else {
+      toast(d.error || 'Delete failed', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+    }
+  } catch(e) {
+    toast('Network error', 'error');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fa-solid fa-trash"></i> Delete';
+  }
+}
+
 async function previewCampaign(id) {
   const r = await fetch(`/email-campaigns/${id}/detail`);
   const d = await r.json();
@@ -606,9 +644,8 @@ async function resumeCampaign(id, btn) {
 
   if (r.ok && d.status !== 'nothing_to_do') {
     toast(`Resuming — ${d.remaining} emails queued`, 'success');
-    // Open progress modal and start polling
     showProgress(id);
-    setTimeout(() => location.reload(), 90000);   // refresh after 90s
+    setTimeout(() => location.reload(), 90000);
   } else if (d.status === 'nothing_to_do') {
     toast('All recipients already sent to ✓', 'success');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-check"></i> Done'; }
@@ -626,7 +663,6 @@ async function showProgress(id) {
   openModal('progressModal');
   await refreshProgress();
 
-  // Poll every 4 seconds while sending
   clearInterval(progressPoller);
   progressPoller = setInterval(async () => {
     const done = await refreshProgress();
@@ -651,7 +687,6 @@ function renderProgressBody(d) {
   const sending = d.status === 'sending';
   const canResume = d.can_resume;
 
-  // Status colour
   const statusColors = {
     sent: 'var(--green)', sending: 'var(--yellow)',
     paused: 'var(--yellow)', draft: 'var(--text3)', failed: 'var(--red)',
@@ -659,7 +694,6 @@ function renderProgressBody(d) {
   const statusColor = statusColors[d.status] || 'var(--text2)';
 
   document.getElementById('progressBody').innerHTML = `
-    <!-- Campaign name + status -->
     <div style="margin-bottom:16px;">
       <div style="font-weight:700;font-size:15px;margin-bottom:4px;">${escHtml(d.campaign_name)}</div>
       <span style="font-size:12px;font-weight:700;color:${statusColor};
@@ -668,7 +702,6 @@ function renderProgressBody(d) {
       </span>
     </div>
 
-    <!-- Big percentage -->
     <div style="text-align:center;margin-bottom:16px;">
       <div style="font-size:42px;font-weight:800;font-family:var(--font-mono);
                   color:${pct === 100 ? 'var(--green)' : 'var(--text)'};">
@@ -677,14 +710,12 @@ function renderProgressBody(d) {
       <div style="font-size:12px;color:var(--text3);">delivered</div>
     </div>
 
-    <!-- Progress bar -->
     <div style="background:var(--border);border-radius:20px;height:8px;
                 overflow:hidden;margin-bottom:16px;">
       <div style="width:${pct}%;background:${pct === 100 ? 'var(--green)' : 'var(--accent)'};
                   height:100%;border-radius:20px;transition:width .5s ease;"></div>
     </div>
 
-    <!-- Stat grid -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:16px;">
       <div style="text-align:center;padding:12px;background:var(--bg2);
                   border-radius:var(--radius);border:1px solid var(--border);">
@@ -707,12 +738,11 @@ function renderProgressBody(d) {
       </div>
     </div>
 
-    <!-- Gmail limit tip -->
     ${d.status === 'paused' ? `
     <div style="background:rgba(245,158,11,.07);border:1px solid rgba(245,158,11,.25);
                 border-radius:var(--radius);padding:12px 14px;font-size:12.5px;
                 color:var(--text2);line-height:1.6;">
-      <strong>📬 Gmail daily limit reached.</strong><br/>
+      <strong><i class="fa-solud fa-envelope"></i> Gmail daily limit reached.</strong><br/>
       Come back tomorrow and click <strong>Resume</strong> — it will continue
       from where it stopped. No one who already received the email will get it again.
       <br/><br/>
@@ -726,7 +756,6 @@ function renderProgressBody(d) {
       <i class="fa-solid fa-circle-check"></i> <strong>All emails delivered successfully!</strong>
     </div>` : ''}`;
 
-  // Show/hide resume button in modal footer
   const resumeBtn = document.getElementById('modalResumeBtn');
   if (resumeBtn) {
     resumeBtn.style.display = canResume ? 'flex' : 'none';

@@ -471,8 +471,11 @@ async def _send_campaign_emails(campaign_id: int):
         campaign.completed_at = datetime.utcnow()
         await db.commit()
 
-        logger.info(f"Campaign {campaign_id} complete: {sent} sent, {failed} failed")
+        from app.services.knowledge_harvester import harvester
+        async with AsyncSessionLocal() as learn_db:
+            await harvester.learn_from_email_campaign(campaign, learn_db)
 
+        logger.info(f"Campaign {campaign_id} complete: {sent} sent, {failed} failed")
 
 @router.post("/{campaign_id}/schedule")
 async def schedule_campaign(
@@ -615,7 +618,6 @@ async def resume_campaign(
             "already_sent": already_sent,
         })
 
-    # Reset failed → pending so they get retried
     failed_recipients = (await db.execute(
         select(EmailCampaignRecipient).where(
             EmailCampaignRecipient.campaign_id == campaign_id,
@@ -773,3 +775,46 @@ async def campaign_progress(
         "can_resume":    (pending + failed) > 0 and campaign.status not in ("sending",),
         "completed_at":  campaign.completed_at.isoformat() if campaign.completed_at else None,
     })
+    
+
+@router.delete("/{campaign_id}")
+async def delete_campaign(
+    campaign_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_user),
+):
+    """
+    Hard-delete a campaign and everything related to it:
+      - EmailCampaignRecipient rows (FK: campaign_id)
+      - EmailCampaign row
+    Only the creator or admin/super_admin can delete.
+    Cannot delete a campaign that is actively sending.
+    """
+    campaign = (await db.execute(
+        select(EmailCampaign).where(EmailCampaign.id == campaign_id)
+    )).scalar_one_or_none()
+ 
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    if (campaign.created_by != current_user.id and
+            current_user.role not in (UserRole.super_admin, UserRole.admin)):
+        raise HTTPException(status_code=403, detail="Not authorised to delete this campaign")
+
+    if campaign.status == "sending":
+        return JSONResponse(
+            {"error": "Cannot delete a campaign that is currently sending. Wait for it to finish or pause it first."},
+            status_code=400,
+        )
+
+    from sqlalchemy import delete as sql_delete
+    await db.execute(
+        sql_delete(EmailCampaignRecipient)
+        .where(EmailCampaignRecipient.campaign_id == campaign_id)
+    )
+ 
+    await db.delete(campaign)
+    await db.commit()
+ 
+    logger.info(f"Campaign {campaign_id} deleted by user {current_user.id}")
+    return JSONResponse({"status": "deleted", "campaign_id": campaign_id})
