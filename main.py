@@ -211,7 +211,6 @@ async def _scheduled_message_worker():
         except Exception as e:
             logger.error(f"Scheduled message worker error: {e}", exc_info=True)
 
-
 async def _campaign_scheduler_worker():
     """Deliver scheduled email campaigns on time."""
     import asyncio
@@ -249,11 +248,9 @@ async def _nightly_harvest_worker():
     from app.services.knowledge_harvester import harvester
  
     while True:
-        # Calculate seconds until next 2am UTC
         now = datetime.utcnow()
         next_2am = now.replace(hour=2, minute=0, second=0, microsecond=0)
         if now >= next_2am:
-            # Already past 2am today — schedule for tomorrow
             from datetime import timedelta
             next_2am += timedelta(days=1)
  
