@@ -30,3 +30,5 @@ reportlab
 pyotp
 pymupdf
 cryptography>=42.0.0
+asyncpg
+alembic

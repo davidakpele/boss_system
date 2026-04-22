@@ -2,12 +2,15 @@
 from fastapi import APIRouter, Depends, Request, Form, UploadFile, File, HTTPException, BackgroundTasks
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from httpx import request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pathlib import Path
 from app.database import get_db
+from app.middleware.tenant_isolation import tenant_filter
 from app.models import Document, KnowledgeChunk, User, AuditLog, DocStatus, AccessLevel, ComplianceRecord, RiskItem
 from app.auth import require_user
+from app.services.audit_service import AuditService
 from app.services.document_service import extract_text_from_file, chunk_text, get_file_type
 from app.services.ai_service import ai_service
 from app.config import settings
@@ -91,6 +94,7 @@ async def documents_list(
 ):
     if current_user.role in ("super_admin", "admin"):
         stmt = select(Document, User.full_name).join(User, Document.author_id == User.id)
+        stmt = stmt.where(*tenant_filter(current_user, Document))
     elif current_user.role == "manager":
         stmt = (select(Document, User.full_name).join(User, Document.author_id == User.id)
                 .where(Document.access_level.in_([AccessLevel.all_staff, AccessLevel.restricted])))
@@ -178,8 +182,7 @@ async def create_document(
             logger.error(f"Compliance extraction: {e}")
         background_tasks.add_task(_post_approve_background, doc.id, full_content, department)
 
-    db.add(AuditLog(user_id=current_user.id, action="create_document", resource_type="document",
-                    resource_id=doc.id, details={"title": title, "department": department}))
+    await AuditService.log_document(db, current_user, "document.create", doc, request=request)
     await db.commit()
     return RedirectResponse("/documents", status_code=302)
 
@@ -200,8 +203,7 @@ async def approve_document(
         for chunk in chunk_text(doc.content, chunk_size=400)[:20]:
             db.add(KnowledgeChunk(document_id=doc.id, source_type="document",
                                   content=chunk, department=doc.department))
-    db.add(AuditLog(user_id=current_user.id, action="approve_document", resource_type="document",
-                    resource_id=doc_id, details={"title": doc.title}))
+    await AuditService.log_document(db, current_user, "document.approve", doc, request=request)
     await db.commit()
     if doc.content:
         background_tasks.add_task(_post_approve_background, doc.id, doc.content, doc.department or "")
@@ -250,10 +252,10 @@ async def knowledge_add_submit(
     content = content.strip()
     if not content:
         return JSONResponse({"error": "Content is required"}, status_code=400)
- 
+    
     # Split into chunks if large
     chunks = chunk_text(content, chunk_size=400, overlap=50) if len(content) > 400 else [content]
- 
+    
     chunk_ids = []
     for ct in chunks[:30]:
         summary = await ai_service.summarize_text(ct)

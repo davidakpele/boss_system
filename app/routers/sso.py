@@ -19,6 +19,7 @@ from app.database import get_db
 from app.models import User, UserRole, OAuthAccount, AuditLog
 from app.auth import create_access_token
 from app.config import settings
+from app.services.audit_service import AuditService
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth/sso", tags=["sso"])
@@ -175,13 +176,8 @@ async def _sso_login(request, db, provider, provider_uid, email, name, tokens):
         return RedirectResponse("/auth/login?sso_error=inactive")
 
     user.is_online = True
-    db.add(AuditLog(
-        user_id=user.id,
-        action=f"sso_login_{provider}",
-        resource_type="auth",
-        details={"email": email},
-        ip_address=request.client.host if request.client else "",
-    ))
+    await AuditService.log_auth(db, user, f"auth.sso_login.{provider}", request=request, details={"email": email})
+
     await db.commit()
 
     token = create_access_token({"sub": str(user.id)})

@@ -18,11 +18,13 @@ from app.routers import business_ops, sso, push
 from app.middleware.ip_allowlist import IPAllowlistMiddleware
 from app.routers import calls as calls_router
 from app.routers import ai_features
+from app.routers import audit as audit_router          # ← NEW
 from app.security_service import seed_default_admin, DataRetentionService
 from app.routers.auth import require_admin
 from app.database import get_db
 from app.routers import platform as platform_router
 from app.middleware.rate_limiter import RateLimiterMiddleware
+from app.models import ImmutableAuditLog 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 logging.basicConfig(level=logging.INFO)
@@ -88,13 +90,14 @@ async def service_worker():
     )
 
 
-# ── Routers
+# ── Routers ───────────────────────────────────────────────────────────────────
 for r in [
     auth.router, sso.router, push.router, bcc.router,
     analytics.router, ai_features.router, dashboard.router,
     messages.router, ask_boss.router, documents.router,
     admin.router, business_ops.router, whatsapp.router,
-    platform_router.router, calls_router.router, email_blast.router
+    platform_router.router, calls_router.router, email_blast.router,
+    audit_router.router, 
 ]:
     app.include_router(r)
 
@@ -265,9 +268,5 @@ async def _nightly_harvest_worker():
             logger.error(f"Nightly harvest failed: {e}", exc_info=True)       
      
 asyncio.create_task(_scheduled_message_worker())
-
 asyncio.create_task(_campaign_scheduler_worker())
-
 asyncio.create_task(_nightly_harvest_worker())
-
-
