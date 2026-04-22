@@ -72,6 +72,7 @@ async def _store_chunks(
     db: AsyncSession,
     label: str = "",
     min_words: int = 30,
+    tenant_id: int = None, 
 ) -> int:
     """
     Chunk content, deduplicate, summarise, and store.
@@ -102,6 +103,7 @@ async def _store_chunks(
             summary     = summary,
             department  = department,
             keywords    = [{"hash": ch_hash}, {"label": label}],
+            tenant_id   = tenant_id,
         )
         db.add(kc)
         await db.flush()
@@ -129,7 +131,7 @@ class KnowledgeHarvester:
 
     # ── Email Campaigns ───────────────────────────────────────────────────────
 
-    async def learn_from_email_campaign(self, campaign, db: AsyncSession) -> int:
+    async def learn_from_email_campaign(self, campaign, db: AsyncSession, tenant_id: int = None) -> int:
         """
         Learn from a sent email campaign body.
         Called once after a campaign is delivered.
@@ -139,7 +141,6 @@ class KnowledgeHarvester:
         if not body:
             return 0
 
-        # Strip HTML tags — the actual text content is what we want to learn
         plain = _clean_html(body) if '<' in body else body
         label = f"campaign:{campaign.id}:{campaign.name[:40]}"
 
@@ -149,16 +150,16 @@ class KnowledgeHarvester:
             department  = "General",
             db          = db,
             label       = label,
+            tenant_id   = tenant_id,
         )
-
-    # ── Internal Messages ─────────────────────────────────────────────────────
-
+        
     async def learn_from_message(
         self,
         content: str,
         channel_name: str,
         department: str,
         db: AsyncSession,
+        tenant_id: int = None, 
     ) -> int:
         """
         Learn from a single channel message.
@@ -182,11 +183,12 @@ class KnowledgeHarvester:
             db          = db,
             label       = f"channel:{channel_name}",
             min_words   = 40,
+            tenant_id   = tenant_id,
         )
 
     async def learn_from_channel_batch(
         self,
-        messages: list[dict],   # list of {content, channel_name, department}
+        messages: list[dict], 
         db: AsyncSession,
     ) -> int:
         """
@@ -212,6 +214,7 @@ class KnowledgeHarvester:
         direction: str,         # "inbound" | "outbound"
         contact_name: str,
         db: AsyncSession,
+        tenant_id: int = None,
     ) -> int:
         """
         Learn from a WhatsApp message.
@@ -229,6 +232,7 @@ class KnowledgeHarvester:
             db          = db,
             label       = label,
             min_words   = 20,
+            tenant_id   = tenant_id,
         )
 
     # ── AI Conversations ──────────────────────────────────────────────────────
@@ -238,6 +242,7 @@ class KnowledgeHarvester:
         question: str,
         answer: str,
         db: AsyncSession,
+        tenant_id: int = None,
     ) -> int:
         """
         Learn from Ask BOSS conversations.
@@ -264,6 +269,7 @@ class KnowledgeHarvester:
             db          = db,
             label       = "ask_boss",
             min_words   = 30,
+            tenant_id   = tenant_id,
         )
 
     # ── Bulk / Nightly Harvest ────────────────────────────────────────────────
@@ -332,8 +338,6 @@ class KnowledgeHarvester:
                 db           = db,
             )
             results["whatsapp"] += n
-
-        # ── 3. Sent email campaigns ───────────────────────────────────────────
         campaigns = (await db.execute(
             select(EmailCampaign).where(EmailCampaign.status.in_(["sent", "paused"]))
             .order_by(EmailCampaign.created_at.desc())
@@ -343,8 +347,6 @@ class KnowledgeHarvester:
         for campaign in campaigns:
             n = await self.learn_from_email_campaign(campaign, db)
             results["email"] += n
-
-        # ── 4. AI Q&A pairs ───────────────────────────────────────────────────
         from app.models import AIConversation
 
         ai_msgs = (await db.execute(
@@ -353,10 +355,7 @@ class KnowledgeHarvester:
             .order_by(AIMessage.created_at.desc())
             .limit(200)
         )).scalars().all()
-
-        # Match each assistant message with its preceding user message
         for ai_msg in ai_msgs:
-            # Get the user message just before this one
             user_msg = (await db.execute(
                 select(AIMessage)
                 .where(

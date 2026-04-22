@@ -10,6 +10,7 @@ from app.database import get_db, AsyncSessionLocal
 from app.models import AIConversation, AIMessage, User, Document, OnboardingConversation
 from app.auth import require_user
 from app.services.ai_service import ai_service
+from app.services.audit_service import AuditService
 from app.services.websocket_manager import manager
 import uuid, json, asyncio, logging
 
@@ -100,8 +101,16 @@ async def chat(
     history = [{"role": m.role, "content": m.content} for m in history_msgs]
 
     context_chunks = await ai_service.retrieve_context(
-        user_message, db, user_role=current_user.role, department=current_user.department
+        user_message, db,
+        user_role=current_user.role,
+        department=current_user.department,
+        tenant_id=current_user.tenant_id,
     )
+    await AuditService.log(db, "ai.query", user=current_user,
+                           resource_type="knowledge",
+                           details={"query_length": len(user_message)},
+                           request=request)
+
     for chunk in context_chunks:
         if chunk.get("document_id"):
             doc = (await db.execute(

@@ -69,10 +69,10 @@ class Channel(Base):
     description = Column(Text)
     channel_type = Column(String(50), default="department")
     department = Column(String(100))
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     created_by = Column(Integer, ForeignKey("users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    last_activity_at = Column(DateTime(timezone=True), nullable=True)   # NEW: tracks last message time
-
+    last_activity_at = Column(DateTime(timezone=True), nullable=True)  
     messages = relationship("Message", back_populates="channel")
     members = relationship("ChannelMember", back_populates="channel")
 
@@ -98,7 +98,7 @@ class Message(Base):
     file_url = Column(String(500))
     file_name = Column(String(255))
     file_size = Column(Integer)
-    voice_duration = Column(Integer, nullable=True)   # <-- ADD THIS
+    voice_duration = Column(Integer, nullable=True)
     reply_to_id = Column(Integer, ForeignKey("messages.id"), nullable=True)
     reply_to_sender = Column(String(255), nullable=True)
     reply_to_content = Column(Text, nullable=True)
@@ -112,6 +112,7 @@ class Message(Base):
     channel = relationship("Channel", back_populates="messages")
     sender = relationship("User", foreign_keys=[sender_id], back_populates="sent_messages")
     reply_to = relationship("Message", remote_side="Message.id", foreign_keys="Message.reply_to_id")
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
 
 class MessageReaction(Base):
     __tablename__ = "message_reactions"
@@ -149,6 +150,7 @@ class Document(Base):
     description = Column(Text)
     department = Column(String(100))
     access_level = Column(SAEnum(AccessLevel, name="accesslevel"), default=AccessLevel.all_staff)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     status = Column(SAEnum(DocStatus, name="docstatus"), default=DocStatus.draft)
     author_id = Column(Integer, ForeignKey("users.id"))
     approved_by = Column(Integer, ForeignKey("users.id"), nullable=True)
@@ -175,7 +177,8 @@ class KnowledgeChunk(Base):
     summary = Column(Text)
     keywords = Column(JSON, default=list)
     department = Column(String(100))
-    embedding = Column(Text, nullable=True)   # NEW: JSON-encoded float list
+    embedding = Column(Text, nullable=True)
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     document = relationship("Document", back_populates="knowledge_chunks")
@@ -216,7 +219,6 @@ class AIConversation(Base):
 
     messages = relationship("AIMessage", back_populates="conversation")
     user = relationship("User")
-
 
 class AIMessage(Base):
     __tablename__ = "ai_messages"
@@ -325,6 +327,7 @@ class Task(Base):
     due_date = Column(DateTime(timezone=True), nullable=True)
     ai_priority_reason = Column(Text, nullable=True)
     position = Column(Integer, default=0)  # order within column
+    tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
@@ -959,3 +962,73 @@ class EmailCampaignRecipient(Base):
  
     campaign = relationship("EmailCampaign", back_populates="recipients")
     contact  = relationship("EmailContact")
+    
+
+class ImmutableAuditLog(Base):
+    """
+    SOC-2 compliant, append-only audit log.
+    
+    Rules enforced at application level:
+      - No UPDATE or DELETE ever issued against this table.
+      - Written via AuditService.log() only — never directly.
+      - Separate from app data (different table, different query paths).
+      - Indexed for fast querying by tenant, user, action, resource, time.
+    
+    What gets logged (everything):
+      auth.*          login, logout, failed_login, password_change, 2fa_*,
+                      api_key_*, sso_login_*
+      document.*      create, read, update, delete, approve, reject, export,
+                      download
+      knowledge.*     create, delete, bulk_tag, query (AI queries)
+      message.*       send, edit, delete, pin, react
+      user.*          create, update, deactivate, role_change, invite
+      task.*          create, update, delete, status_change
+      hr.*            job_create, application_view, screening, status_change
+      accounting.*    record_create, record_delete, export
+      inventory.*     create, update, movement, delete
+      settings.*      update
+      tenant.*        create, update, toggle, branding_update
+      ai.*            query (who asked what, when — no content stored)
+      admin.*         lockout, unlock, retention_run, backup_trigger
+    """
+    __tablename__ = "immutable_audit_logs"
+ 
+    id            = Column(Integer, primary_key=True, index=True)
+ 
+    # Who
+    user_id       = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    user_email    = Column(String(255), nullable=True)       # denormalised — survives user deletion
+    user_role     = Column(String(50),  nullable=True)
+    tenant_id     = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
+ 
+    # What
+    action        = Column(String(100), nullable=False, index=True)   # e.g. "document.approve"
+    resource_type = Column(String(100), nullable=True,  index=True)   # e.g. "document"
+    resource_id   = Column(Integer,     nullable=True)
+    resource_name = Column(String(500), nullable=True)                # human-readable label
+ 
+    # Context
+    details       = Column(JSON, default=dict)    # additional structured context
+    status        = Column(String(20), default="success")  # success | failure | error
+    error_msg     = Column(Text, nullable=True)
+ 
+    # Where / How
+    ip_address    = Column(String(50),  nullable=True)
+    user_agent    = Column(String(512), nullable=True)
+    session_id    = Column(String(256), nullable=True)
+ 
+    # When (server-side, not client-supplied)
+    created_at    = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+ 
+    # Relationships (read-only; never modify through these)
+    user   = relationship("User",   foreign_keys=[user_id],   lazy="select")
+    tenant = relationship("Tenant", foreign_keys=[tenant_id], lazy="select")
+ 
+    # Composite indexes for SOC-2 query patterns
+    __table_args__ = (
+        Index("ix_audit_tenant_time",  "tenant_id", "created_at"),
+        Index("ix_audit_user_time",    "user_id",   "created_at"),
+        Index("ix_audit_action_time",  "action",    "created_at"),
+        Index("ix_audit_resource",     "resource_type", "resource_id"),
+    )
+ 

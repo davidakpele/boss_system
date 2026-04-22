@@ -1,64 +1,256 @@
-{# Audit Logs template   #}
+{# app/templates/audit/index.html #}
 {% extends "base.html" %}
 {% block title %}Audit Logs — BOSS System{% endblock %}
-{% block page_title %}Audit Logs{% endblock %}
-{% block page_sub %}System activity trail{% endblock %}
+{% block page_title %}Audit Trail{% endblock %}
+{% block page_sub %}SOC-2 compliant, immutable activity log{% endblock %}
 
 {% block content %}
-<div class="card">
-  <div class="card-title flex justify-between">
-    <span><i class="fa-solid fa-list-check" style="color:var(--accent)"></i> Activity Log</span>
-    <span class="text-sm text-muted">Last 100 events</span>
-  </div>
-  <div style="display:flex;gap:8px;margin-bottom:16px;">
-    <a href="/platform/audit/export?format=csv&days=90" class="btn btn-ghost btn-sm">
-      <i class="fa-solid fa-download"></i> Export CSV (90 days)
-    </a>
-    <a href="/platform/audit/export?format=pdf&days=30" class="btn btn-ghost btn-sm">
-      <i class="fa-solid fa-file-pdf"></i> Export PDF (30 days)
-    </a>
-  </div>
-  <table class="table">
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th>User</th>
-        <th>Action</th>
-        <th>Resource</th>
-        <th>Details</th>
-        <th>IP</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for log, uname in logs %}
-      <tr>
-        <td class="font-mono text-xs text-muted">{{ log.created_at.strftime('%b %d %H:%M:%S') if log.created_at else '—' }}</td>
-        <td>
-          <span style="font-size:13px;font-weight:500;">{{ uname }}</span>
-        </td>
-        <td>
-          <span class="badge badge-
-            {% if 'login' in log.action %}green
-            {% elif 'create' in log.action %}blue
-            {% elif 'approve' in log.action %}purple
-            {% elif 'delete' in log.action %}red
-            {% elif 'reject' in log.action %}red
-            {% else %}gray{% endif %}">
-            {{ log.action.replace('_', ' ') }}
-          </span>
-        </td>
-        <td class="text-xs text-muted">{{ log.resource_type or '—' }}{% if log.resource_id %} #{{ log.resource_id }}{% endif %}</td>
-        <td class="text-xs text-muted font-mono">
-          {% if log.details %}
-            {% for k, v in log.details.items() %}{{ k }}: {{ v }}{% if not loop.last %} · {% endif %}{% endfor %}
-          {% else %}—{% endif %}
-        </td>
-        <td class="text-xs text-muted font-mono">{{ log.ip_address or '—' }}</td>
-      </tr>
-      {% else %}
-      <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text3);">No audit logs yet</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<style>
+  .audit-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;align-items:flex-end;}
+  .audit-filters select,.audit-filters input{
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    color:var(--text);padding:8px 12px;font-size:13px;font-family:inherit;outline:none;}
+  .audit-filters select:focus,.audit-filters input:focus{border-color:var(--accent);}
+  .audit-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+  .stat-mini{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;}
+  .stat-mini .val{font-size:22px;font-weight:700;color:var(--text);}
+  .stat-mini .lbl{font-size:11px;color:var(--text3);margin-top:2px;font-family:var(--font-mono);}
+  .action-badge{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-family:var(--font-mono);font-weight:600;}
+  .ab-auth    {background:rgba(16,185,129,.12);color:#10b981;}
+  .ab-document{background:rgba(59,130,246,.12);color:#3b82f6;}
+  .ab-user    {background:rgba(139,92,246,.12);color:#8b5cf6;}
+  .ab-ai      {background:rgba(245,158,11,.12);color:#f59e0b;}
+  .ab-admin   {background:rgba(239,68,68,.12);color:#ef4444;}
+  .ab-default {background:rgba(255,255,255,.06);color:var(--text2);}
+  .status-ok  {color:#10b981;font-size:11px;}
+  .status-fail{color:#ef4444;font-size:11px;}
+  #audit-table-body tr:hover{background:rgba(255,255,255,0.02);}
+  .pagination{display:flex;align-items:center;gap:8px;margin-top:16px;justify-content:flex-end;}
+  .pagination button{padding:6px 14px;background:var(--surface);border:1px solid var(--border);
+    border-radius:6px;color:var(--text2);cursor:pointer;font-size:12px;}
+  .pagination button:disabled{opacity:0.35;cursor:default;}
+  .pagination .page-info{font-size:12px;color:var(--text3);}
+</style>
+
+<!-- Stats row -->
+<div class="audit-stats" id="audit-stats">
+  <div class="stat-mini"><div class="val" id="stat-total">—</div><div class="lbl">Total Events</div></div>
+  <div class="stat-mini"><div class="val" id="stat-failures" style="color:#ef4444">—</div><div class="lbl">Failures</div></div>
+  <div class="stat-mini"><div class="val" id="stat-top-action">—</div><div class="lbl">Top Action</div></div>
+  <div class="stat-mini"><div class="val" id="stat-top-user">—</div><div class="lbl">Most Active User</div></div>
 </div>
+
+<!-- Filters + Export -->
+<div class="card">
+  <div class="card-title flex justify-between" style="flex-wrap:wrap;gap:8px;">
+    <span><i class="fa-solid fa-shield-halved" style="color:var(--accent)"></i> Immutable Audit Log</span>
+    <div style="display:flex;gap:8px;">
+      <a id="export-csv" href="/audit/export?format=csv&days=90" class="btn btn-ghost btn-sm">
+        <i class="fa-solid fa-download"></i> CSV
+      </a>
+      <a id="export-pdf" href="/audit/export?format=pdf&days=30" class="btn btn-ghost btn-sm">
+        <i class="fa-solid fa-file-pdf"></i> PDF
+      </a>
+    </div>
+  </div>
+
+  <!-- Filter bar -->
+  <div class="audit-filters">
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Days</div>
+      <select id="f-days" onchange="loadAudit()">
+        <option value="7">Last 7 days</option>
+        <option value="30" selected>Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="365">Last year</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Resource</div>
+      <select id="f-resource" onchange="loadAudit()">
+        <option value="">All resources</option>
+        <option>auth</option>
+        <option>document</option>
+        <option>knowledge</option>
+        <option>user</option>
+        <option>message</option>
+        <option>task</option>
+        <option>hr</option>
+        <option>accounting</option>
+        <option>inventory</option>
+        <option>settings</option>
+        <option>tenant</option>
+        <option>ai</option>
+      </select>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Action contains</div>
+      <input type="text" id="f-action" placeholder="e.g. document.approve"
+             style="width:180px" oninput="debounceLoad()"/>
+    </div>
+    <div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">Status</div>
+      <select id="f-status" onchange="loadAudit()">
+        <option value="">All</option>
+        <option value="success">Success</option>
+        <option value="failure">Failure</option>
+        <option value="error">Error</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div style="overflow-x:auto;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Timestamp (UTC)</th>
+          <th>User</th>
+          <th>Action</th>
+          <th>Resource</th>
+          <th>Status</th>
+          <th>IP Address</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody id="audit-table-body">
+        <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3);">
+          <i class="fa-solid fa-spinner fa-spin"></i> Loading…
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="pagination">
+    <button id="btn-prev" onclick="prevPage()" disabled>‹ Prev</button>
+    <span class="page-info" id="page-info"></span>
+    <button id="btn-next" onclick="nextPage()">Next ›</button>
+  </div>
+</div>
+
+<script>
+let _offset = 0;
+const _limit = 100;
+let _total   = 0;
+let _debounce = null;
+
+function debounceLoad(){
+  clearTimeout(_debounce);
+  _debounce = setTimeout(loadAudit, 400);
+}
+
+function getFilters(){
+  return {
+    days:          document.getElementById('f-days').value,
+    resource_type: document.getElementById('f-resource').value,
+    action:        document.getElementById('f-action').value,
+    status:        document.getElementById('f-status').value,
+  };
+}
+
+function updateExportLinks(){
+  const d = document.getElementById('f-days').value;
+  document.getElementById('export-csv').href = `/audit/export?format=csv&days=${d}`;
+  document.getElementById('export-pdf').href = `/audit/export?format=pdf&days=${d}`;
+}
+
+async function loadAudit(resetOffset=true){
+  if(resetOffset) _offset = 0;
+  updateExportLinks();
+
+  const f = getFilters();
+  const params = new URLSearchParams({
+    days: f.days, limit: _limit, offset: _offset,
+    ...(f.resource_type && {resource_type: f.resource_type}),
+    ...(f.action        && {action: f.action}),
+    ...(f.status        && {status: f.status}),
+  });
+
+  const tbody = document.getElementById('audit-table-body');
+  tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text3)">
+    <i class="fa-solid fa-spinner fa-spin"></i> Loading…</td></tr>`;
+
+  try {
+    const [dataRes, statsRes] = await Promise.all([
+      fetch('/audit/data?' + params).then(r => r.json()),
+      fetch(`/audit/stats?days=${f.days}`).then(r => r.json()),
+    ]);
+
+    _total = dataRes.total || 0;
+    renderTable(dataRes.logs || []);
+    renderStats(statsRes, dataRes.total);
+    renderPagination();
+
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:30px;color:#ef4444">
+      Failed to load audit data</td></tr>`;
+  }
+}
+
+function renderStats(stats, total){
+  document.getElementById('stat-total').textContent    = total?.toLocaleString() || '0';
+  document.getElementById('stat-failures').textContent = stats.failures?.toLocaleString() || '0';
+  document.getElementById('stat-top-action').textContent =
+    stats.by_action?.[0]?.action?.split('.')?.[1] || '—';
+  const topUser = stats.top_users?.[0]?.email || '—';
+  document.getElementById('stat-top-user').textContent =
+    topUser.length > 18 ? topUser.substring(0, 16) + '…' : topUser;
+}
+
+function actionBadgeClass(action){
+  if(!action) return 'ab-default';
+  const pfx = action.split('.')[0];
+  return {auth:'ab-auth', document:'ab-document', user:'ab-user',
+          ai:'ab-ai', admin:'ab-admin'}[pfx] || 'ab-default';
+}
+
+function renderTable(logs){
+  const tbody = document.getElementById('audit-table-body');
+  if(!logs.length){
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text3)">
+      No audit events found for this filter</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = logs.map(l => {
+    const ts = l.created_at ? new Date(l.created_at).toISOString().replace('T',' ').slice(0,19) : '—';
+    const statusHtml = l.status === 'success'
+      ? `<span class="status-ok"><i class="fa-solid fa-check"></i> ok</span>`
+      : `<span class="status-fail"><i class="fa-solid fa-xmark"></i> ${l.status}</span>`;
+    const details = Object.entries(l.details||{}).map(([k,v])=>`${k}:${v}`).join(' · ') || '—';
+    const resLabel = l.resource_type
+      ? `${l.resource_type}${l.resource_id ? ' #'+l.resource_id : ''}`
+      : '—';
+    return `<tr>
+      <td class="font-mono" style="font-size:11px;color:var(--text3);white-space:nowrap">${ts}</td>
+      <td style="font-size:12px">
+        <div style="font-weight:500;color:var(--text)">${l.user_email||'<i style="color:var(--text3)">system</i>'}</div>
+        <div style="color:var(--text3);font-size:11px">${l.user_role||''}</div>
+      </td>
+      <td><span class="action-badge ${actionBadgeClass(l.action)}">${l.action||''}</span></td>
+      <td style="font-size:12px;color:var(--text2)">${resLabel}${l.resource_name?'<br><span style="font-size:11px;color:var(--text3)">'+escHtml(l.resource_name.slice(0,40))+'</span>':''}</td>
+      <td>${statusHtml}</td>
+      <td class="font-mono" style="font-size:11px;color:var(--text3)">${l.ip_address||'—'}</td>
+      <td style="font-size:11px;color:var(--text3);max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(details)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function escHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderPagination(){
+  const start = _offset + 1;
+  const end   = Math.min(_offset + _limit, _total);
+  document.getElementById('page-info').textContent = _total
+    ? `${start}–${end} of ${_total.toLocaleString()}`
+    : 'No results';
+  document.getElementById('btn-prev').disabled = _offset === 0;
+  document.getElementById('btn-next').disabled = _offset + _limit >= _total;
+}
+
+function prevPage(){ _offset = Math.max(0, _offset - _limit); loadAudit(false); }
+function nextPage(){ _offset += _limit; loadAudit(false); }
+
+// Initial load
+loadAudit();
+</script>
 {% endblock %}

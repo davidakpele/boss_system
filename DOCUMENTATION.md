@@ -138,13 +138,53 @@ RAG-powered AI chat connected to your entire company knowledge base:
 ---
 ![Ask Boss Preview](public/assets/images/3.png)
 ### 4. Knowledge Base
-The organisation's accumulated intelligence:
-
-- Auto-populated from approved documents, chat messages, and manual entries
-- Three source types: `document`, `message`, `manual`
-- Full-text search + department filter
-- AI-generated 1–2 sentence summary per chunk
-- Embedding stored per chunk for vector retrieval
+ 
+The organisation's accumulated intelligence — now self-growing across every channel.
+ 
+**Manual Entry (`/knowledge-base/add`)**
+Staff can teach the AI directly without uploading a file. A dedicated form with 10 category cards guides the entry:
+ 
+| Category | What to add |
+|---|---|
+| 🏢 Company Profile | Who you are, mission, overview |
+| 📦 Products & Services | What you offer, pricing, features |
+| 📋 Policies & Rules | HR, leave, conduct, procedures |
+| ❓ FAQs | Common questions and answers |
+| 👥 Team & Roles | Who does what |
+| 🤝 Clients & Partners | Clients, partners, stakeholders |
+| 📊 Market & Industry | Industry context, competitors |
+| ⚙️ Processes | Step-by-step procedures |
+| 📍 Locations | Offices, branches, territories |
+| 📖 Company History | Background, milestones |
+ 
+Five content template buttons auto-fill a structured template for the chosen category. A live character/word counter and content preview are included. The backend chunks long content, generates AI summaries, stores chunks, and runs embedding generation in the background.
+ 
+**Passive Harvesting (Automatic)**
+The `KnowledgeHarvester` service (`app/services/knowledge_harvester.py`) passively learns from all BOSS communication channels without any manual effort:
+ 
+| Source | What is learned | Min length |
+|---|---|---|
+| 📧 Email campaigns | Email body text (HTML stripped) | 30 words |
+| 💬 Channel messages | Substantive internal messages | 40 words |
+| 📱 WhatsApp | Inbound questions + outbound AI replies | 20 words |
+| 🤖 Ask BOSS Q&A | Confident AI answer + question pairs | 30 words |
+| 📄 Documents | Already handled via approval workflow | — |
+ 
+**De-duplication** — a 16-character SHA-256 hash of normalised content is stored with every chunk. The same email body sent to 2,000 recipients is studied once and skipped 1,999 times. Uncertain AI answers ("I don't know", "I cannot find") are never stored as knowledge.
+ 
+**Nightly Harvest** — a background worker at 2am UTC runs a full sweep of all channels from the last 7 days, picking up anything missed by the real-time hooks.
+ 
+**Manual Trigger** — admins can trigger an immediate harvest from the admin panel (`POST /admin/harvest/run`). The knowledge sources dashboard widget at `GET /admin/harvest/stats` shows a breakdown by source type with percentage bars.
+ 
+**Sources stored:**
+- `document` — approved uploads
+- `manual` — direct form entry
+- `message` — channel messages (40+ words)
+- `whatsapp` — WhatsApp conversations
+- `email_campaign` — sent campaign bodies
+- `ai_qa` — Ask BOSS question+answer pairs
+**Search + retrieval** — full-text search + department filter on the knowledge base page. Vector RAG (all-MiniLM-L6-v2, 384-dim cosine similarity) used for Ask BOSS. Keyword fallback when embeddings are unavailable.
+ 
 
 ---
 
@@ -607,8 +647,8 @@ Available during an active call via the 🖥️ button. Uses `getDisplayMedia()`
 
 ---
 
-## 19. Platform & Infrastructure
-
+## 18. ⚙️ Platform & Infrastructure
+ 
 | # | Feature | Status |
 |---|---------|--------|
 | 76 | **Multi-Tenant Architecture** | ✅ Built |
@@ -623,45 +663,237 @@ Available during an active call via the 🖥️ button. Uses `getDisplayMedia()`
 | 85 | **Drag-and-Drop File Uploads** | ✅ Built |
 | 86 | **Audit Trail Export** | ✅ Built |
 | 87 | **Rate Limiting** | ✅ Built |
-
-### Feature Details
-
-**76. Multi-Tenant Architecture**
-`Tenant` model with slug-based organisation identifiers, plan tiers (starter / pro / enterprise), user limits, and active/inactive toggle. Each tenant has isolated settings via `TenantSetting` key-value table. Super-admin dashboard at `/tenants` for creating, editing, and managing all organisations. Full CRUD: create with name + slug + plan + max users, toggle active status, edit all branding fields.
-
-**77. White Labelling**
-Per-tenant brand fields: `brand_name`, `brand_logo_url`, `brand_favicon`, `primary_color` (accent), `sidebar_color`, and `custom_css` injected on every page. Edit via Tenants dashboard → Edit Brand modal. Colour pickers for accent and sidebar. Custom CSS field allows arbitrary overrides. Changes take effect on next page load without server restart.
-
-**78. Automated Database Backups**
-`pg_dump | gzip` runs daily at 2am UTC via an asyncio background task started in the `lifespan` context. Manual trigger from the Health dashboard. Downloads available as `.sql.gz` via `GET /platform/backup/{id}/download`. All runs logged in `backup_logs` table with status, file size, duration, and error message. Auto-prunes files older than 30 days. Triggered-by field distinguishes `scheduler` vs `manual`.
-
-**79. Health Check Dashboard**
-Live dashboard at `/platform` refreshing every 10 seconds via `GET /platform/health`. Six metric cards: Database (connected + latency in ms), AI Engine (Ollama online/offline + model name), Disk (used / total GB with progress bar), Memory (used / total GB with progress bar), WebSockets (active connections), Uploads directory (total MB). Table row counts for every major model. Overall system status dot (green / red). Backup log panel alongside.
-
-**80. Email Digest**
-Daily digest sender at `email_service.send_daily_digest()`. Accepts a `stats` dict with labelled metric rows. Rendered as a clean HTML table with BOSS branding. Designed to be called from a scheduler (e.g., daily at 8am) passing counts for messages, tasks completed, new hires, accounting records, etc. Configurable per-manager delivery.
-
-**81. Changelog & Version Notes**
-In-app changelog at `/platform/changelog`. Super-admins publish versioned entries with type badge: 🟢 Feature / 🔵 Bug Fix / 🟡 Improvement / 🔴 Security. Each entry has version string, title, and markdown-style body (bullet lists, headings supported). Users see a `NEW` badge on unread entries. Read status tracked per-user in `changelog_reads`. Unread count available via `GET /platform/changelog/unread-count` for topbar badge.
-
-**82. Dark / Light Mode Toggle**
-Moon/sun toggle button in the topbar. Switches all CSS custom properties (`--bg`, `--text`, `--border`, etc.) instantly via JavaScript. Preference saved to `localStorage` and restored on every page load — no flash of wrong theme. Light mode uses white/zinc palette; dark mode uses a deep navy/slate palette. Both modes fully supported across all pages.
-
-**83. Keyboard Shortcuts**
-`G` + letter navigation (1.2 second window): `D` Dashboard, `M` Messages, `A` Ask BOSS, `T` Tasks, `B` Command Centre, `R` Analytics, `S` Settings, `P` System Health. `Ctrl+K` / `Cmd+K` opens Global Search overlay. `Esc` closes search or modals. `?` opens the shortcuts reference modal. All shortcuts disabled when typing in inputs/textareas. Implemented via `keydown` event listener on `document`.
-
-**84. Global Search**
-`Ctrl+K` / `Cmd+K` opens a full-screen overlay with a search input. Searches five collections simultaneously: Messages (content + sender), Documents (title + content), Users (name + email), Tasks (title + description), Knowledge chunks (content + summary). Results show type icon, title, subtitle, and colour-coded type label. Arrow keys navigate, Enter opens the result's page. Match text highlighted in yellow. Quick-nav shortcuts shown on first open. Debounced 250ms. Backend: `GET /search?q=`.
-
-**85. Drag-and-Drop File Uploads**
-Page-wide drop zone — drag any file anywhere on the browser window. A full-screen overlay with a cloud upload icon appears while dragging. On drop, files are routed by current page: Messages page → `handleFileSelect()` attaches to message input; Documents page → triggers the file input's change event. Works with multiple files. Visual feedback via the overlay disappearing on drop. Implemented as a document-level `dragenter` / `dragleave` / `drop` listener.
-
-**86. Audit Trail Export**
-`GET /platform/audit/export?format=csv&days=90` or `?format=pdf`. CSV exports all columns (timestamp, user, email, action, resource type, resource ID, IP address, details) for up to 10,000 rows — suitable for spreadsheet analysis and compliance submissions. PDF export uses ReportLab with a styled two-tone table, BOSS header, generation timestamp, and record count. PDF limited to 500 rows with a note to use CSV for full data. Both available from the Audit Logs page action buttons.
-
-**87. Rate Limiting**
-In-memory sliding window middleware at `app/middleware/rate_limiter.py`. No Redis dependency. Per-path limits: login (10/min), registration (5/min), WhatsApp send (30/min), AI endpoints (20/min), search (60/min). Violators blocked for 5 minutes. Every response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Window` headers. Static files and health endpoints are exempt. Block duration and per-path limits configurable in `RATE_RULES` dict.
+ 
+**76. Multi-Tenant Architecture** — `Tenant` model with slug-based organisation identifiers, plan tiers (starter / pro / enterprise), user limits, and active/inactive toggle. Each tenant has isolated settings via `TenantSetting` key-value table. Super-admin dashboard at `/tenants` for creating, editing, and managing all organisations.
+ 
+**77. White Labelling** — Per-tenant brand fields: `brand_name`, `brand_logo_url`, `brand_favicon`, `primary_color`, `sidebar_color`, and `custom_css` injected on every page. Changes take effect on next page load without a server restart.
+ 
+**78. Automated Database Backups** — `pg_dump | gzip` runs daily at 2am UTC. Manual trigger from Health dashboard. Downloads as `.sql.gz`. All runs logged in `backup_logs` with status, file size, duration, and error message. Auto-prunes files older than 30 days.
+ 
+**79. Health Check Dashboard** — Live dashboard at `/platform` refreshing every 10 seconds. Six metric cards: Database latency, Ollama status, Disk, Memory, WebSockets, Uploads directory. Table row counts for every major model.
+ 
+**80. Email Digest** — Daily digest sender at `email_service.send_daily_digest()`. Accepts a `stats` dict with labelled metric rows. Designed to be called from a scheduler passing counts for messages, tasks, new hires, accounting records, etc.
+ 
+**81. Changelog & Version Notes** — In-app changelog at `/platform/changelog`. Super-admins publish versioned entries with type badges: Feature / Bug Fix / Improvement / Security. Read status tracked per-user in `changelog_reads`.
+ 
+**82. Dark / Light Mode Toggle** — Switches all CSS custom properties instantly. Preference saved to `localStorage`. Both modes fully supported across all pages.
+ 
+**83. Keyboard Shortcuts** — `G` + letter navigation: D Dashboard, M Messages, A Ask BOSS, T Tasks, B BCC, R Analytics, S Settings, P System Health. `Ctrl+K` opens Global Search. `?` opens shortcuts reference modal.
+ 
+**84. Global Search** — `Ctrl+K` opens full-screen overlay searching: Messages, Documents, Users, Tasks, Knowledge chunks simultaneously. Arrow keys navigate, Enter opens the result. Backend: `GET /search?q=`.
+ 
+**85. Drag-and-Drop File Uploads** — Page-wide drop zone. Files routed by current page context. Visual overlay on drag. Works with multiple files.
+ 
+**86. Audit Trail Export** — `GET /platform/audit/export?format=csv` (up to 10,000 rows) or `?format=pdf` (500 rows, ReportLab styled). Both available from the Audit Logs page.
+ 
+**87. Rate Limiting** — In-memory sliding window middleware. No Redis dependency. Per-path limits: login (10/min), registration (5/min), WhatsApp (30/min), AI (20/min), search (60/min). Violators blocked for 5 minutes.
 ---
+
+## 19. 📧 Email Campaign System
+ 
+AI-generated mass email campaigns with full delivery management, recipient tracking, and Gmail rate-limit awareness.
+ 
+### How It Works
+ 
+```
+  User fills campaign form
+  (name, tone, sender, prompt)
+         │
+         ▼
+  AI generates email body
+  from knowledge base (RAG)
+         │
+         ▼
+  User edits + selects recipients
+  (searchable contact list, Select All,
+   manual comma-separated emails)
+         │
+         ├──► Send Now  → background delivery worker
+         │
+         └──► Schedule → cron worker delivers at set time
+```
+ 
+### Contact Management (`/email-campaigns/contacts`)
+ 
+- Add individual contacts: name, email, title, role, institution, department, notes
+- **Bulk import** from CSV, TXT, PDF, or DOCX — regex extracts every valid email address automatically
+- Deduplication — contacts with existing emails are skipped on import
+- Soft-delete (deactivate) preserves send history
+### AI Email Generation
+ 
+The generate modal (`POST /email-campaigns/generate`) calls Ollama `/api/generate` directly with a focused prompt under 800 tokens — optimised for `codellama:7b-instruct` models that fail on large context windows.
+ 
+Inputs collected from the user:
+- **Campaign name** — for dashboard tracking
+- **Tone** — Professional / Persuasive / Formal / Friendly
+- **Sender name, email, phone** — used in the sign-off and contact footer
+- **Target audience** — helps the AI tailor language
+- **Prompt** — describes what the email should achieve
+The AI then: RAG-searches the knowledge base for relevant context → writes a complete email body → generates a subject line in a separate short call → returns both to the frontend for review and editing.
+ 
+### Email Template
+ 
+Emails render in the exact format shown in the screenshot reference — matching professional Nigerian business email conventions:
+ 
+- White background, Arial 14px, black text, 1.6 line-height
+- `**Bold terms**` in the prompt/body are automatically rendered as `<strong>` in HTML
+- Contact footer structured with emoji icons: `📞 phone` and `📧 email | email2`
+- Company name bolded in sign-off
+- No BOSS branding injected on campaign emails (clean, client-branded)
+- Personalisation: "Dear Esteemed" replaced with "Dear [Recipient Name]," per recipient
+### Delivery & Gmail Rate Limiting
+ 
+Campaigns are sent in a background asyncio worker with 1.5-second delays between emails. When Gmail's 550/day limit is hit, the worker catches the failure and sets campaign status to `paused` automatically — no manual intervention needed.
+ 
+**Resuming a paused campaign:**
+ 
+1. Campaign card shows **Resume (X left)** button with the exact undelivered count
+2. Click Resume → system queries only `status = "pending"` and `status = "failed"` recipients
+3. All `status = "sent"` recipients are permanently skipped — no duplicate emails
+4. On Gmail block: pauses again, ready for next day
+5. Repeat until all recipients reached
+**Progress modal** (polling every 4 seconds while sending):
+- Live percentage ring, sent / remaining / failed counts
+- Gmail limit tip shown when paused
+- Resume button in modal footer
+### Campaign Lifecycle
+ 
+```
+draft → sending → paused → sending → ... → sent
+  │
+  └──► scheduled → sending → paused → ... → sent
+```
+ 
+| Status | Meaning |
+|---|---|
+| `draft` | Saved, not sent |
+| `scheduled` | Will send at a future datetime |
+| `sending` | Background worker active |
+| `paused` | Worker stopped (Gmail limit or error) |
+| `sent` | All recipients delivered |
+| `failed` | Hard failure |
+ 
+### Campaign Deletion
+ 
+`DELETE /email-campaigns/{id}` — hard-deletes the campaign and all its `email_campaign_recipients` rows in one transaction. Blocked if status is `sending`. Only the campaign creator or admin/super_admin can delete.
+ 
+### Knowledge Harvesting from Campaigns
+ 
+After a campaign is fully sent, the `KnowledgeHarvester` automatically extracts the email body (HTML stripped) and stores it in the knowledge base. This means future AI-generated emails can learn from the language, tone, and content of previously successful campaigns.
+ 
+### API Routes
+ 
+| Route | Method | Purpose |
+|---|---|---|
+| `/email-campaigns` | GET | Dashboard with all campaigns |
+| `/email-campaigns/contacts` | GET | Contact manager page |
+| `/email-campaigns/contacts/add` | POST | Add single contact |
+| `/email-campaigns/contacts/import` | POST | Bulk import CSV/PDF/DOCX |
+| `/email-campaigns/contacts/list` | GET | JSON list for recipient picker |
+| `/email-campaigns/contacts/{id}` | DELETE | Soft-delete contact |
+| `/email-campaigns/generate` | POST | AI generates email body + subject |
+| `/email-campaigns/save` | POST | Save campaign + recipients as draft |
+| `/email-campaigns/{id}/send` | POST | Start sending now |
+| `/email-campaigns/{id}/schedule` | POST | Schedule for future datetime |
+| `/email-campaigns/{id}/cancel` | POST | Cancel scheduled campaign |
+| `/email-campaigns/{id}/resume` | POST | Resume paused/partial campaign |
+| `/email-campaigns/{id}/progress` | GET | Live delivery progress (JSON) |
+| `/email-campaigns/{id}/detail` | GET | Campaign + recipients detail |
+| `/email-campaigns/{id}` | DELETE | Hard-delete campaign + recipients |
+ 
+### Database Tables
+ 
+```
+email_contacts              — external recipient contacts
+email_campaigns             — one row per campaign
+email_campaign_recipients   — one row per recipient per campaign
+                              (status: pending | sent | failed | bounced)
+```
+ 
+---
+ 
+## 20. 🧠 Knowledge Harvester
+ 
+The `KnowledgeHarvester` (`app/services/knowledge_harvester.py`) is an autonomous background service that makes BOSS's AI smarter over time without any manual effort.
+ 
+### What It Learns From
+ 
+Every communication channel in BOSS feeds into the knowledge base automatically:
+ 
+**Email Campaigns** — after each campaign is delivered, the email body is stripped of HTML and stored as knowledge. A campaign sent to 2,000 people produces one knowledge chunk, not 2,000.
+ 
+**Channel Messages** — messages over 40 words are candidates for learning. Short conversational exchanges ("ok", "see you at 3", "thanks") are ignored. Messages are harvested in real-time as they are sent (via `asyncio.create_task`) and during the nightly sweep.
+ 
+**WhatsApp** — both inbound customer questions and outbound AI replies over 20 words are learned. Customer questions become FAQ knowledge. AI replies become examples of how the company communicates.
+ 
+**Ask BOSS Q&A** — when the AI gives a confident answer (not containing "I don't know", "I cannot find", etc.), the question and answer are stored together as a Q&A knowledge pair. The AI literally learns from its own good answers.
+ 
+### De-duplication
+ 
+Every chunk is fingerprinted with a 16-character SHA-256 hash of its normalised (lowercased, whitespace-collapsed) content before storage. If the same content arrives from multiple sources — the same email to 2,000 people, the same policy shared in multiple channels — it is stored once and silently skipped on all subsequent encounters.
+ 
+### Harvest Schedule
+ 
+| Trigger | When | Scope |
+|---|---|---|
+| Real-time hook | Immediately after each message/campaign | Single item |
+| Nightly worker | Daily at 2am UTC | Last 7 days, all channels |
+| Manual trigger | Admin clicks "Harvest Now" | Last 7 days, all channels |
+ 
+### Quality Filters
+ 
+| Source | Minimum words | Additional filter |
+|---|---|---|
+| Channel messages | 40 | Must be `message_type = "text"` |
+| WhatsApp | 20 | — |
+| Email campaigns | 30 | HTML stripped first |
+| AI Q&A | 30 | Answer must not contain uncertainty phrases |
+ 
+### Admin Interface
+ 
+**Dashboard widget** (add to knowledge base page):
+- Bar chart showing chunks by source type with percentages
+- "Harvest Now" button — triggers `POST /admin/harvest/run` in background
+- Stats auto-refresh 30 seconds after harvest is started
+**Stats endpoint** (`GET /admin/harvest/stats`):
+```json
+{
+  "total_chunks": 847,
+  "by_source": [
+    { "source": "document",       "count": 312, "percent": 36.8, "label": "📄 Documents" },
+    { "source": "manual",         "count": 145, "percent": 17.1, "label": "✍️ Manual Entry" },
+    { "source": "message",        "count": 198, "percent": 23.4, "label": "💬 Channel Messages" },
+    { "source": "email_campaign", "count": 112, "percent": 13.2, "label": "📧 Email Campaigns" },
+    { "source": "whatsapp",       "count": 54,  "percent": 6.4,  "label": "📱 WhatsApp" },
+    { "source": "ai_qa",          "count": 26,  "percent": 3.1,  "label": "🤖 Ask BOSS Q&A" }
+  ]
+}
+```
+ 
+### Integration Points
+ 
+To activate real-time harvesting, add these one-line hooks to existing routers:
+ 
+```python
+# In messages.py WebSocket handler — after saving a new message:
+asyncio.create_task(harvester.learn_from_message(
+    content=msg.content, channel_name=channel.name,
+    department=channel.department, db=db
+))
+ 
+# In email_blast.py — after _send_campaign_emails completes:
+await harvester.learn_from_email_campaign(campaign, learn_db)
+ 
+# In whatsapp.py — after each inbound/outbound message:
+asyncio.create_task(harvester.learn_from_whatsapp_message(
+    content=body_text, direction="inbound", contact_name=contact.name, db=db
+))
+ 
+# In ask_boss.py — after streaming response completes:
+asyncio.create_task(harvester.learn_from_ai_conversation(
+    question=user_message, answer=full_response, db=db
+))
+```
 
 ### 🧠 AI-Powered Intelligence (Expanded)
 
@@ -751,8 +983,8 @@ Advanced protection and compliance-ready infrastructure:
 
 ---
 
-## Database Schema (35+ Tables)
-
+## Database Schema (60+ Tables)
+ 
 ```
 CORE
 ────────────────────────────────────────────────────────────────────
@@ -760,28 +992,53 @@ users                   channels              messages
 oauth_accounts          channel_members       knowledge_chunks
 push_subscriptions      ip_allowlist          audit_logs
 app_settings            internal_notifications
-
+ 
+MESSAGING
+────────────────────────────────────────────────────────────────────
+message_reactions       message_read_receipts  mentions
+scheduled_messages      pinned_messages        message_edits
+message_threads
+ 
 DOCUMENTS & AI
 ────────────────────────────────────────────────────────────────────
 documents               ai_conversations      ai_messages
 compliance_records      risk_items            meeting_summaries
-onboarding_conversations
-
+onboarding_conversations  document_tags       sentiment_logs
+meeting_transcripts
+ 
 ONBOARDING
 ────────────────────────────────────────────────────────────────────
 onboarding_steps        onboarding_progress
-
+ 
 BUSINESS OPERATIONS
 ────────────────────────────────────────────────────────────────────
 tasks                   meeting_rooms         meeting_attendees
 announcements           announcement_reads    leave_requests
 reporting_lines
-
+ 
 BUSINESS COMMAND CENTRE
 ────────────────────────────────────────────────────────────────────
 accounting_records      accounting_categories
 inventory_items         inventory_movements
 job_postings            job_applications      hr_notifications
+ 
+WHATSAPP
+────────────────────────────────────────────────────────────────────
+whatsapp_contacts       whatsapp_messages     whatsapp_sessions
+ 
+EMAIL CAMPAIGNS (NEW)
+────────────────────────────────────────────────────────────────────
+email_contacts          email_campaigns       email_campaign_recipients
+ 
+CALLS (NEW)
+────────────────────────────────────────────────────────────────────
+call_records            call_participants
+ 
+PLATFORM & INFRASTRUCTURE
+────────────────────────────────────────────────────────────────────
+tenants                 tenant_settings       backup_logs
+changelog_entries       changelog_reads       rate_limit_buckets
+email_queue
 ```
 
 ---

@@ -41,6 +41,7 @@ from app.security_service import (
     LockoutService, SessionService,
     TwoFactorService, APIKeyService, PasswordPolicy,
 )
+from app.services.audit_service import AuditService
 
 def verify_password(plain: str, hashed: str) -> bool:
     return bcrypt.checkpw(plain.encode(), hashed.encode())
@@ -371,10 +372,8 @@ async def login(
     session = await SessionService.create(db, user.id, ip, ua)
     token   = create_access_token({"sub": str(user.id), "sid": session.id})
 
-    db.add(AuditLog(
-        user_id=user.id, action="login", resource_type="auth",
-        details={"email": email, "ip": ip}, ip_address=ip,
-    ))
+    await AuditService.log_auth(db, user, "auth.login", request=request, details={"email": email})
+
     await db.commit()
 
     redirect = RedirectResponse("/dashboard", status_code=302)
@@ -395,6 +394,7 @@ async def logout(
     if current_user:
         current_user.is_online = False
         try:
+            await AuditService.log_auth(db, current_user, "auth.logout", request=request)
             tok = request.cookies.get("access_token")
             if tok:
                 payload = jwt.decode(tok, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
@@ -457,7 +457,7 @@ async def register(
     db.add(user)
     await db.commit()
     await db.refresh(user)
-
+    await AuditService.log_auth(db, user, "auth.register", request=request, details={"email": email, "department": department})
     await PasswordPolicy.record(db, user.id, hashed)
     await db.commit()
 
