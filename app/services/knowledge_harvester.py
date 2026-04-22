@@ -54,12 +54,12 @@ def _clean_html(html: str) -> str:
 
 
 async def _already_stored(content_hash: str, db: AsyncSession) -> bool:
-    """Return True if a chunk with this hash already exists."""
-    # We store the hash in the `keywords` JSON field as {"hash": "..."}
-    # so no schema migration is needed.
+    from sqlalchemy import cast, type_coerce
+    from sqlalchemy.dialects.postgresql import JSONB
+    from sqlalchemy import func, Text
     existing = (await db.execute(
         select(KnowledgeChunk).where(
-            KnowledgeChunk.keywords.contains([{"hash": content_hash}])
+            func.cast(KnowledgeChunk.keywords, Text).contains(content_hash)
         )
     )).scalar_one_or_none()
     return existing is not None

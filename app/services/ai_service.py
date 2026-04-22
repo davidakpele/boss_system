@@ -57,6 +57,7 @@ class AIService:
         user_role: str = "staff",
         department: Optional[str] = None,
         max_chunks: int = 5,
+        tenant_id: Optional[int] = None, 
     ) -> List[dict]:
         """
         Retrieve the most relevant knowledge chunks.
@@ -70,7 +71,10 @@ class AIService:
             allowed_levels = [AccessLevel.all_staff, AccessLevel.restricted]
         else:
             allowed_levels = [AccessLevel.all_staff]
-        stmt = select(KnowledgeChunk).limit(200)
+        stmt = select(KnowledgeChunk)
+        if tenant_id is not None:
+            stmt = stmt.where(KnowledgeChunk.tenant_id == tenant_id)
+        stmt = stmt.limit(200)
         chunks = (await db.execute(stmt)).scalars().all()
 
         if not chunks:
