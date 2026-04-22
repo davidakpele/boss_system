@@ -11,7 +11,7 @@ echo ""
 
 # Check .env
 if [ ! -f .env ]; then
-  echo "⚙️  Creating .env from .env.example..."
+  echo "Creating .env from .env.example..."
   cp .env.example .env
   echo ".env created. Edit it with your DB credentials before running."
   echo ""
