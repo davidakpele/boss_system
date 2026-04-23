@@ -997,34 +997,25 @@ class ImmutableAuditLog(Base):
  
     # Who
     user_id       = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
-    user_email    = Column(String(255), nullable=True)       # denormalised — survives user deletion
+    user_email    = Column(String(255), nullable=True)
     user_role     = Column(String(50),  nullable=True)
     tenant_id     = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
  
     # What
-    action        = Column(String(100), nullable=False, index=True)   # e.g. "document.approve"
-    resource_type = Column(String(100), nullable=True,  index=True)   # e.g. "document"
+    action        = Column(String(100), nullable=False, index=True)
+    resource_type = Column(String(100), nullable=True,  index=True)
     resource_id   = Column(Integer,     nullable=True)
-    resource_name = Column(String(500), nullable=True)                # human-readable label
- 
-    # Context
-    details       = Column(JSON, default=dict)    # additional structured context
+    resource_name = Column(String(500), nullable=True) 
+
+    details       = Column(JSON, default=dict)
     status        = Column(String(20), default="success")  # success | failure | error
     error_msg     = Column(Text, nullable=True)
- 
-    # Where / How
     ip_address    = Column(String(50),  nullable=True)
     user_agent    = Column(String(512), nullable=True)
     session_id    = Column(String(256), nullable=True)
- 
-    # When (server-side, not client-supplied)
     created_at    = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
- 
-    # Relationships (read-only; never modify through these)
     user   = relationship("User",   foreign_keys=[user_id],   lazy="select")
     tenant = relationship("Tenant", foreign_keys=[tenant_id], lazy="select")
- 
-    # Composite indexes for SOC-2 query patterns
     __table_args__ = (
         Index("ix_audit_tenant_time",  "tenant_id", "created_at"),
         Index("ix_audit_user_time",    "user_id",   "created_at"),
