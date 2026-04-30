@@ -1,6 +1,5 @@
 """
 app/middleware/tenant_isolation.py
-──────────────────────────────────────────────────────────────────────────────
 Multi-tenant data isolation.
 
 Every DB query for tenant-scoped data must be filtered by tenant_id.

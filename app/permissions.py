@@ -1,6 +1,5 @@
 """
 app/permissions.py
-──────────────────────────────────────────────────────────────────────────────
 Role-Based Access Control (RBAC) — scoped by role, department, and action.
 
 Roles (from UserRole enum):
