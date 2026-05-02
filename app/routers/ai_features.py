@@ -1,7 +1,7 @@
 # app/routers/ai_features.py
 """
 AI-Powered Features Router
-  POST /ai/writing/assist          — writing assistant (improve/expand/shorten/translate)
+  POST /ai/writing/assist          — writing assistant
   POST /ai/documents/{id}/qa       — document Q&A with citations
   POST /ai/documents/{id}/auto-tag — auto-tag a document
   POST /ai/knowledge/auto-tag      — auto-tag all untagged knowledge chunks
